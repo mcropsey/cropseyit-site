@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cropsey IT Solutions, LLC</title>
+  <meta name="description" content="Expert IT Consulting — Networks · Linux · Security · Automation. Hands-on expertise for infrastructure, security, and automation.">
+  <meta name="author" content="Mike Cropsey">
+  <link rel="canonical" href="https://www.cropseyit.com/">
+  <link rel="icon" href="logo.png" type="image/png">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f7f8fa;
+      --text: #1a1a1a;
+      --text-muted: #555555;
+      --accent: #1a56db;
+      --accent-hover: #1e40af;
+      --border: #e5e7eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--border);
+      background: #ffffff;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.9rem 0;
+      gap: 1rem;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .logo:hover {
+      text-decoration: none;
+      color: var(--accent);
+    }
+
+    .logo img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    nav a {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    nav a:hover {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .social {
+      display: flex;
+      gap: 0.85rem;
+      align-items: center;
+    }
+
+    .social a {
+      color: var(--text-muted);
+      display: inline-flex;
+    }
+
+    .social a:hover {
+      color: var(--accent);
+    }
+
+    .social svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 4rem 0 3rem;
+    }
+
+    .hero-inner {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    @media (min-width: 720px) {
+      .hero-inner {
+        grid-template-columns: 1.3fr 0.9fr;
+      }
+    }
+
+    .hero h1 {
+      font-size: clamp(1.75rem, 4vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+      margin-bottom: 1rem;
+    }
+
+    .hero p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      max-width: 36rem;
+    }
+
+    .hero-logo {
+      display: flex;
+      justify-content: center;
+    }
+
+    .hero-logo img {
+      width: min(280px, 70vw);
+      height: auto;
+      object-fit: contain;
+    }
+
+    /* Sections */
+    section {
+      padding: 3rem 0;
+      border-top: 1px solid var(--border);
+    }
+
+    section h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    section h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 1.75rem 0 0.75rem;
+      color: var(--text);
+    }
+
+    /* Capabilities grid */
+    .capabilities {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.15rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem 1.3rem;
+    }
+
+    .card h3 {
+      margin: 0 0 0.55rem;
+      font-size: 1rem;
+      color: var(--accent);
+    }
+
+    .card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .card li {
+      position: relative;
+      padding-left: 1rem;
+      margin-bottom: 0.35rem;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .card li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+    }
+
+    /* Services */
+    .services-intro {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      max-width: 48rem;
+    }
+
+    .service-block {
+      margin-bottom: 2rem;
+    }
+
+    .service-block ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .service-block li {
+      margin-bottom: 0.5rem;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .service-block li strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .service-block p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    /* About / Contact */
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+
+    @media (min-width: 700px) {
+      .about-grid {
+        grid-template-columns: 1.4fr 1fr;
+      }
+    }
+
+    .about-text p {
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    .about-text ul {
+      list-style: none;
+      margin: 1rem 0;
+    }
+
+    .about-text li {
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      font-size: 0.95rem;
+    }
+
+    .about-text li strong {
+      color: var(--text);
+    }
+
+    .contact-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem 1.5rem;
+      height: fit-content;
+      text-align: center;
+    }
+
+    .contact-box .logo-large {
+      width: 140px;
+      height: 140px;
+      margin: 0 auto 1.1rem;
+      display: block;
+      object-fit: contain;
+    }
+
+    .contact-box h3 {
+      margin: 0 0 0.75rem;
+      font-size: 1.15rem;
+    }
+
+    .contact-box p {
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    .contact-email {
+      display: inline-block;
+      margin-top: 0.35rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .contact-email:hover {
+      color: var(--accent-hover);
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem 0;
+      margin-top: 1rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    footer a {
+      color: var(--text-muted);
+    }
+
+    footer a:hover {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container header-inner">
+      <a href="/" class="logo">
+        <img src="logo.png" alt="Cropsey IT logo" width="40" height="40">
+        Cropsey IT Solutions, LLC
+      </a>
+      <nav>
+        <a href="#services">Services</a>
+        <a href="#contact">Contact</a>
+        <div class="social">
+          <a href="https://www.linkedin.com/in/michael-cropsey/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          </a>
+          <a href="https://github.com/mcropsey" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          </a>
+          <a href="https://www.youtube.com/@mikecropsey1966" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          </a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <div class="hero-inner">
+          <div>
+            <h1>Expert IT Consulting — Networks · Linux · Security · Automation</h1>
+            <p>Hands-on expertise across networking, Linux, Windows, and security. Stabilize infrastructure, automate operations, and reduce risk.</p>
+          </div>
+          <div class="hero-logo">
+            <img src="logo.png" alt="Cropsey IT Solutions logo" width="280" height="280">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="capabilities">
+      <div class="container">
+        <h2>Core Capabilities</h2>
+        <div class="capabilities">
+          <div class="card">
+            <h3>Networking</h3>
+            <ul>
+              <li>Design, implement, and stabilize enterprise networks</li>
+              <li>Load balancing for high availability and performance</li>
+              <li>Secure remote access and traffic optimization</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Linux Systems Administration</h3>
+            <ul>
+              <li>RHEL, Debian, Ubuntu, CentOS server management</li>
+              <li>System hardening and compliance (CIS, STIG)</li>
+              <li>Performance tuning and troubleshooting</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Security</h3>
+            <ul>
+              <li>Firewalls and Zero Trust architectures</li>
+              <li>API Security and Web Application Firewalls (WAF)</li>
+              <li>Identity, access, and threat mitigation strategies</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Windows Systems Administration</h3>
+            <ul>
+              <li>Active Directory &amp; GPO management</li>
+              <li>Patching, Certificate Services, and PowerShell automation</li>
+              <li>Exchange, SQL Server, and Windows clusters</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Automation &amp; Scripting</h3>
+            <ul>
+              <li>Ansible playbooks for reliable automation</li>
+              <li>Python scripting for custom workflows</li>
+              <li>Streamlined operations that reduce manual effort</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="services">
+      <div class="container">
+        <h2>Services</h2>
+        <p class="services-intro">I partner with organizations to solve tough infrastructure problems, reduce security risk, and scale operations with automation—without locking you into rigid packages or public pricing.</p>
+
+        <div class="service-block">
+          <h3>Network Administration</h3>
+          <ul>
+            <li><strong>Routing &amp; Switching</strong> — Enterprise networking with Cisco IOS and Nexus switches</li>
+            <li><strong>Cisco WiFi</strong> — Secure wireless deployments and performance optimization</li>
+            <li><strong>Firewalls</strong> — Design, operations, and policy management with Cisco ASA and NGFW</li>
+            <li><strong>Secure Access</strong> — Cisco Identity Services Engine (ISE) for authentication and authorization</li>
+            <li><strong>VPNs &amp; Segmentation</strong> — Remote access, site-to-site VPNs, and network segmentation</li>
+            <li><strong>Zero Trust / ZNTA</strong> — Implementation of Zero Trust patterns for secure connectivity</li>
+            <li><strong>VoIP</strong> — Deployment and security of Cisco VoIP solutions</li>
+          </ul>
+        </div>
+
+        <div class="service-block">
+          <h3>Linux System Administration (RHEL / CentOS / Debian / Ubuntu)</h3>
+          <ul>
+            <li><strong>User &amp; Permission Management</strong> — Accounts, groups, sudoers, and access control</li>
+            <li><strong>Storage Management</strong> — Partitions, LVM, mounting, and persistent configuration</li>
+            <li><strong>File &amp; Directory Services</strong> — NFS, Samba, and LDAP integration</li>
+            <li><strong>System Security</strong> — Service hardening, SELinux, and firewalld configuration</li>
+            <li><strong>Patching &amp; Troubleshooting</strong> — Regular updates, CVE mitigation, and root cause analysis</li>
+            <li><strong>DevOps &amp; Kubernetes</strong> — Cluster management, CI/CD workflows, and container orchestration</li>
+            <li><strong>Automation &amp; Scripting</strong> — Ansible playbooks and custom shell scripting</li>
+          </ul>
+        </div>
+
+        <div class="service-block">
+          <h3>Automation &amp; Scripting (Ansible, Python)</h3>
+          <ul>
+            <li><strong>Network Device Automation</strong> — Automating Cisco, NetScaler, and other network gear</li>
+            <li><strong>Linux Automation</strong> — System provisioning, patching, configuration management, and compliance</li>
+            <li><strong>Windows Automation</strong> — Active Directory, GPOs, patching, and application deployment</li>
+            <li><strong>CI/CD Workflows</strong> — Automated build, test, and deploy pipelines</li>
+            <li><strong>Standardized Runbooks</strong> — Repeatable, version-controlled automation</li>
+            <li><strong>Error Reduction &amp; Efficiency</strong> — Replace manual tasks with consistent, reliable automation</li>
+          </ul>
+        </div>
+
+        <div class="service-block">
+          <h3>Windows System Administration</h3>
+          <ul>
+            <li><strong>Active Directory</strong> — Domain services, user/group management, and secure authentication</li>
+            <li><strong>GPO Policy Management</strong> — Centralized configuration, compliance, and security baselines</li>
+            <li><strong>Patching &amp; Updates</strong> — WSUS and automated patch management</li>
+            <li><strong>Certificate Services</strong> — PKI, SSL/TLS certificates, and enterprise trust</li>
+            <li><strong>PowerShell Automation</strong> — Scripting for administration, reporting, and Ansible integration</li>
+            <li><strong>Exchange Server</strong> — Messaging, calendaring, and secure mail flow</li>
+            <li><strong>SQL Server</strong> — Database administration, backups, and performance optimization</li>
+            <li><strong>Clustering &amp; High Availability</strong> — Failover clusters, load balancing, and DR planning</li>
+          </ul>
+        </div>
+
+        <div class="service-block">
+          <h3>Advisory &amp; Architecture Reviews</h3>
+          <p>Roadmaps, platform choices, migration guidance, and practical standards that balance velocity with security.</p>
+        </div>
+
+        <div class="service-block">
+          <h3>Staff Augmentation &amp; Special Projects</h3>
+          <p>Short- and long-term coverage, project delivery, and off-hours support during peaks or maintenance windows.</p>
+        </div>
+
+        <div class="service-block">
+          <h3>Security Consulting &amp; Zero Trust</h3>
+          <p>Vulnerability assessments, identity &amp; access patterns, API risk awareness, incident response support, policy and configuration reviews.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact">
+      <div class="container">
+        <h2>Let’s Connect</h2>
+        <div class="about-grid">
+          <div class="about-text">
+            <p>Hands-on expertise across <strong>Networking, Linux, Windows, and Security</strong>. I integrate seamlessly with your team to stabilize infrastructure, automate operations, and provide critical off-hours coverage.</p>
+            <ul>
+              <li><strong>Cisco Networking &amp; Security</strong> — Routing, switching, WiFi, firewalls, Cisco ASA, Cisco ISE, and Zero Trust</li>
+              <li><strong>Linux Administration</strong> — RHEL, Debian, Ubuntu, CentOS; SELinux, firewalld, NFS/Samba, and system hardening</li>
+              <li><strong>Windows Administration</strong> — Active Directory, GPO, Certificate Services, Exchange, SQL Server, clustering</li>
+              <li><strong>Automation &amp; DevOps</strong> — Ansible playbooks, Python scripting, CI/CD workflows, and repeatable builds</li>
+            </ul>
+            <p>Available for <strong>projects, advisory, or staff augmentation</strong>. U.S.-based, remote-first, with on-site options available by arrangement.</p>
+          </div>
+          <div class="contact-box">
+            <img class="logo-large" src="logo.png" alt="Cropsey IT logo" width="140" height="140">
+            <h3>Contact</h3>
+            <p>Tell me a bit about your project or needs and I’ll reach out with the right next steps.</p>
+            <a class="contact-email" href="mailto:mcropsey@gmail.com">mcropsey@gmail.com</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; <span id="year"></span> Cropsey IT Solutions, LLC</p>
+      <p style="margin-top: 0.35rem;"><a href="mailto:mcropsey@gmail.com">mcropsey@gmail.com</a></p>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
