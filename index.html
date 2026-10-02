@@ -4,31 +4,49 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cropsey IT Solutions, LLC</title>
-  <meta name="description" content="Expert IT Consulting — Networks · Linux · Security · Automation. Hands-on expertise for infrastructure, security, and automation.">
+  <meta name="description" content="Cybersecurity and AI security consulting, including agentic AI, built on deep Linux and network engineering experience.">
   <meta name="author" content="Mike Cropsey">
   <link rel="canonical" href="https://www.cropseyit.com/">
   <link rel="icon" href="logo.png" type="image/png">
   <style>
     :root {
       --bg: #ffffff;
-      --surface: #f7f8fa;
-      --text: #1a1a1a;
-      --text-muted: #555555;
-      --accent: #1a56db;
-      --accent-hover: #1e40af;
-      --border: #e5e7eb;
+      --surface: #f5f7fb;
+      --surface-2: #eef2fa;
+      --text: #0f172a;
+      --text-muted: #4b5568;
+      --border: #e2e7f0;
+      --brand: #1238a8;
+      --brand-hover: #0d2b85;
+      --cyan: #0a9bd6;
+      --teal: #0f7a5c;
+      --hero-bg: #0a1430;
+      --hero-text: #e8eefc;
+      --hero-muted: #a9b6d6;
+      --tag-bg: #e6eefc;
+      --tag-text: #1238a8;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1222;
+        --surface: #111a2e;
+        --surface-2: #16213a;
+        --text: #e6ebf5;
+        --text-muted: #a3afc7;
+        --border: #23304d;
+        --brand: #6f9bff;
+        --brand-hover: #9bbaff;
+        --cyan: #38c4f5;
+        --teal: #3fc79c;
+        --hero-bg: #070d1d;
+        --tag-bg: #1a2a4d;
+        --tag-text: #a9c2ff;
+      }
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       background: var(--bg);
@@ -36,334 +54,181 @@
       line-height: 1.6;
       font-size: 16px;
     }
-
-    a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-
-    a:hover {
-      color: var(--accent-hover);
-      text-decoration: underline;
-    }
-
-    .container {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 0 1.5rem;
-    }
+    a { color: var(--brand); text-decoration: none; }
+    a:hover { color: var(--brand-hover); text-decoration: underline; }
+    .container { max-width: 1040px; margin: 0 auto; padding: 0 1rem; }
+    @media (min-width: 720px) { .container { padding: 0 1.5rem; } }
 
     /* Header */
     header {
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
-      background: #ffffff;
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      position: sticky; top: 0; z-index: 100;
     }
-
     .header-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.9rem 0;
-      gap: 1rem;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 0.6rem 1.25rem; padding: 0.75rem 0;
     }
-
     .logo {
-      display: flex;
-      align-items: center;
-      gap: 0.7rem;
-      font-weight: 700;
-      font-size: 1.05rem;
-      color: var(--text);
-      letter-spacing: -0.02em;
+      display: flex; align-items: center; gap: 0.65rem;
+      font-weight: 700; font-size: 1.02rem; color: var(--text); letter-spacing: -0.01em;
     }
-
-    .logo:hover {
-      text-decoration: none;
-      color: var(--accent);
-    }
-
-    .logo img {
-      width: 40px;
-      height: 40px;
-      object-fit: contain;
-    }
-
-    nav {
-      display: flex;
-      align-items: center;
-      gap: 1.25rem;
-    }
-
-    nav a {
-      color: var(--text-muted);
-      font-size: 0.95rem;
-      font-weight: 500;
-    }
-
-    nav a:hover {
-      color: var(--text);
-      text-decoration: none;
-    }
-
-    .social {
-      display: flex;
-      gap: 0.85rem;
-      align-items: center;
-    }
-
-    .social a {
-      color: var(--text-muted);
-      display: inline-flex;
-    }
-
-    .social a:hover {
-      color: var(--accent);
-    }
-
-    .social svg {
-      width: 20px;
-      height: 20px;
-    }
+    .logo:hover { text-decoration: none; color: var(--brand); }
+    .logo img { width: 36px; height: 36px; border-radius: 8px; background: #fff; object-fit: contain; }
+    nav { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem 1.15rem; }
+    nav a { color: var(--text-muted); font-size: 0.93rem; font-weight: 500; }
+    nav a:hover { color: var(--text); text-decoration: none; }
+    .social { display: flex; gap: 0.8rem; align-items: center; }
+    .social a { color: var(--text-muted); display: inline-flex; }
+    .social a:hover { color: var(--brand); }
+    .social svg { width: 19px; height: 19px; }
 
     /* Hero */
     .hero {
-      padding: 4rem 0 3rem;
+      background:
+        linear-gradient(rgba(10,155,214,0.07) 1px, transparent 1px) 0 0 / 32px 32px,
+        linear-gradient(90deg, rgba(10,155,214,0.07) 1px, transparent 1px) 0 0 / 32px 32px,
+        radial-gradient(ellipse at 80% 20%, rgba(18,56,168,0.55), transparent 60%),
+        var(--hero-bg);
+      color: var(--hero-text);
+      padding: 4.5rem 0 4rem;
     }
-
-    .hero-inner {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 2rem;
-      align-items: center;
+    .hero-inner { display: grid; grid-template-columns: 1fr; gap: 2.5rem; align-items: center; }
+    @media (min-width: 820px) { .hero-inner { grid-template-columns: 1.45fr 0.8fr; } }
+    .eyebrow {
+      font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #5fd3ff; margin-bottom: 1rem;
     }
-
-    @media (min-width: 720px) {
-      .hero-inner {
-        grid-template-columns: 1.3fr 0.9fr;
-      }
-    }
-
     .hero h1 {
-      font-size: clamp(1.75rem, 4vw, 2.4rem);
-      font-weight: 700;
-      line-height: 1.2;
-      letter-spacing: -0.03em;
-      margin-bottom: 1rem;
+      font-size: clamp(1.9rem, 4.6vw, 2.9rem); font-weight: 750; line-height: 1.12;
+      letter-spacing: -0.03em; margin-bottom: 1.15rem; text-wrap: balance;
     }
-
-    .hero p {
-      color: var(--text-muted);
-      font-size: 1.1rem;
-      max-width: 36rem;
+    .hero h1 em { font-style: normal; color: #5fd3ff; }
+    .hero p.lead { color: var(--hero-muted); font-size: 1.12rem; max-width: 38rem; }
+    .hero-cta { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.9rem; }
+    .btn {
+      display: inline-block; padding: 0.7rem 1.2rem; border-radius: 8px;
+      font-weight: 600; font-size: 0.97rem; border: 1px solid transparent;
     }
-
-    .hero-logo {
-      display: flex;
-      justify-content: center;
-    }
-
+    .btn:hover { text-decoration: none; }
+    .btn-primary { background: #1d5cff; color: #fff; }
+    .btn-primary:hover { background: #3a72ff; color: #fff; }
+    .btn-ghost { border-color: rgba(169,182,214,0.45); color: var(--hero-text); }
+    .btn-ghost:hover { border-color: #5fd3ff; color: #fff; }
+    .hero-logo { display: flex; justify-content: center; }
     .hero-logo img {
-      width: min(280px, 70vw);
-      height: auto;
-      object-fit: contain;
+      width: min(270px, 64vw); height: auto; background: #fff; border-radius: 22px; padding: 0.6rem;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.45), 0 0 0 1px rgba(95,211,255,0.25);
+    }
+    .pillars {
+      display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 2.2rem;
+      font-family: var(--mono); font-size: 0.78rem;
+    }
+    .pillars span {
+      border: 1px solid rgba(95,211,255,0.3); color: #bfe9ff; border-radius: 999px; padding: 0.25rem 0.7rem;
     }
 
     /* Sections */
-    section {
-      padding: 3rem 0;
-      border-top: 1px solid var(--border);
+    section { padding: 4rem 0; }
+    section + section { border-top: 1px solid var(--border); }
+    .section-head { max-width: 44rem; margin-bottom: 2.25rem; }
+    .kicker {
+      font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--cyan); margin-bottom: 0.5rem;
     }
+    section h2 { font-size: clamp(1.45rem, 3vw, 1.85rem); font-weight: 720; letter-spacing: -0.02em; line-height: 1.2; }
+    .section-head p { color: var(--text-muted); margin-top: 0.75rem; font-size: 1.05rem; }
 
-    section h2 {
-      font-size: 1.45rem;
-      font-weight: 700;
-      margin-bottom: 1.5rem;
-      letter-spacing: -0.02em;
-    }
-
-    section h3 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin: 1.75rem 0 0.75rem;
-      color: var(--text);
-    }
-
-    /* Capabilities grid */
-    .capabilities {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1.15rem;
-    }
-
+    /* Focus grid */
+    .focus { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+    @media (min-width: 640px) { .focus { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 960px) { .focus { grid-template-columns: repeat(6, 1fr); } .focus .card { grid-column: span 2; } .focus .card.wide { grid-column: span 3; } }
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.2rem 1.3rem;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.35rem 1.4rem;
     }
-
-    .card h3 {
-      margin: 0 0 0.55rem;
-      font-size: 1rem;
-      color: var(--accent);
+    .card.feature {
+      background: linear-gradient(160deg, var(--surface-2), var(--surface));
+      border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
     }
-
-    .card ul {
-      list-style: none;
-      padding: 0;
+    .card .icon {
+      width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center;
+      background: var(--tag-bg); color: var(--tag-text); margin-bottom: 0.9rem;
     }
-
-    .card li {
-      position: relative;
-      padding-left: 1rem;
-      margin-bottom: 0.35rem;
-      color: var(--text-muted);
-      font-size: 0.95rem;
-    }
-
-    .card li::before {
-      content: "•";
-      position: absolute;
-      left: 0;
-      color: var(--accent);
+    .card .icon svg { width: 20px; height: 20px; }
+    .card h3 { font-size: 1.08rem; font-weight: 650; margin-bottom: 0.55rem; }
+    .card ul { list-style: none; color: var(--text-muted); font-size: 0.95rem; }
+    .card li { padding-left: 1rem; position: relative; margin-top: 0.3rem; }
+    .card li::before { content: ""; position: absolute; left: 0; top: 0.62em; width: 5px; height: 5px; border-radius: 50%; background: var(--cyan); }
+    .badge {
+      display: inline-block; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase;
+      background: var(--tag-bg); color: var(--tag-text); border-radius: 4px; padding: 0.1rem 0.45rem; margin-left: 0.35rem; vertical-align: 2px;
     }
 
     /* Services */
-    .services-intro {
-      color: var(--text-muted);
-      margin-bottom: 1.5rem;
-      max-width: 48rem;
+    .services { display: grid; gap: 1.1rem; }
+    .service {
+      border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem 1.5rem 1.35rem; background: var(--bg);
     }
+    .service.feature { border-left: 4px solid var(--brand); }
+    .service h3 { font-size: 1.15rem; font-weight: 680; margin-bottom: 0.3rem; }
+    .service .sub { color: var(--text-muted); font-size: 0.97rem; margin-bottom: 0.9rem; }
+    .service ul { list-style: none; display: grid; grid-template-columns: 1fr; gap: 0.55rem 1.75rem; }
+    @media (min-width: 760px) { .service ul { grid-template-columns: 1fr 1fr; } }
+    .service li { font-size: 0.95rem; color: var(--text-muted); }
+    .service li strong { color: var(--text); font-weight: 600; display: block; }
+    .small-services { display: grid; grid-template-columns: 1fr; gap: 1.1rem; }
+    @media (min-width: 760px) { .small-services { grid-template-columns: 1fr 1fr; } }
+    .small-services p { color: var(--text-muted); font-size: 0.95rem; }
 
-    .service-block {
-      margin-bottom: 2rem;
+    /* Approach */
+    .steps { display: grid; grid-template-columns: 1fr; gap: 1rem; counter-reset: step; }
+    @media (min-width: 760px) { .steps { grid-template-columns: repeat(4, 1fr); } }
+    .step { border-top: 2px solid var(--brand); padding-top: 0.9rem; }
+    .step::before {
+      counter-increment: step; content: "0" counter(step);
+      font-family: var(--mono); font-size: 0.8rem; color: var(--cyan); display: block; margin-bottom: 0.3rem;
     }
+    .step h3 { font-size: 1rem; font-weight: 650; margin-bottom: 0.3rem; }
+    .step p { color: var(--text-muted); font-size: 0.93rem; }
 
-    .service-block ul {
-      list-style: none;
-      padding: 0;
+    /* Labs callout */
+    .labs {
+      display: grid; grid-template-columns: 1fr; gap: 1.25rem; align-items: center;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.75rem;
     }
+    @media (min-width: 760px) { .labs { grid-template-columns: 1fr auto; } }
+    .labs h2 { font-size: 1.35rem; }
+    .labs p { color: var(--text-muted); margin-top: 0.4rem; }
+    .labs .btn-primary { white-space: nowrap; }
 
-    .service-block li {
-      margin-bottom: 0.5rem;
-      color: var(--text-muted);
-      font-size: 0.95rem;
-    }
-
-    .service-block li strong {
-      color: var(--text);
-      font-weight: 600;
-    }
-
-    .service-block p {
-      color: var(--text-muted);
-      font-size: 0.95rem;
-    }
-
-    /* About / Contact */
-    .about-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 2rem;
-    }
-
-    @media (min-width: 700px) {
-      .about-grid {
-        grid-template-columns: 1.4fr 1fr;
-      }
-    }
-
-    .about-text p {
-      color: var(--text-muted);
-      margin-bottom: 1rem;
-    }
-
-    .about-text ul {
-      list-style: none;
-      margin: 1rem 0;
-    }
-
-    .about-text li {
-      color: var(--text-muted);
-      margin-bottom: 0.4rem;
-      font-size: 0.95rem;
-    }
-
-    .about-text li strong {
-      color: var(--text);
-    }
-
+    /* Contact */
+    .about-grid { display: grid; grid-template-columns: 1fr; gap: 2rem; }
+    @media (min-width: 800px) { .about-grid { grid-template-columns: 1.5fr 1fr; } }
+    .about-text p { color: var(--text-muted); margin-bottom: 1rem; }
+    .about-text strong { color: var(--text); }
     .contact-box {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.75rem 1.5rem;
-      height: fit-content;
-      text-align: center;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.75rem; text-align: center;
     }
+    .contact-box img { width: 120px; height: 120px; background: #fff; border-radius: 16px; padding: 0.35rem; margin-bottom: 0.75rem; }
+    .contact-box h3 { font-size: 1.15rem; margin-bottom: 0.4rem; }
+    .contact-box p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.1rem; }
+    .contact-box .btn-primary { overflow-wrap: anywhere; }
 
-    .contact-box .logo-large {
-      width: 140px;
-      height: 140px;
-      margin: 0 auto 1.1rem;
-      display: block;
-      object-fit: contain;
-    }
-
-    .contact-box h3 {
-      margin: 0 0 0.75rem;
-      font-size: 1.15rem;
-    }
-
-    .contact-box p {
-      color: var(--text-muted);
-      margin-bottom: 0.75rem;
-      font-size: 0.95rem;
-    }
-
-    .contact-email {
-      display: inline-block;
-      margin-top: 0.35rem;
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: var(--accent);
-    }
-
-    .contact-email:hover {
-      color: var(--accent-hover);
-    }
-
-    /* Footer */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 2rem 0;
-      margin-top: 1rem;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 0.9rem;
-    }
-
-    footer a {
-      color: var(--text-muted);
-    }
-
-    footer a:hover {
-      color: var(--accent);
-    }
+    footer { border-top: 1px solid var(--border); padding: 2rem 0; color: var(--text-muted); font-size: 0.9rem; }
+    .footer-inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem 1.5rem; }
   </style>
 </head>
 <body>
   <header>
     <div class="container header-inner">
       <a href="/" class="logo">
-        <img src="logo.png" alt="Cropsey IT logo" width="40" height="40">
+        <img src="logo.png" alt="Cropsey IT logo" width="36" height="36">
         Cropsey IT Solutions, LLC
       </a>
       <nav>
+        <a href="#focus">Focus</a>
         <a href="#services">Services</a>
+        <a href="rhcsa.html">RHCSA Labs</a>
         <a href="#contact">Contact</a>
         <div class="social">
           <a href="https://www.linkedin.com/in/michael-cropsey/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
@@ -385,58 +250,75 @@
       <div class="container">
         <div class="hero-inner">
           <div>
-            <h1>Expert IT Consulting — Networks · Linux · Security · Automation</h1>
-            <p>Hands-on expertise across networking, Linux, Windows, and security. Stabilize infrastructure, automate operations, and reduce risk.</p>
+            <p class="eyebrow">Cybersecurity &middot; AI Security &middot; Linux &middot; Networking</p>
+            <h1>Securing your infrastructure&nbsp;&mdash; and the <em>AI agents</em> now running on it.</h1>
+            <p class="lead">Hands-on cybersecurity and AI security consulting built on years of Linux and network engineering. I help teams adopt LLMs and agentic AI without opening new holes, and harden the systems and networks underneath them.</p>
+            <div class="hero-cta">
+              <a class="btn btn-primary" href="#contact">Start a conversation</a>
+              <a class="btn btn-ghost" href="#services">See services</a>
+            </div>
+            <div class="pillars" aria-label="Focus areas">
+              <span>Agentic AI security</span><span>LLM threat modeling</span><span>Zero Trust</span><span>Linux hardening</span><span>Network security</span>
+            </div>
           </div>
           <div class="hero-logo">
-            <img src="logo.png" alt="Cropsey IT Solutions logo" width="280" height="280">
+            <img src="logo.png" alt="Cropsey IT Solutions logo" width="270" height="270">
           </div>
         </div>
       </div>
     </section>
 
-    <section id="capabilities">
+    <section id="focus">
       <div class="container">
-        <h2>Core Capabilities</h2>
-        <div class="capabilities">
-          <div class="card">
-            <h3>Networking</h3>
+        <div class="section-head">
+          <p class="kicker">Focus areas</p>
+          <h2>Security first, from the network up to the agent.</h2>
+          <p>AI systems inherit every weakness of the infrastructure they run on, and add new ones of their own. I work across the whole stack.</p>
+        </div>
+        <div class="focus">
+          <div class="card feature wide">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M8 4h8M9 13h.01M15 13h.01M9 17h6"/></svg></div>
+            <h3>AI &amp; Agentic AI Security <span class="badge">Core</span></h3>
             <ul>
-              <li>Design, implement, and stabilize enterprise networks</li>
-              <li>Load balancing for high availability and performance</li>
-              <li>Secure remote access and traffic optimization</li>
+              <li>Threat modeling for LLM apps and autonomous agents</li>
+              <li>Prompt injection, data leakage, and excessive-agency risk</li>
+              <li>Least-privilege tool access, sandboxing, and human approval gates</li>
+            </ul>
+          </div>
+          <div class="card feature wide">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <h3>Cybersecurity &amp; Zero Trust <span class="badge">Core</span></h3>
+            <ul>
+              <li>Vulnerability assessments and configuration reviews</li>
+              <li>Zero Trust architecture, identity, and access control</li>
+              <li>API security, WAF, and incident response support</li>
             </ul>
           </div>
           <div class="card">
-            <h3>Linux Systems Administration</h3>
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></div>
+            <h3>Linux Security &amp; Administration</h3>
             <ul>
-              <li>RHEL, Debian, Ubuntu, CentOS server management</li>
-              <li>System hardening and compliance (CIS, STIG)</li>
-              <li>Performance tuning and troubleshooting</li>
+              <li>RHEL, Rocky, Debian, Ubuntu</li>
+              <li>CIS/STIG hardening, SELinux, firewalld</li>
+              <li>Troubleshooting and performance tuning</li>
             </ul>
           </div>
           <div class="card">
-            <h3>Security</h3>
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-5.5 5.5M12 12l5.5 5.5"/></svg></div>
+            <h3>Network Security &amp; Engineering</h3>
             <ul>
-              <li>Firewalls and Zero Trust architectures</li>
-              <li>API Security and Web Application Firewalls (WAF)</li>
-              <li>Identity, access, and threat mitigation strategies</li>
+              <li>Cisco routing, switching, and WiFi</li>
+              <li>Firewalls, VPNs, and segmentation</li>
+              <li>Cisco ISE and secure access</li>
             </ul>
           </div>
           <div class="card">
-            <h3>Windows Systems Administration</h3>
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
+            <h3>Security Automation</h3>
             <ul>
-              <li>Active Directory &amp; GPO management</li>
-              <li>Patching, Certificate Services, and PowerShell automation</li>
-              <li>Exchange, SQL Server, and Windows clusters</li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>Automation &amp; Scripting</h3>
-            <ul>
-              <li>Ansible playbooks for reliable automation</li>
-              <li>Python scripting for custom workflows</li>
-              <li>Streamlined operations that reduce manual effort</li>
+              <li>Ansible for hardening and compliance</li>
+              <li>Python tooling and integrations</li>
+              <li>Repeatable, version-controlled builds</li>
             </ul>
           </div>
         </div>
@@ -445,97 +327,133 @@
 
     <section id="services">
       <div class="container">
-        <h2>Services</h2>
-        <p class="services-intro">I partner with organizations to solve tough infrastructure problems, reduce security risk, and scale operations with automation—without locking you into rigid packages or public pricing.</p>
-
-        <div class="service-block">
-          <h3>Network Administration</h3>
-          <ul>
-            <li><strong>Routing &amp; Switching</strong> — Enterprise networking with Cisco IOS and Nexus switches</li>
-            <li><strong>Cisco WiFi</strong> — Secure wireless deployments and performance optimization</li>
-            <li><strong>Firewalls</strong> — Design, operations, and policy management with Cisco ASA and NGFW</li>
-            <li><strong>Secure Access</strong> — Cisco Identity Services Engine (ISE) for authentication and authorization</li>
-            <li><strong>VPNs &amp; Segmentation</strong> — Remote access, site-to-site VPNs, and network segmentation</li>
-            <li><strong>Zero Trust / ZNTA</strong> — Implementation of Zero Trust patterns for secure connectivity</li>
-            <li><strong>VoIP</strong> — Deployment and security of Cisco VoIP solutions</li>
-          </ul>
+        <div class="section-head">
+          <p class="kicker">Services</p>
+          <h2>How I can help</h2>
+          <p>Flexible engagements with no rigid packages: from a one-time review to ongoing hands-on work alongside your team.</p>
         </div>
 
-        <div class="service-block">
-          <h3>Linux System Administration (RHEL / CentOS / Debian / Ubuntu)</h3>
-          <ul>
-            <li><strong>User &amp; Permission Management</strong> — Accounts, groups, sudoers, and access control</li>
-            <li><strong>Storage Management</strong> — Partitions, LVM, mounting, and persistent configuration</li>
-            <li><strong>File &amp; Directory Services</strong> — NFS, Samba, and LDAP integration</li>
-            <li><strong>System Security</strong> — Service hardening, SELinux, and firewalld configuration</li>
-            <li><strong>Patching &amp; Troubleshooting</strong> — Regular updates, CVE mitigation, and root cause analysis</li>
-            <li><strong>DevOps &amp; Kubernetes</strong> — Cluster management, CI/CD workflows, and container orchestration</li>
-            <li><strong>Automation &amp; Scripting</strong> — Ansible playbooks and custom shell scripting</li>
-          </ul>
-        </div>
+        <div class="services">
+          <div class="service feature">
+            <h3>AI &amp; Agentic AI Security</h3>
+            <p class="sub">For teams building or deploying LLM-powered apps, copilots, and autonomous agents that can take real actions.</p>
+            <ul>
+              <li><strong>AI threat modeling</strong>Map risks with OWASP Top 10 for LLM Applications and MITRE ATLAS before they reach production.</li>
+              <li><strong>Prompt injection &amp; red teaming</strong>Test direct and indirect injection, jailbreaks, and data exfiltration paths.</li>
+              <li><strong>Agent permissions &amp; guardrails</strong>Scope tools to least privilege, sandbox execution, and add human-in-the-loop approvals for risky actions.</li>
+              <li><strong>MCP &amp; tool integration review</strong>Assess MCP servers, plugins, and API connectors for over-broad access and trust issues.</li>
+              <li><strong>RAG &amp; data security</strong>Enforce access controls on retrieval and keep secrets and sensitive data out of prompts.</li>
+              <li><strong>Monitoring &amp; governance</strong>Log and audit agent activity, and align policy with the NIST AI RMF.</li>
+            </ul>
+          </div>
 
-        <div class="service-block">
-          <h3>Automation &amp; Scripting (Ansible, Python)</h3>
-          <ul>
-            <li><strong>Network Device Automation</strong> — Automating Cisco, NetScaler, and other network gear</li>
-            <li><strong>Linux Automation</strong> — System provisioning, patching, configuration management, and compliance</li>
-            <li><strong>Windows Automation</strong> — Active Directory, GPOs, patching, and application deployment</li>
-            <li><strong>CI/CD Workflows</strong> — Automated build, test, and deploy pipelines</li>
-            <li><strong>Standardized Runbooks</strong> — Repeatable, version-controlled automation</li>
-            <li><strong>Error Reduction &amp; Efficiency</strong> — Replace manual tasks with consistent, reliable automation</li>
-          </ul>
-        </div>
+          <div class="service feature">
+            <h3>Cybersecurity &amp; Zero Trust</h3>
+            <p class="sub">Practical risk reduction across identity, network, and application layers.</p>
+            <ul>
+              <li><strong>Vulnerability assessments</strong>Find and prioritize exposures, then help fix them.</li>
+              <li><strong>Zero Trust architecture</strong>Identity-aware access, microsegmentation, and continuous verification.</li>
+              <li><strong>Identity &amp; access</strong>Least-privilege design, MFA, and privileged access patterns.</li>
+              <li><strong>API security &amp; WAF</strong>API risk awareness, WAF policy, and web application protection.</li>
+              <li><strong>Policy &amp; configuration reviews</strong>Firewall rule audits and security baseline checks.</li>
+              <li><strong>Incident response support</strong>Triage, containment, root cause analysis, and hardening afterward.</li>
+            </ul>
+          </div>
 
-        <div class="service-block">
-          <h3>Windows System Administration</h3>
-          <ul>
-            <li><strong>Active Directory</strong> — Domain services, user/group management, and secure authentication</li>
-            <li><strong>GPO Policy Management</strong> — Centralized configuration, compliance, and security baselines</li>
-            <li><strong>Patching &amp; Updates</strong> — WSUS and automated patch management</li>
-            <li><strong>Certificate Services</strong> — PKI, SSL/TLS certificates, and enterprise trust</li>
-            <li><strong>PowerShell Automation</strong> — Scripting for administration, reporting, and Ansible integration</li>
-            <li><strong>Exchange Server</strong> — Messaging, calendaring, and secure mail flow</li>
-            <li><strong>SQL Server</strong> — Database administration, backups, and performance optimization</li>
-            <li><strong>Clustering &amp; High Availability</strong> — Failover clusters, load balancing, and DR planning</li>
-          </ul>
-        </div>
+          <div class="service">
+            <h3>Linux System Administration &amp; Hardening</h3>
+            <p class="sub">RHEL, Rocky, CentOS, Debian, and Ubuntu.</p>
+            <ul>
+              <li><strong>Hardening &amp; compliance</strong>CIS and STIG baselines, SELinux, firewalld, and service lockdown.</li>
+              <li><strong>Patching &amp; CVE mitigation</strong>Regular updates, vulnerability remediation, and root cause analysis.</li>
+              <li><strong>Users, permissions &amp; access</strong>Accounts, groups, sudoers, ACLs, and SSH key management.</li>
+              <li><strong>Storage &amp; file services</strong>LVM, persistent mounts, NFS, Samba, and LDAP integration.</li>
+              <li><strong>Containers &amp; Kubernetes</strong>Cluster management, CI/CD workflows, and container security.</li>
+              <li><strong>Monitoring &amp; logging</strong>Metrics, centralized logs, and alerting.</li>
+            </ul>
+          </div>
 
-        <div class="service-block">
-          <h3>Advisory &amp; Architecture Reviews</h3>
-          <p>Roadmaps, platform choices, migration guidance, and practical standards that balance velocity with security.</p>
-        </div>
+          <div class="service">
+            <h3>Network Engineering &amp; Security</h3>
+            <p class="sub">Enterprise Cisco environments, designed to be stable and secure.</p>
+            <ul>
+              <li><strong>Routing &amp; switching</strong>Cisco IOS and Nexus.</li>
+              <li><strong>Firewalls</strong>Design, operations, and policy management with Cisco ASA and NGFW.</li>
+              <li><strong>Secure access</strong>Cisco Identity Services Engine (ISE) for authentication and authorization.</li>
+              <li><strong>VPNs &amp; segmentation</strong>Remote access, site-to-site VPNs, and network segmentation.</li>
+              <li><strong>Wireless</strong>Secure Cisco WiFi deployments and performance tuning.</li>
+              <li><strong>Load balancing &amp; VoIP</strong>High availability, traffic optimization, and secured Cisco voice.</li>
+            </ul>
+          </div>
 
-        <div class="service-block">
-          <h3>Staff Augmentation &amp; Special Projects</h3>
-          <p>Short- and long-term coverage, project delivery, and off-hours support during peaks or maintenance windows.</p>
-        </div>
+          <div class="service">
+            <h3>Security Automation (Ansible, Python)</h3>
+            <p class="sub">Replace manual, error-prone work with consistent, auditable automation.</p>
+            <ul>
+              <li><strong>Compliance as code</strong>Automated hardening and drift detection across fleets.</li>
+              <li><strong>Network device automation</strong>Cisco, NetScaler, and other network gear.</li>
+              <li><strong>Linux provisioning &amp; patching</strong>Configuration management at scale.</li>
+              <li><strong>CI/CD &amp; runbooks</strong>Build, test, and deploy pipelines with version-controlled runbooks.</li>
+            </ul>
+          </div>
 
-        <div class="service-block">
-          <h3>Security Consulting &amp; Zero Trust</h3>
-          <p>Vulnerability assessments, identity &amp; access patterns, API risk awareness, incident response support, policy and configuration reviews.</p>
+          <div class="small-services">
+            <div class="service">
+              <h3>Advisory &amp; Architecture Reviews</h3>
+              <p>Roadmaps, platform choices, AI adoption guidance, and practical standards that balance speed with security.</p>
+            </div>
+            <div class="service">
+              <h3>Staff Augmentation &amp; Special Projects</h3>
+              <p>Short- and long-term coverage, project delivery, and off-hours support during peaks or maintenance windows.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="approach">
+      <div class="container">
+        <div class="section-head">
+          <p class="kicker">Approach</p>
+          <h2>Hands-on, practical, and built to stick</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><h3>Assess</h3><p>Understand your environment, your AI use cases, and where the real risk sits.</p></div>
+          <div class="step"><h3>Prioritize</h3><p>Rank findings by impact and effort so you fix what matters first.</p></div>
+          <div class="step"><h3>Implement</h3><p>Work hands-on with your team to harden, automate, and add guardrails.</p></div>
+          <div class="step"><h3>Verify</h3><p>Test the controls, document them, and leave you with repeatable runbooks.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="labs">
+      <div class="container">
+        <div class="labs">
+          <div>
+            <p class="kicker">Free resource</p>
+            <h2>RHCSA EX200 Lab Workbook</h2>
+            <p>25 hands-on, multi-server labs for RHEL 9 / 10, from SELinux and firewalld to LVM, NFS, and autofs, plus a printable command cheat sheet.</p>
+          </div>
+          <a class="btn btn-primary" href="rhcsa.html">Open the labs &rarr;</a>
         </div>
       </div>
     </section>
 
     <section id="contact">
       <div class="container">
-        <h2>Let’s Connect</h2>
         <div class="about-grid">
           <div class="about-text">
-            <p>Hands-on expertise across <strong>Networking, Linux, Windows, and Security</strong>. I integrate seamlessly with your team to stabilize infrastructure, automate operations, and provide critical off-hours coverage.</p>
-            <ul>
-              <li><strong>Cisco Networking &amp; Security</strong> — Routing, switching, WiFi, firewalls, Cisco ASA, Cisco ISE, and Zero Trust</li>
-              <li><strong>Linux Administration</strong> — RHEL, Debian, Ubuntu, CentOS; SELinux, firewalld, NFS/Samba, and system hardening</li>
-              <li><strong>Windows Administration</strong> — Active Directory, GPO, Certificate Services, Exchange, SQL Server, clustering</li>
-              <li><strong>Automation &amp; DevOps</strong> — Ansible playbooks, Python scripting, CI/CD workflows, and repeatable builds</li>
-            </ul>
+            <p class="kicker">Let&rsquo;s connect</p>
+            <h2 style="margin-bottom:1rem">Bring security into your AI plans early.</h2>
+            <p>Whether you&rsquo;re rolling out your first AI agent, hardening a Linux fleet, or tightening up network access, I work hands-on with your team to reduce risk without slowing you down.</p>
+            <p>Expertise spans <strong>cybersecurity, AI and agentic AI security, Linux, and Cisco networking</strong>, with automation tying it all together.</p>
             <p>Available for <strong>projects, advisory, or staff augmentation</strong>. U.S.-based, remote-first, with on-site options available by arrangement.</p>
           </div>
           <div class="contact-box">
-            <img class="logo-large" src="logo.png" alt="Cropsey IT logo" width="140" height="140">
+            <img src="logo.png" alt="Cropsey IT logo" width="120" height="120">
             <h3>Contact</h3>
-            <p>Tell me a bit about your project or needs and I’ll reach out with the right next steps.</p>
-            <a class="contact-email" href="mailto:mcropsey@gmail.com">mcropsey@gmail.com</a>
+            <p>Tell me a bit about your project and I&rsquo;ll reach out with the right next steps.</p>
+            <a class="btn btn-primary" href="mailto:mcropsey@gmail.com">mcropsey@gmail.com</a>
           </div>
         </div>
       </div>
@@ -543,9 +461,9 @@
   </main>
 
   <footer>
-    <div class="container">
+    <div class="container footer-inner">
       <p>&copy; <span id="year"></span> Cropsey IT Solutions, LLC</p>
-      <p style="margin-top: 0.35rem;"><a href="mailto:mcropsey@gmail.com">mcropsey@gmail.com</a></p>
+      <p><a href="mailto:mcropsey@gmail.com">mcropsey@gmail.com</a> &middot; <a href="rhcsa.html">RHCSA Labs</a></p>
     </div>
   </footer>
 
