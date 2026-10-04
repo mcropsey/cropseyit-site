@@ -703,25 +703,20 @@ exec /sbin/reboot -f</code></pre></div>
   <div class="callout"><p><code>init=/bin/bash</code> starts a root shell as PID&nbsp;1. <code>rd.break</code> no longer works on current RHEL. Skip <code>/.autorelabel</code> and SELinux will deny reads of the new <code>/etc/shadow</code>.</p></div>
 </section>
 
-<section class="card" id="tools" data-k="find tar gzip bzip2 xz script find_small_files size xdev prune parents exec copy archive compress">
+<section class="card" id="tools" data-k="find tar gzip bzip2 xz script find_small_files size xdev exec copy archive compress">
   <h2>Essential tools: find, tar, scripts<span class="ix">Labs 10, 12, 16</span></h2>
-  <h3>find &amp; copy, preserving paths</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>find / -xdev -path /root/find_large_files -prune -o \
-  -type f -size +4M -exec cp -a --parents -t /root/find_large_files {} +
-
-<span class="c"># how much am I about to copy?</span>
-find / -xdev -type f -size +4M -printf '%s\n' \
-  | awk '{s+=$1} END {printf "%.0f MiB\n", s/1048576}'
+  <h3>find &amp; copy</h3>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mkdir /root/find_large_files
+find / -xdev -type f -size +4M -exec cp {} /root/find_large_files/ \;
 
 <span class="c"># variants</span>
-find / -user harry -type f -exec cp -a --parents -t /root/harry_files {} +
+find / -user harry -type f -exec cp {} /root/harry_files/ \;
 find /usr/share -type f -size +30k -size -50k
 find / -xdev -nouser</code></pre></div>
   <div class="tablewrap"><table class="kv"><tbody>
-    <tr><td><code>-xdev</code></td><td>stay on one filesystem &mdash; skips /proc, /sys, /boot, NFS</td></tr>
-    <tr><td><code>-prune</code></td><td>don't descend into the destination, or find re-discovers its own copies</td></tr>
-    <tr><td><code>{} +</code></td><td>one <code>cp</code> for many files instead of one per file &mdash; far faster</td></tr>
-    <tr><td><code>--parents</code></td><td>recreate the source directory tree under the target</td></tr>
+    <tr><td><code>-xdev</code></td><td>stay on one filesystem &mdash; skips /proc (whose kcore reports terabytes), /sys, /boot, NFS</td></tr>
+    <tr><td><code>{}</code></td><td>replaced with each file find matches</td></tr>
+    <tr><td><code>\;</code></td><td>ends the <code>-exec</code> command; the backslash stops the shell from eating the <code>;</code></td></tr>
   </tbody></table></div>
   <div class="callout warn"><p><strong>The <code>-size</code> trap:</strong> <code>find -size -1M</code> matches <strong>only empty files</strong>. find rounds sizes up to whole units, so "less than one 1-MiB unit" means 0. For exact limits use bytes: <code>-size -1048576c</code>.</p></div>
   <h3>Archive &amp; compress</h3>
@@ -739,10 +734,8 @@ file /root/*.tar.*</code></pre></div>
   <h3>Script runnable by name</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cat &gt; /usr/local/bin/find_small_files.sh &lt;&lt;'EOF'
 #!/bin/bash
-dest=/root/find_root_files
-mkdir -p "$dest"
-find /usr/share -xdev -type f -size -1048576c \
-  -exec cp -a --parents -t "$dest" {} +
+mkdir -p /root/find_root_files
+find /usr/share -type f -size -1048576c -exec cp {} /root/find_root_files/ \;
 EOF
 chmod 755 /usr/local/bin/find_small_files.sh
 find_small_files.sh        <span class="c"># /usr/local/bin is in root's PATH</span></code></pre></div>

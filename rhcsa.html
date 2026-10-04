@@ -512,15 +512,8 @@ chronyc clients<span class="c">           # ServerA: lists 192.168.1.96</span></
     </div>
     <label class="done"><input type="checkbox" data-done="10"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>copy every regular file larger than 4 MiB on the root filesystem into /root/find_large_files, preserving paths.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mkdir -p /root/find_large_files
-
-<span class="c"># See how much you&#x27;re about to copy</span>
-find / -xdev -type f -size +4M -printf &#x27;%s\n&#x27; | awk &#x27;{s+=$1} END {printf &quot;%.0f MiB\n&quot;, s/1048576}&#x27;
-
-find / -xdev -path /root/find_large_files -prune -o \
-     -type f -size +4M -exec cp -a --parents -t /root/find_large_files {} +</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>du -sh /root/find_large_files
-find /root/find_large_files -type f | head
-find /root/find_large_files -type f ! -size +4M<span class="c">      # expect no output</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The <code>-prune</code> keeps find from descending into the destination. Without it, find can rediscover the files it just copied.</li><li><code>-exec ... {} +</code> runs cp once for many files instead of once per file, which is much faster.</li><li><code>-xdev</code> stays on the root filesystem, so /proc, /sys, /boot, and NFS mounts are skipped.</li><li>Exam variants: <code>find / -user harry -type f -exec cp -a --parents -t /root/harry_files {} +</code> and <code>find /usr/share -type f -size +30k -size -50k</code>.</li><li>The optional NFS export of /root was dropped. Exporting /root is poor practice; use <code>scp -r /root/find_large_files serverb:/tmp/</code> if you want a cross-host step.</li></ul>
+  <p class="goal"><span>Goal</span>find every file larger than 4 MiB and copy it into /root/find_large_files.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mkdir /root/find_large_files
+find / -xdev -type f -size +4M -exec cp {} /root/find_large_files/ \;</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls -lh /root/find_large_files</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>-xdev</code> keeps find on the root filesystem. Without it, find hits /proc/kcore, which reports a size of terabytes.</li><li>&quot;are the same file&quot; errors are harmless: find is rediscovering files it already copied into /root.</li><li>Exam variant: <code>find / -user harry -type f -exec cp {} /root/harry_files/ \;</code></li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-11" data-lab="11">
@@ -617,15 +610,11 @@ su -s /bin/bash sarah -c &#x27;sudo -n id&#x27;<span class="c">      # fails (sa
   </header>
   <p class="goal"><span>Goal</span>a script, runnable from anywhere, that copies files under /usr/share smaller than 1 MiB into /root/find_root_files.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cat &gt; /usr/local/bin/find_small_files.sh &lt;&lt;&#x27;EOF&#x27;
 #!/bin/bash
-<span class="c"># Copy regular files under /usr/share smaller than 1 MiB, preserving paths</span>
-dest=/root/find_root_files
-mkdir -p &quot;$dest&quot;
-find /usr/share -xdev -type f -size -1048576c -exec cp -a --parents -t &quot;$dest&quot; {} +
+mkdir -p /root/find_root_files
+find /usr/share -type f -size -1048576c -exec cp {} /root/find_root_files/ \;
 EOF
 chmod 755 /usr/local/bin/find_small_files.sh
-find_small_files.sh<span class="c">                        # /usr/local/bin is in root&#x27;s PATH</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>find /usr/share -xdev -type f -size -1048576c | wc -l
-find /root/find_root_files -type f | wc -l<span class="c">            # same count</span>
-find /root/find_root_files -type f -size +1048575c<span class="c">    # expect no output</span></code></pre></div><h3>Notes &amp; gotchas</h3><p class="callout warn"><strong>Warning:</strong> <code>find -size -1M</code> matches only <strong>empty</strong> files. find rounds sizes up to whole units, so &quot;less than 1 MiB&quot; becomes &quot;less than one 1-MiB unit&quot;, which is 0. The original script copied almost nothing. Use bytes (<code>c</code>) for exact limits.</p><ul><li>Putting the script in /usr/local/bin lets you run it by name, which exam tasks often require.</li><li>The optional NFS export of /root was dropped.</li></ul>
+find_small_files.sh<span class="c">                        # /usr/local/bin is in root&#x27;s PATH</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls /root/find_root_files | head</code></pre></div><h3>Notes &amp; gotchas</h3><p class="callout warn"><strong>Warning:</strong> <code>find -size -1M</code> matches only <strong>empty</strong> files. find rounds sizes up to whole units, so &quot;less than 1 MiB&quot; becomes &quot;less than one 1-MiB unit&quot;, which is 0. Use bytes (<code>c</code>) for exact limits.</p><ul><li>Putting the script in /usr/local/bin lets you run it by name, which exam tasks often require.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-17" data-lab="17">
