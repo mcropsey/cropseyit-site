@@ -441,7 +441,7 @@ sudo lvextend -L 1.5G  -r /dev/datastore/database <span class="c"># to absolute 
 sudo lvextend -r -l +100%FREE /dev/rhel/root    <span class="c"># take everything left</span>
 
 <span class="c"># out of space in the VG? add a disk:</span>
-sudo pvcreate /dev/vdc; sudo vgextend datastore /dev/vdc</code></pre></div>
+sudo pvcreate /dev/vdd; sudo vgextend datastore /dev/vdd</code></pre></div>
   <h3>Grow / after the hypervisor disk was enlarged</h3>
   <div class="callout"><p><strong>Memory anchor:</strong> disk &rarr; <code>growpart</code> &rarr; <code>pvresize</code> &rarr; <code>lvextend -r</code>. Every layer has to grow, in that order.</p></div>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk; df -h /; sudo pvs; sudo vgs              <span class="c"># 0. before</span>
@@ -487,28 +487,29 @@ findmnt /mnt/database; df -h /mnt/database</code></pre></div>
   <div class="callout warn"><p><strong>Order matters:</strong> <code>chmod</code> the mount point <em>after</em> mounting. Do it before and you've only changed the empty directory that the filesystem then hides.</p></div>
 </section>
 
-<section class="card" id="swap" data-k="swap swapfile mkswap swapon dd fallocate swapfile_t free">
+<section class="card" id="swap" data-k="swap mkswap swapon partition linux-swap lvcreate parted free existing">
   <h2>Swap<span class="ix">Lab 18</span></h2>
-  <h3>Swap file</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dd if=/dev/zero of=/swapfile bs=1M count=512
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo semanage fcontext -a -t swapfile_t /swapfile <span class="c"># if ls -Z disagrees</span>
-sudo restorecon -v /swapfile
-echo '/swapfile none swap defaults 0 0' | sudo tee -a /etc/fstab
-sudo systemctl daemon-reload
-sudo swapon -a</code></pre></div>
-  <h3>Swap LV (the exam's usual phrasing)</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo lvcreate -L 256M -n swap datastore
+  <h3>Swap LV</h3>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>swapon --show                    <span class="c"># note the existing swap first</span>
+sudo lvcreate -L 256M -n swap datastore
 sudo mkswap /dev/datastore/swap
 echo "UUID=$(sudo blkid -s UUID -o value /dev/datastore/swap) \
+none swap defaults 0 0" | sudo tee -a /etc/fstab</code></pre></div>
+  <h3>Swap partition</h3>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>SWAPDISK=/dev/vdc                <span class="c"># the small extra disk (lsblk)</span>
+sudo parted -s $SWAPDISK mklabel gpt
+sudo parted -s $SWAPDISK mkpart swap1 linux-swap 1MiB 513MiB   <span class="c"># 512 MiB</span>
+sudo udevadm settle
+sudo mkswap ${SWAPDISK}1
+echo "UUID=$(sudo blkid -s UUID -o value ${SWAPDISK}1) \
 none swap defaults 0 0" | sudo tee -a /etc/fstab
+
 sudo systemctl daemon-reload
 sudo swapon -a
-swapon --show; free -h</code></pre></div>
+swapon --show; free -h           <span class="c"># old swap + LV (/dev/dm-N) + partition</span></code></pre></div>
   <ul>
-    <li>Use <code>dd</code>, not <code>fallocate</code> &mdash; <code>swapon</code> rejects fallocated files on some filesystems.</li>
-    <li>The SELinux label matters at <em>boot</em>, when systemd activates the file. A wrong label shows up as an AVC after reboot.</li>
+    <li>Keep the existing swap: only <strong>add</strong> fstab lines.</li>
+    <li>Partition end = start + size (1MiB + 512MiB = 513MiB). MBR: <code>mklabel msdos</code>, <code>mkpart primary linux-swap ...</code>.</li>
   </ul>
 </section>
 
@@ -802,7 +803,7 @@ flatpak list                      <span class="c"># empty</span></code></pre></d
       <tr><td>15</td><td>Passwordless sudo</td><td>A</td><td>4</td><td><a href="#sudo">sudo</a></td></tr>
       <tr><td>16</td><td>Script: find small files</td><td>A</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
       <tr><td>17</td><td>Root password reset</td><td>A</td><td>&mdash;</td><td><a href="#boot">Boot &amp; recovery</a></td></tr>
-      <tr><td>18</td><td>Swap file + swap LV</td><td>B</td><td>19 (LV part)</td><td><a href="#swap">Swap</a></td></tr>
+      <tr><td>18</td><td>Swap LV + swap partition</td><td>A</td><td>19, third disk</td><td><a href="#swap">Swap</a></td></tr>
       <tr><td>19</td><td>LVM: VG, LV, mount by UUID</td><td>A</td><td>&mdash;</td><td><a href="#lvm">LVM</a>, <a href="#fstab">fstab</a></td></tr>
       <tr><td>20</td><td>Extend the LV</td><td>A</td><td>19</td><td><a href="#lvm">LVM</a></td></tr>
       <tr><td>21</td><td>tuned &amp; process priority</td><td>both</td><td>&mdash;</td><td><a href="#tuned">tuned</a></td></tr>
