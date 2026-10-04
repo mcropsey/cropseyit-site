@@ -720,16 +720,12 @@ find / -xdev -nouser</code></pre></div>
   </tbody></table></div>
   <div class="callout warn"><p><strong>The <code>-size</code> trap:</strong> <code>find -size -1M</code> matches <strong>only empty files</strong>. find rounds sizes up to whole units, so "less than one 1-MiB unit" means 0. For exact limits use bytes: <code>-size -1048576c</code>.</p></div>
   <h3>Archive &amp; compress</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>tar -czf /root/var-backup.tar.gz --exclude=var/www/html/rhel /var
-tar -tzf /root/var-backup.tar.gz | head          <span class="c"># list</span>
-tar -xzf /root/var-backup.tar.gz -C /root/restore var/log   <span class="c"># partial restore</span>
-
-tar -cjf /root/etc-backup.tar.bz2 /etc           <span class="c"># bzip2</span>
-tar -cJf /root/etc-backup.tar.xz  /etc           <span class="c"># xz</span>
-file /root/*.tar.*</code></pre></div>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>tar -cjf /root/backup.tar.bz2 /usr/local
+file /root/backup.tar.bz2                  <span class="c"># bzip2 compressed data</span>
+tar -tjf /root/backup.tar.bz2 | head       <span class="c"># list</span></code></pre></div>
   <ul>
-    <li>Mnemonic: <strong>z</strong>&nbsp;=&nbsp;gzip (.gz), <strong>j</strong>&nbsp;=&nbsp;bzip2 (.bz2), <strong>J</strong>&nbsp;=&nbsp;xz (.xz). <code>-C</code> chooses where to extract.</li>
-    <li>"Removing leading <code>/</code> from member names" and "socket ignored" are normal.</li>
+    <li>Mnemonic: <strong>z</strong>&nbsp;=&nbsp;gzip (.gz), <strong>j</strong>&nbsp;=&nbsp;bzip2 (.bz2), <strong>J</strong>&nbsp;=&nbsp;xz (.xz). Use the one the task asks for.</li>
+    <li>If <code>-j</code> fails, <code>dnf -y install bzip2</code>.</li>
   </ul>
   <h3>Script runnable by name</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cat &gt; /usr/local/bin/find_small_files.sh &lt;&lt;'EOF'
