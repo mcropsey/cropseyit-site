@@ -175,7 +175,7 @@ th { font-weight: 700; border-bottom: 2px solid var(--teal); }
     <em>Every command from these 25 labs, regrouped by exam objective &mdash; searchable and printable.</em>
     <a class="go" href="cheatsheet.html">Open cheat sheet &rarr;</a>
   </p>
-  <p>Servers: <strong>ServerA</strong> = 192.168.1.95 (servera.lab.local) | <strong>ServerB</strong> = 192.168.1.96 (serverb.lab.local)</p><p>Unless a step says otherwise, run commands as root (<code>sudo -i</code>), the same way you work on the exam.</p><h2>How to use this workbook</h2><ul><li>Do every lab in the same order: make the change, <strong>verify it</strong>, then <strong>reboot and verify again</strong>. The exam is graded after a reboot, so anything that doesn&#x27;t survive one scores zero.</li><li>Before any reboot that follows an <code>/etc/fstab</code> change, run <code>findmnt --verify</code>. A bad fstab line can drop the server into emergency mode.</li><li>Never &quot;fix&quot; SELinux by setting it to permissive or disabled. Read the denial, then fix the label, port, or boolean.</li><li>When you forget syntax, use <code>man &lt;cmd&gt;</code>, <code>man 5 &lt;file&gt;</code>, the EXAMPLES section of <code>man semanage-fcontext</code>, and <code>/usr/share/doc/</code>. They&#x27;re all available on the exam.</li><li>Take a VM snapshot of both servers after Lab 1, and again before Lab 3.</li></ul><h2>Lab order &amp; dependencies</h2><div class="tablewrap"><table><thead><tr><th>Lab</th><th>Needs first</th><th>Notes</th></tr></thead><tbody><tr><td>1 Network</td><td>none</td><td>Do first on both servers</td></tr><tr><td>2 Repository</td><td>1</td><td>ServerB installs packages from ServerA after this</td></tr><tr><td>3 Apache/SELinux</td><td>2</td><td>Moves Apache off port 80 and off /var/www/html, which breaks the Lab 2 repo. Snapshot first.</td></tr><tr><td>4 Users</td><td>1</td><td>Creates harry, natasha, sarah, used by Labs 5, 7, 8, 13, 15, 23</td></tr><tr><td>6 NFS/autofs</td><td>1, 2</td><td>ServerB needs packages from the repo</td></tr><tr><td>9 chrony</td><td>1</td><td>ServerA becomes ServerB&#x27;s time source</td></tr><tr><td>18 Swap (LV variant), 20</td><td>19</td><td>Uses the datastore VG</td></tr><tr><td>24 Diagnostics drill</td><td>2</td><td>Run on ServerB (nginx needs port 80 free)</td></tr></tbody></table></div><h2>Quick standards applied</h2><ul><li>Passwords are set non-interactively with <code>chpasswd</code>.</li><li>Users are created in the same order on both servers so UIDs match (required for NFS).</li><li>Custom Apache ports use SELinux type <code>http_port_t</code>; custom web roots use <code>httpd_sys_content_t</code>.</li><li>NFS: firewalld opens nfs, mountd, rpc-bind. Autofs timeout is 30 seconds, configured with a drop-in in <code>/etc/auto.master.d/</code>.</li><li><code>/etc/fstab</code> entries use UUIDs for block devices and <code>_netdev</code> for network mounts.</li><li>Root password reset uses <code>init=/bin/bash</code> (rd.break no longer works).</li><li>Container lab removed; Lab 22 covers Flatpak install and removal.</li></ul>
+  <p>Servers: <strong>ServerA</strong> = 192.168.1.95 (servera.lab.local) | <strong>ServerB</strong> = 192.168.1.96 (serverb.lab.local)</p><p>Commands are written for a regular user with sudo rights (a member of <code>wheel</code>). Anything that needs root starts with <code>sudo</code>. Files are written with <code>sudo tee</code>, because <code>sudo echo ... &gt; file</code> fails: the <code>&gt;</code> is handled by your own shell, not by sudo. On the exam you can work this way, or open a root shell once with <code>sudo -i</code> and leave the <code>sudo</code> off.</p><h2>How to use this workbook</h2><ul><li>Do every lab in the same order: make the change, <strong>verify it</strong>, then <strong>reboot and verify again</strong>. The exam is graded after a reboot, so anything that doesn&#x27;t survive one scores zero.</li><li>Before any reboot that follows an <code>/etc/fstab</code> change, run <code>findmnt --verify</code>. A bad fstab line can drop the server into emergency mode.</li><li>Never &quot;fix&quot; SELinux by setting it to permissive or disabled. Read the denial, then fix the label, port, or boolean.</li><li>When you forget syntax, use <code>man &lt;cmd&gt;</code>, <code>man 5 &lt;file&gt;</code>, the EXAMPLES section of <code>man semanage-fcontext</code>, and <code>/usr/share/doc/</code>. They&#x27;re all available on the exam.</li><li>Take a VM snapshot of both servers after Lab 1, and again before Lab 3.</li></ul><h2>Lab order &amp; dependencies</h2><div class="tablewrap"><table><thead><tr><th>Lab</th><th>Needs first</th><th>Notes</th></tr></thead><tbody><tr><td>1 Network</td><td>none</td><td>Do first on both servers</td></tr><tr><td>2 Repository</td><td>1</td><td>ServerB installs packages from ServerA after this</td></tr><tr><td>3 Apache/SELinux</td><td>2</td><td>Moves Apache off port 80 and off /var/www/html, which breaks the Lab 2 repo. Snapshot first.</td></tr><tr><td>4 Users</td><td>1</td><td>Creates harry, natasha, sarah, used by Labs 5, 7, 8, 13, 15, 23</td></tr><tr><td>6 NFS/autofs</td><td>1, 2</td><td>ServerB needs packages from the repo</td></tr><tr><td>9 chrony</td><td>1</td><td>ServerA becomes ServerB&#x27;s time source</td></tr><tr><td>18 Swap (LV variant), 20</td><td>19</td><td>Uses the datastore VG</td></tr><tr><td>24 Diagnostics drill</td><td>2</td><td>Run on ServerB (nginx needs port 80 free)</td></tr></tbody></table></div><h2>Quick standards applied</h2><ul><li>Passwords are set non-interactively with <code>chpasswd</code>.</li><li>Users are created in the same order on both servers so UIDs match (required for NFS).</li><li>Custom Apache ports use SELinux type <code>http_port_t</code>; custom web roots use <code>httpd_sys_content_t</code>.</li><li>NFS: firewalld opens nfs, mountd, rpc-bind. Autofs timeout is 30 seconds, configured with a drop-in in <code>/etc/auto.master.d/</code>.</li><li><code>/etc/fstab</code> entries use UUIDs for block devices and <code>_netdev</code> for network mounts.</li><li>Root password reset uses <code>init=/bin/bash</code> (rd.break no longer works).</li><li>Container lab removed; Lab 22 covers Flatpak install and removal.</li></ul>
 </section>
 
 <section class="lab" id="lab-1" data-lab="1">
@@ -194,19 +194,19 @@ nmcli -t -f NAME,DEVICE con show --active
 CON=&quot;ens160&quot;<span class="c">          # &lt;-- set to YOUR connection name</span>
 
 <span class="c"># ServerA</span>
-hostnamectl set-hostname servera.lab.local
-nmcli con mod &quot;$CON&quot; ipv4.addresses 192.168.1.95/24 ipv4.gateway 192.168.1.1 \
+sudo hostnamectl set-hostname servera.lab.local
+sudo nmcli con mod &quot;$CON&quot; ipv4.addresses 192.168.1.95/24 ipv4.gateway 192.168.1.1 \
   ipv4.dns &quot;1.1.1.1 8.8.8.8&quot; ipv4.method manual connection.autoconnect yes
-nmcli con up &quot;$CON&quot;
+sudo nmcli con up &quot;$CON&quot;
 
 <span class="c"># ServerB</span>
-hostnamectl set-hostname serverb.lab.local
-nmcli con mod &quot;$CON&quot; ipv4.addresses 192.168.1.96/24 ipv4.gateway 192.168.1.1 \
+sudo hostnamectl set-hostname serverb.lab.local
+sudo nmcli con mod &quot;$CON&quot; ipv4.addresses 192.168.1.96/24 ipv4.gateway 192.168.1.1 \
   ipv4.dns &quot;1.1.1.1 8.8.8.8&quot; ipv4.method manual connection.autoconnect yes
-nmcli con up &quot;$CON&quot;
+sudo nmcli con up &quot;$CON&quot;
 
 <span class="c"># Both: hosts entries (the grep guard stops duplicates if you re-run it)</span>
-grep -q servera.lab.local /etc/hosts || cat &gt;&gt; /etc/hosts &lt;&lt;&#x27;EOF&#x27;
+grep -q servera.lab.local /etc/hosts || sudo tee -a /etc/hosts &lt;&lt;&#x27;EOF&#x27;
 192.168.1.95 servera.lab.local servera
 192.168.1.96 serverb.lab.local serverb
 EOF</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ip -4 addr show
@@ -215,7 +215,7 @@ hostnamectl
 cat /etc/resolv.conf
 ping -c 2 serverb<span class="c">          # from ServerA</span>
 ping -c 2 servera<span class="c">          # from ServerB</span>
-reboot<span class="c">                     # then repeat the checks</span></code></pre></div><h3>Notes &amp; gotchas</h3><p class="callout warn"><strong>Warning:</strong> If you&#x27;re connected over SSH, <code>nmcli con up</code> drops your session when the address changes. Run it from the VM console.</p><ul><li>Set <code>ipv4.addresses</code> in the same command as (or before) <code>ipv4.method manual</code>. Manual mode with no address is rejected.</li><li>RHEL 9 and 10 store connections as keyfiles in <code>/etc/NetworkManager/system-connections/</code>. Old ifcfg files are deprecated in RHEL 9 and not used in RHEL 10, so use <code>nmcli</code> or <code>nmtui</code>.</li><li>Exam variant: add a static IPv6 address with <code>ipv6.addresses fd00::95/64 ipv6.method manual</code>.</li></ul>
+sudo reboot<span class="c">                # then repeat the checks</span></code></pre></div><h3>Notes &amp; gotchas</h3><p class="callout warn"><strong>Warning:</strong> If you&#x27;re connected over SSH, <code>nmcli con up</code> drops your session when the address changes. Run it from the VM console.</p><ul><li>Set <code>ipv4.addresses</code> in the same command as (or before) <code>ipv4.method manual</code>. Manual mode with no address is rejected.</li><li>RHEL 9 and 10 store connections as keyfiles in <code>/etc/NetworkManager/system-connections/</code>. Old ifcfg files are deprecated in RHEL 9 and not used in RHEL 10, so use <code>nmcli</code> or <code>nmtui</code>.</li><li>Exam variant: add a static IPv6 address with <code>ipv6.addresses fd00::95/64 ipv6.method manual</code>.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-2" data-lab="2">
@@ -228,14 +228,14 @@ reboot<span class="c">                     # then repeat the checks</span></code
     <label class="done"><input type="checkbox" data-done="2"> Done</label>
   </header>
   <p class="goal"><span>Goal</span>serve BaseOS and AppStream from the RHEL install ISO on ServerA; consume it with a file:// repo on ServerA and an http:// repo on ServerB.</p><h3>Steps — ServerA</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># Copy the RHEL ISO (same major version as the servers) to /root/rhel.iso</span>
-mkdir -p /var/www/html/rhel
-mount -o loop,ro /root/rhel.iso /mnt
-cp -a /mnt/. /var/www/html/rhel/<span class="c">        # roughly 10 GB; check free space first</span>
-umount /mnt
+sudo mkdir -p /var/www/html/rhel
+sudo mount -o loop,ro /root/rhel.iso /mnt
+sudo cp -a /mnt/. /var/www/html/rhel/<span class="c">   # roughly 10 GB; check free space first</span>
+sudo umount /mnt
 ls /var/www/html/rhel<span class="c">                    # expect BaseOS  AppStream  ...</span>
 
 <span class="c"># Local file:// repo, so ServerA can install httpd without a network repo</span>
-cat &gt; /etc/yum.repos.d/local.repo &lt;&lt;&#x27;EOF&#x27;
+sudo tee /etc/yum.repos.d/local.repo &lt;&lt;&#x27;EOF&#x27;
 [local-baseos]
 name=Local BaseOS
 baseurl=file:///var/www/html/rhel/BaseOS
@@ -251,12 +251,12 @@ gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
 EOF
 
-dnf clean all
-dnf -y install httpd
-restorecon -Rv /var/www/html<span class="c">            # cp -a keeps the ISO&#x27;s labels; reset to httpd_sys_content_t</span>
-systemctl enable --now httpd
-firewall-cmd --permanent --add-service=http
-firewall-cmd --reload</code></pre></div><h3>Steps — ServerB</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cat &gt; /etc/yum.repos.d/lab.repo &lt;&lt;&#x27;EOF&#x27;
+sudo dnf clean all
+sudo dnf -y install httpd
+sudo restorecon -Rv /var/www/html<span class="c">       # cp -a keeps the ISO&#x27;s labels; reset to httpd_sys_content_t</span>
+sudo systemctl enable --now httpd
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --reload</code></pre></div><h3>Steps — ServerB</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /etc/yum.repos.d/lab.repo &lt;&lt;&#x27;EOF&#x27;
 [lab-baseos]
 name=Lab BaseOS
 baseurl=http://192.168.1.95/rhel/BaseOS
@@ -271,10 +271,10 @@ enabled=1
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
 EOF
-dnf clean all
-dnf repolist</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -sI http://192.168.1.95/rhel/BaseOS/repodata/repomd.xml | head -1<span class="c">   # HTTP/1.1 200 OK</span>
-dnf repolist -v | grep -E &#x27;Repo-id|Repo-pkgs&#x27;
-dnf info nfs-utils | grep -i repo<span class="c">                                         # from ServerB: lab-baseos</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original used <code>$releaserver</code> (a typo for <code>$releasever</code>) in two places. Also, <code>$releasever</code> and <code>$basearch</code> are dnf variables. In a shell command such as <code>mkdir</code> or <code>curl</code> they expand to empty strings, so the paths came out wrong. This version uses the ISO&#x27;s own layout, so neither variable is needed.</li><li>Exam shortcut: <code>dnf config-manager --add-repo http://.../BaseOS</code> writes the repo file for you, but with no <code>gpgkey=</code> line, so installs fail the signature check. Either add the <code>gpgkey=</code> line or run <code>rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release</code>. Use <code>gpgcheck=0</code> only if the task tells you to.</li><li>A noisy third-party repo that fails (like a 401 from an expired credential) stops every dnf command. Skip it with <code>--disablerepo=&lt;id&gt;</code> or disable it with <code>dnf config-manager --disable &lt;id&gt;</code>.</li></ul>
+sudo dnf clean all
+sudo dnf repolist</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -sI http://192.168.1.95/rhel/BaseOS/repodata/repomd.xml | head -1<span class="c">   # HTTP/1.1 200 OK</span>
+sudo dnf repolist -v | grep -E &#x27;Repo-id|Repo-pkgs&#x27;
+sudo dnf info nfs-utils | grep -i repo<span class="c">                                    # from ServerB: lab-baseos</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original used <code>$releaserver</code> (a typo for <code>$releasever</code>) in two places. Also, <code>$releasever</code> and <code>$basearch</code> are dnf variables. In a shell command such as <code>mkdir</code> or <code>curl</code> they expand to empty strings, so the paths came out wrong. This version uses the ISO&#x27;s own layout, so neither variable is needed.</li><li>Exam shortcut: <code>sudo dnf config-manager --add-repo http://.../BaseOS</code> writes the repo file for you, but with no <code>gpgkey=</code> line, so installs fail the signature check. Either add the <code>gpgkey=</code> line or run <code>sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release</code>. Use <code>gpgcheck=0</code> only if the task tells you to.</li><li>A noisy third-party repo that fails (like a 401 from an expired credential) stops every dnf command. Skip it with <code>--disablerepo=&lt;id&gt;</code> or disable it with <code>sudo dnf config-manager --disable &lt;id&gt;</code>.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-3" data-lab="3">
@@ -286,50 +286,50 @@ dnf info nfs-utils | grep -i repo<span class="c">                               
     </div>
     <label class="done"><input type="checkbox" data-done="3"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>serve /webdata on port 82 with SELinux enforcing, verify from ServerB, and survive a reboot.</p><p class="goal"><span>Flow</span>baseline → move DocumentRoot → SELinux file-context denial → fix → port 82 → SELinux port denial → fix → &quot;forget&quot; the firewall → firewall denial → fix → reboot test → cleanup.</p><p class="callout warn"><strong>Warning:</strong> This lab moves Apache off port 80 and off /var/www/html, which breaks the Lab 2 repository for ServerB. Snapshot ServerA first and revert afterwards, or restore <code>Listen 80</code> and the original DocumentRoot when you&#x27;re done.</p><h3>0. Prep</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>dnf -y install httpd policycoreutils-python-utils setroubleshoot-server
-systemctl enable --now httpd
-systemctl is-enabled firewalld auditd<span class="c">       # both should already be enabled</span></code></pre></div><ul><li><strong>policycoreutils</strong> (base, preinstalled): <code>restorecon</code>, <code>getenforce</code>, <code>setenforce</code></li><li><strong>policycoreutils-python-utils</strong>: <code>semanage</code>, <code>audit2why</code>, <code>audit2allow</code></li><li><strong>setroubleshoot-server</strong>: <code>sealert</code> and plain-English AVC summaries in the journal</li><li><strong>auditd</strong>: writes AVC denials to /var/log/audit/audit.log. Never run <code>systemctl restart auditd</code> (the unit refuses it); use <code>service auditd restart</code>.</li></ul><h3>1. SELinux awareness</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>getenforce
+  <p class="goal"><span>Goal</span>serve /webdata on port 82 with SELinux enforcing, verify from ServerB, and survive a reboot.</p><p class="goal"><span>Flow</span>baseline → move DocumentRoot → SELinux file-context denial → fix → port 82 → SELinux port denial → fix → &quot;forget&quot; the firewall → firewall denial → fix → reboot test → cleanup.</p><p class="callout warn"><strong>Warning:</strong> This lab moves Apache off port 80 and off /var/www/html, which breaks the Lab 2 repository for ServerB. Snapshot ServerA first and revert afterwards, or restore <code>Listen 80</code> and the original DocumentRoot when you&#x27;re done.</p><h3>0. Prep</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install httpd policycoreutils-python-utils setroubleshoot-server
+sudo systemctl enable --now httpd
+systemctl is-enabled firewalld auditd<span class="c">       # both should already be enabled</span></code></pre></div><ul><li><strong>policycoreutils</strong> (base, preinstalled): <code>restorecon</code>, <code>getenforce</code>, <code>setenforce</code></li><li><strong>policycoreutils-python-utils</strong>: <code>semanage</code>, <code>audit2why</code>, <code>audit2allow</code></li><li><strong>setroubleshoot-server</strong>: <code>sealert</code> and plain-English AVC summaries in the journal</li><li><strong>auditd</strong>: writes AVC denials to /var/log/audit/audit.log. Never run <code>systemctl restart auditd</code> (the unit refuses it); use <code>sudo service auditd restart</code>.</li></ul><h3>1. SELinux awareness</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>getenforce
 sestatus
-grep ^SELINUX= /etc/selinux/config</code></pre></div><p>Three ways to view denials (used throughout):</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ausearch -m avc -ts recent -i<span class="c">               # raw events; &quot;recent&quot; = last 10 minutes</span>
-sealert -a /var/log/audit/audit.log<span class="c">         # analysis plus a suggested fix</span>
-journalctl -t setroubleshoot --since &quot;-10min&quot;</code></pre></div><h3>2. Baseline on port 80</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &quot;Hello from original DocumentRoot&quot; &gt; /var/www/html/index.html
-firewall-cmd --permanent --add-service=http<span class="c">   # already done in Lab 2; harmless</span>
-firewall-cmd --reload
+grep ^SELINUX= /etc/selinux/config</code></pre></div><p>Three ways to view denials (used throughout):</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ausearch -m avc -ts recent -i<span class="c">          # raw events; &quot;recent&quot; = last 10 minutes</span>
+sudo sealert -a /var/log/audit/audit.log<span class="c">    # analysis plus a suggested fix</span>
+sudo journalctl -t setroubleshoot --since &quot;-10min&quot;</code></pre></div><h3>2. Baseline on port 80</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &quot;Hello from original DocumentRoot&quot; | sudo tee /var/www/html/index.html
+sudo firewall-cmd --permanent --add-service=http<span class="c">  # already done in Lab 2; harmless</span>
+sudo firewall-cmd --reload
 curl http://localhost<span class="c">                         # on ServerA</span>
-curl http://192.168.1.95<span class="c">                      # on ServerB</span></code></pre></div><p>Optional: move the welcome page aside so a 403 shows as a 403 instead of the Red Hat test page.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mv /etc/httpd/conf.d/welcome.conf /root/welcome.conf.bak</code></pre></div><h3>3. Move DocumentRoot to /webdata (file-context denial)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mkdir /webdata
-echo &quot;Hello from /webdata&quot; &gt; /webdata/index.html
-ls -Zd /var/www/html /webdata<span class="c">        # httpd_sys_content_t vs default_t</span></code></pre></div><p>Edit /etc/httpd/conf/httpd.conf. CHANGE the existing DocumentRoot line (don&#x27;t add a second one) and add a Directory block:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>DocumentRoot &quot;/webdata&quot;
+curl http://192.168.1.95<span class="c">                      # on ServerB</span></code></pre></div><p>Optional: move the welcome page aside so a 403 shows as a 403 instead of the Red Hat test page.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mv /etc/httpd/conf.d/welcome.conf /root/welcome.conf.bak</code></pre></div><h3>3. Move DocumentRoot to /webdata (file-context denial)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir /webdata
+echo &quot;Hello from /webdata&quot; | sudo tee /webdata/index.html
+ls -Zd /var/www/html /webdata<span class="c">        # httpd_sys_content_t vs default_t</span></code></pre></div><p>Edit the config with <code>sudo vi /etc/httpd/conf/httpd.conf</code>. CHANGE the existing DocumentRoot line (don&#x27;t add a second one) and add a Directory block:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>DocumentRoot &quot;/webdata&quot;
 &lt;Directory &quot;/webdata&quot;&gt;
     AllowOverride None
     Require all granted
-&lt;/Directory&gt;</code></pre></div><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>apachectl configtest<span class="c">                  # expect &quot;Syntax OK&quot;</span>
-systemctl restart httpd
-curl -i http://localhost<span class="c">              # expect HTTP/1.1 403 Forbidden</span></code></pre></div><p>Read the denial. Look for <code>denied { read } ... tcontext=...default_t ... comm=&quot;httpd&quot;</code>:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ausearch -m avc -ts recent -i
-ausearch -m avc -ts recent | audit2why<span class="c">      # SELinux explains the cause</span>
-journalctl -t setroubleshoot --since &quot;-10min&quot;</code></pre></div><p>Fix it (a persistent rule, then apply it):</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>semanage fcontext -a -t httpd_sys_content_t &quot;/webdata(/.*)?&quot;
-restorecon -Rv /webdata
+&lt;/Directory&gt;</code></pre></div><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo apachectl configtest<span class="c">             # expect &quot;Syntax OK&quot;</span>
+sudo systemctl restart httpd
+curl -i http://localhost<span class="c">              # expect HTTP/1.1 403 Forbidden</span></code></pre></div><p>Read the denial. Look for <code>denied { read } ... tcontext=...default_t ... comm=&quot;httpd&quot;</code>:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ausearch -m avc -ts recent -i
+sudo ausearch -m avc -ts recent | sudo audit2why<span class="c">  # SELinux explains the cause</span>
+sudo journalctl -t setroubleshoot --since &quot;-10min&quot;</code></pre></div><p>Fix it (a persistent rule, then apply it):</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo semanage fcontext -a -t httpd_sys_content_t &quot;/webdata(/.*)?&quot;
+sudo restorecon -Rv /webdata
 ls -Z /webdata/index.html<span class="c">             # now httpd_sys_content_t</span>
-curl http://localhost<span class="c">                 # &quot;Hello from /webdata&quot;</span></code></pre></div><ul><li>Alternative fix: copy the rules for /var/www with <code>semanage fcontext -a -e /var/www /webdata</code>.</li><li>Trap: <code>chcon</code> works until the next relabel, then it&#x27;s gone. Use <code>semanage fcontext</code> plus <code>restorecon</code> for a persistent fix.</li><li>Bonus gotcha: create a file in your home directory and <code>mv</code> it into /webdata. It keeps <code>user_home_t</code>, because mv preserves context while cp inherits the target&#x27;s. Check with <code>ls -Z</code>, then fix it with <code>restorecon</code>.</li></ul><h3>4. Change to port 82 (port-type denial)</h3><p>Edit /etc/httpd/conf/httpd.conf and change <code>Listen 80</code> to <code>Listen 82</code>.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>apachectl configtest
-systemctl restart httpd<span class="c">               # FAILS (this is expected)</span>
+curl http://localhost<span class="c">                 # &quot;Hello from /webdata&quot;</span></code></pre></div><ul><li>Alternative fix: copy the rules for /var/www with <code>sudo semanage fcontext -a -e /var/www /webdata</code>.</li><li>Trap: <code>chcon</code> works until the next relabel, then it&#x27;s gone. Use <code>semanage fcontext</code> plus <code>restorecon</code> for a persistent fix.</li><li>Bonus gotcha: create a file in your home directory and <code>mv</code> it into /webdata. It keeps <code>user_home_t</code>, because mv preserves context while cp inherits the target&#x27;s. Check with <code>ls -Z</code>, then fix it with <code>restorecon</code>.</li></ul><h3>4. Change to port 82 (port-type denial)</h3><p>Run <code>sudo vi /etc/httpd/conf/httpd.conf</code> and change <code>Listen 80</code> to <code>Listen 82</code>.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo apachectl configtest
+sudo systemctl restart httpd<span class="c">          # FAILS (this is expected)</span>
 systemctl status httpd --no-pager<span class="c">     # &quot;could not bind to address ... :82&quot;</span>
-ausearch -m avc -ts recent -i<span class="c">         # denied { name_bind } ... src=82</span></code></pre></div><p>Port 82 isn&#x27;t in the default http_port_t list (80, 81, 443, 488, 8008, 8009, 8443, 9000). Fix:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>semanage port -l | grep -w http_port_t
-semanage port -a -t http_port_t -p tcp 82
-systemctl restart httpd
-ss -tlnp | grep :82
-curl http://localhost:82<span class="c">              # works locally (loopback isn&#x27;t firewalled)</span></code></pre></div><h3>5. &quot;Forget&quot; the firewall (firewall denial)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>firewall-cmd --set-log-denied=all
-firewall-cmd --get-log-denied</code></pre></div><p>On ServerB:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -m 5 http://192.168.1.95:82<span class="c">      # fails: &quot;No route to host&quot;</span></code></pre></div><p>On ServerA:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>journalctl -k --since &quot;-5min&quot; | grep &quot;DPT=82&quot; | tail
-journalctl -k -f | grep --line-buffered &quot;DPT=82&quot;<span class="c">      # live view; Ctrl+C to stop</span></code></pre></div><p class="callout note"><strong>Note:</strong> Testing from localhost will NOT show a denial, because firewalld doesn&#x27;t filter the loopback interface.</p><p>Fix:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>firewall-cmd --permanent --add-port=82/tcp
-firewall-cmd --reload
-firewall-cmd --list-all</code></pre></div><p>On ServerB, <code>curl http://192.168.1.95:82</code> should return &quot;Hello from /webdata&quot;. You don&#x27;t need to restart httpd for firewall changes.</p><h3>6. Persistence check (the exam grades after reboot)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>semanage fcontext -l -C<span class="c">               # your custom file-context rule</span>
-semanage port -l -C<span class="c">                   # your custom port rule</span>
+sudo ausearch -m avc -ts recent -i<span class="c">    # denied { name_bind } ... src=82</span></code></pre></div><p>Port 82 isn&#x27;t in the default http_port_t list (80, 81, 443, 488, 8008, 8009, 8443, 9000). Fix:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo semanage port -l | grep -w http_port_t
+sudo semanage port -a -t http_port_t -p tcp 82
+sudo systemctl restart httpd
+sudo ss -tlnp | grep :82
+curl http://localhost:82<span class="c">              # works locally (loopback isn&#x27;t firewalled)</span></code></pre></div><h3>5. &quot;Forget&quot; the firewall (firewall denial)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo firewall-cmd --set-log-denied=all
+sudo firewall-cmd --get-log-denied</code></pre></div><p>On ServerB:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -m 5 http://192.168.1.95:82<span class="c">      # fails: &quot;No route to host&quot;</span></code></pre></div><p>On ServerA:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo journalctl -k --since &quot;-5min&quot; | grep &quot;DPT=82&quot; | tail
+sudo journalctl -k -f | grep --line-buffered &quot;DPT=82&quot;<span class="c">  # live view; Ctrl+C to stop</span></code></pre></div><p class="callout note"><strong>Note:</strong> Testing from localhost will NOT show a denial, because firewalld doesn&#x27;t filter the loopback interface.</p><p>Fix:</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo firewall-cmd --permanent --add-port=82/tcp
+sudo firewall-cmd --reload
+sudo firewall-cmd --list-all</code></pre></div><p>On ServerB, <code>curl http://192.168.1.95:82</code> should return &quot;Hello from /webdata&quot;. You don&#x27;t need to restart httpd for firewall changes.</p><h3>6. Persistence check (the exam grades after reboot)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo semanage fcontext -l -C<span class="c">          # your custom file-context rule</span>
+sudo semanage port -l -C<span class="c">              # your custom port rule</span>
 systemctl is-enabled httpd
-reboot
+sudo reboot
 <span class="c"># after reboot, from ServerB:</span>
 curl http://192.168.1.95:82
 <span class="c"># on ServerA:</span>
-ausearch -m avc -ts boot<span class="c">              # expect &lt;no matches&gt;</span></code></pre></div><h3>7. Cleanup</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>firewall-cmd --set-log-denied=off
-mv /root/welcome.conf.bak /etc/httpd/conf.d/welcome.conf<span class="c">      # if you moved it</span>
-<span class="c"># Then revert the snapshot, or restore Listen 80 + DocumentRoot &quot;/var/www/html&quot;</span></code></pre></div><p>Optional extra: run <code>setenforce 0</code>, repeat the /webdata test with the wrong label, and note that the denial is logged but not enforced. Then run <code>setenforce 1</code>. This is why permissive mode is a diagnostic tool, not a fix.</p>
+sudo ausearch -m avc -ts boot<span class="c">         # expect &lt;no matches&gt;</span></code></pre></div><h3>7. Cleanup</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo firewall-cmd --set-log-denied=off
+sudo mv /root/welcome.conf.bak /etc/httpd/conf.d/welcome.conf<span class="c">  # if you moved it</span>
+<span class="c"># Then revert the snapshot, or restore Listen 80 + DocumentRoot &quot;/var/www/html&quot;</span></code></pre></div><p>Optional extra: run <code>sudo setenforce 0</code>, repeat the /webdata test with the wrong label, and note that the denial is logged but not enforced. Then run <code>sudo setenforce 1</code>. This is why permissive mode is a diagnostic tool, not a fix.</p>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-4" data-lab="4">
@@ -341,14 +341,14 @@ mv /root/welcome.conf.bak /etc/httpd/conf.d/welcome.conf<span class="c">      # 
     </div>
     <label class="done"><input type="checkbox" data-done="4"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>group admin; users harry and natasha with admin as a supplementary group; sarah with no interactive shell.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>groupadd admin
-useradd -G admin harry
-useradd -G admin natasha
-useradd -s /sbin/nologin sarah
-printf &#x27;%s\n&#x27; &#x27;harry:Harry123&#x27; &#x27;natasha:Natasha123&#x27; &#x27;sarah:Sarah123&#x27; | chpasswd</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>id harry; id natasha; id sarah
+  <p class="goal"><span>Goal</span>group admin; users harry and natasha with admin as a supplementary group; sarah with no interactive shell.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo groupadd admin
+sudo useradd -G admin harry
+sudo useradd -G admin natasha
+sudo useradd -s /sbin/nologin sarah
+printf &#x27;%s\n&#x27; &#x27;harry:Harry123&#x27; &#x27;natasha:Natasha123&#x27; &#x27;sarah:Sarah123&#x27; | sudo chpasswd</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>id harry; id natasha; id sarah
 getent group admin
 getent passwd sarah | cut -d: -f7<span class="c">     # /sbin/nologin</span>
-su - sarah<span class="c">                            # &quot;This account is currently not available.&quot;</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Run the commands in the same order on both servers so the UIDs match. NFS (Lab 6) maps ownership by number, not name.</li><li><code>usermod -G admin user</code> <strong>replaces</strong> all supplementary groups. Use <code>usermod -aG admin user</code> to append.</li><li>natasha was used by Labs 7, 8, and 13 but never created in the original workbook; she is created here.</li></ul>
+sudo su - sarah<span class="c">                       # &quot;This account is currently not available.&quot;</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Run the commands in the same order on both servers so the UIDs match. NFS (Lab 6) maps ownership by number, not name.</li><li><code>sudo usermod -G admin user</code> <strong>replaces</strong> all supplementary groups. Use <code>sudo usermod -aG admin user</code> to append.</li><li>natasha was used by Labs 7, 8, and 13 but never created in the original workbook; she is created here.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-5" data-lab="5">
@@ -360,13 +360,13 @@ su - sarah<span class="c">                            # &quot;This account is cu
     </div>
     <label class="done"><input type="checkbox" data-done="5"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>/srv/common_admin owned by group admin; new files inherit the group; no access for anyone else.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mkdir -p /srv/common_admin
-chgrp admin /srv/common_admin
-chmod 2770 /srv/common_admin</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls -ld /srv/common_admin<span class="c">                                  # drwxrws---. root admin</span>
-su - harry   -c &#x27;touch /srv/common_admin/harry.txt&#x27;
-su - natasha -c &#x27;touch /srv/common_admin/natasha.txt&#x27;
-ls -l /srv/common_admin<span class="c">                                   # both files: group admin</span>
-su -s /bin/bash sarah -c &#x27;ls /srv/common_admin&#x27;<span class="c">          # Permission denied</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Extension: <code>chmod 3770</code> adds the sticky bit, so members can&#x27;t delete each other&#x27;s files. Test it with <code>su - natasha -c &#x27;rm /srv/common_admin/harry.txt&#x27;</code>, which should be denied.</li><li>Extension: <code>setfacl -m d:g:admin:rwx /srv/common_admin</code> adds a default ACL so new files are group-writable regardless of the creator&#x27;s umask.</li></ul>
+  <p class="goal"><span>Goal</span>/srv/common_admin owned by group admin; new files inherit the group; no access for anyone else.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir -p /srv/common_admin
+sudo chgrp admin /srv/common_admin
+sudo chmod 2770 /srv/common_admin</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls -ld /srv/common_admin<span class="c">                                  # drwxrws---. root admin</span>
+sudo su - harry   -c &#x27;touch /srv/common_admin/harry.txt&#x27;
+sudo su - natasha -c &#x27;touch /srv/common_admin/natasha.txt&#x27;
+sudo ls -l /srv/common_admin<span class="c">                              # both files: group admin</span>
+sudo su -s /bin/bash sarah -c &#x27;ls /srv/common_admin&#x27;<span class="c">     # Permission denied</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Extension: <code>sudo chmod 3770 /srv/common_admin</code> adds the sticky bit, so members can&#x27;t delete each other&#x27;s files. Test it with <code>sudo su - natasha -c &#x27;rm /srv/common_admin/harry.txt&#x27;</code>, which should be denied.</li><li>Extension: <code>sudo setfacl -m d:g:admin:rwx /srv/common_admin</code> adds a default ACL so new files are group-writable regardless of the creator&#x27;s umask.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-6" data-lab="6">
@@ -378,46 +378,46 @@ su -s /bin/bash sarah -c &#x27;ls /srv/common_admin&#x27;<span class="c">       
     </div>
     <label class="done"><input type="checkbox" data-done="6"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>export /public (ro) and /private (rw) from ServerA; mount both on ServerB statically and with autofs using a 30-second timeout.</p><h3>Steps — ServerA</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>dnf -y install nfs-utils
-mkdir -p /public /private
-echo &quot;Public data&quot;  &gt; /public/d.txt
-echo &quot;Private data&quot; &gt; /private/d.txt
-chown -R nobody:nobody /public /private
-chmod 755 /public
-chmod 770 /private
+  <p class="goal"><span>Goal</span>export /public (ro) and /private (rw) from ServerA; mount both on ServerB statically and with autofs using a 30-second timeout.</p><h3>Steps — ServerA</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install nfs-utils
+sudo mkdir -p /public /private
+echo &quot;Public data&quot; | sudo tee /public/d.txt
+echo &quot;Private data&quot; | sudo tee /private/d.txt
+sudo chown -R nobody:nobody /public /private
+sudo chmod 755 /public
+sudo chmod 770 /private
 
-cat &gt;&gt; /etc/exports &lt;&lt;&#x27;EOF&#x27;
+sudo tee -a /etc/exports &lt;&lt;&#x27;EOF&#x27;
 /public   192.168.1.0/24(ro,sync)
 /private  192.168.1.0/24(rw,sync)
 EOF
 
-systemctl enable --now nfs-server
-exportfs -rav
-firewall-cmd --permanent --add-service={nfs,mountd,rpc-bind}
-firewall-cmd --reload
-exportfs -v</code></pre></div><h3>Steps — ServerB, part A: static mounts</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>dnf -y install nfs-utils autofs
+sudo systemctl enable --now nfs-server
+sudo exportfs -rav
+sudo firewall-cmd --permanent --add-service={nfs,mountd,rpc-bind}
+sudo firewall-cmd --reload
+sudo exportfs -v</code></pre></div><h3>Steps — ServerB, part A: static mounts</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install nfs-utils autofs
 showmount -e 192.168.1.95
-mkdir -p /mnt/public /mnt/private
-cat &gt;&gt; /etc/fstab &lt;&lt;&#x27;EOF&#x27;
+sudo mkdir -p /mnt/public /mnt/private
+sudo tee -a /etc/fstab &lt;&lt;&#x27;EOF&#x27;
 192.168.1.95:/public   /mnt/public   nfs  defaults,_netdev,ro  0 0
 192.168.1.95:/private  /mnt/private  nfs  defaults,_netdev,rw  0 0
 EOF
-systemctl daemon-reload
-mount -a
+sudo systemctl daemon-reload
+sudo mount -a
 findmnt -t nfs4
 cat /mnt/public/d.txt
-touch /mnt/public/x<span class="c">                    # &quot;Read-only file system&quot; (expected)</span>
-echo test &gt; /mnt/private/static.txt
-ls -l /mnt/private<span class="c">                     # owner nobody: root is squashed</span></code></pre></div><h3>Steps — ServerB, part B: autofs</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mkdir -p /automount
-echo &#x27;/automount  /etc/auto.automount  --timeout=30&#x27; &gt; /etc/auto.master.d/automount.autofs
-cat &gt; /etc/auto.automount &lt;&lt;&#x27;EOF&#x27;
+sudo touch /mnt/public/x<span class="c">               # &quot;Read-only file system&quot; (expected)</span>
+echo test | sudo tee /mnt/private/static.txt
+sudo ls -l /mnt/private<span class="c">                # owner nobody: root is squashed</span></code></pre></div><h3>Steps — ServerB, part B: autofs</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir -p /automount
+echo &#x27;/automount  /etc/auto.automount  --timeout=30&#x27; | sudo tee /etc/auto.master.d/automount.autofs
+sudo tee /etc/auto.automount &lt;&lt;&#x27;EOF&#x27;
 public   -fstype=nfs,ro  192.168.1.95:/public
 private  -fstype=nfs,rw  192.168.1.95:/private
 EOF
-systemctl enable autofs
-systemctl restart autofs<span class="c">               # restart, so map changes are read</span></code></pre></div><h3>Verify (autofs)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls /automount<span class="c">                          # empty: normal, keys appear on access</span>
+sudo systemctl enable autofs
+sudo systemctl restart autofs<span class="c">          # restart, so map changes are read</span></code></pre></div><h3>Verify (autofs)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls /automount<span class="c">                          # empty: normal, keys appear on access</span>
 cat /automount/public/d.txt
-echo &quot;autofs write&quot; &gt; /automount/private/autofs.txt
+echo &quot;autofs write&quot; | sudo tee /automount/private/autofs.txt
 mount | grep /automount<span class="c">                # both mounted now</span>
 sleep 40; mount | grep /automount<span class="c">      # gone after 30 s idle (don&#x27;t cd into it first)</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original was missing <code>dnf install nfs-utils autofs</code> on ServerB, and its <code>cat /automount/public.txt</code> pointed at a file that doesn&#x27;t exist.</li><li><code>chown</code>/<code>chmod</code> on the client mount points did nothing useful, because the mounted share&#x27;s permissions cover the directory. Those lines are removed.</li><li>nfs alone is enough for NFSv4 mounts. mountd and rpc-bind are what make <code>showmount -e</code> (and NFSv3) work from ServerB.</li><li><code>systemctl enable --now autofs</code> doesn&#x27;t reload maps if autofs was already running. Restart it after editing maps.</li><li>Exam favorite (wildcard map for remote home directories), as a pair of files:</li></ul><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># /etc/auto.master.d/rhome.autofs</span>
 /rhome  /etc/auto.rhome
@@ -434,26 +434,26 @@ sleep 40; mount | grep /automount<span class="c">      # gone after 30 s idle (d
     </div>
     <label class="done"><input type="checkbox" data-done="7"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>harry runs a logging job every 5 minutes on ServerA; natasha is denied cron on ServerB.</p><h3>Steps — ServerA</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cat &gt; /usr/local/bin/ex200.sh &lt;&lt;&#x27;EOF&#x27;
+  <p class="goal"><span>Goal</span>harry runs a logging job every 5 minutes on ServerA; natasha is denied cron on ServerB.</p><h3>Steps — ServerA</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /usr/local/bin/ex200.sh &lt;&lt;&#x27;EOF&#x27;
 #!/bin/bash
 echo &quot;EX200 message $(date)&quot; &gt;&gt; /var/log/ex200.log
 EOF
-chmod 755 /usr/local/bin/ex200.sh
+sudo chmod 755 /usr/local/bin/ex200.sh
 
 <span class="c"># harry can&#x27;t write to root-owned /var/log, so pre-create the log for him</span>
-touch /var/log/ex200.log
-chown harry:harry /var/log/ex200.log
+sudo touch /var/log/ex200.log
+sudo chown harry:harry /var/log/ex200.log
 
 <span class="c"># Append to harry&#x27;s crontab without opening an editor</span>
-(crontab -u harry -l 2&gt;/dev/null; echo &#x27;*/5 * * * * /usr/local/bin/ex200.sh&#x27;) | crontab -u harry -</code></pre></div><h3>Steps — ServerB</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo natasha &gt;&gt; /etc/cron.deny</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># ServerA</span>
+(sudo crontab -u harry -l 2&gt;/dev/null; echo &#x27;*/5 * * * * /usr/local/bin/ex200.sh&#x27;) | sudo crontab -u harry -</code></pre></div><h3>Steps — ServerB</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo natasha | sudo tee -a /etc/cron.deny</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># ServerA</span>
 systemctl is-active crond
-crontab -u harry -l
+sudo crontab -u harry -l
 <span class="c"># wait 5+ minutes</span>
 tail -n 5 /var/log/ex200.log
-grep CROND /var/log/cron | tail -n 3
+sudo grep CROND /var/log/cron | tail -n 3
 
 <span class="c"># ServerB</span>
-su - natasha -c &#x27;crontab -l&#x27;<span class="c">     # &quot;You (natasha) are not allowed to use this program&quot;</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>In the original, harry&#x27;s job could never write to /var/log/ex200.log, so the job failed silently every 5 minutes.</li><li>Test the deny with <code>crontab -l</code>, not <code>crontab -e</code>. If the deny isn&#x27;t working, <code>-e</code> opens an editor and hangs the test.</li><li>If /etc/cron.allow exists, only users listed there may use cron, and cron.deny is ignored.</li><li>Common exam variant: <code>*/2 * * * * logger &quot;EX200 in progress&quot;</code>, verified with <code>journalctl -t harry</code>.</li><li>One-off jobs with at (needs <code>dnf -y install at; systemctl enable --now atd</code>):</li></ul><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &#x27;date &gt; /tmp/at-test.txt&#x27; | at now + 2 minutes
+sudo su - natasha -c &#x27;crontab -l&#x27;<span class="c">  # &quot;You (natasha) are not allowed to use this program&quot;</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>In the original, harry&#x27;s job could never write to /var/log/ex200.log, so the job failed silently every 5 minutes.</li><li>Test the deny with <code>crontab -l</code>, not <code>crontab -e</code>. If the deny isn&#x27;t working, <code>-e</code> opens an editor and hangs the test.</li><li>If /etc/cron.allow exists, only users listed there may use cron, and cron.deny is ignored.</li><li>Common exam variant: <code>*/2 * * * * logger &quot;EX200 in progress&quot;</code>, verified with <code>sudo journalctl -t harry</code>.</li><li>One-off jobs with at (needs <code>sudo dnf -y install at; sudo systemctl enable --now atd</code>):</li></ul><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &#x27;date &gt; /tmp/at-test.txt&#x27; | at now + 2 minutes
 atq</code></pre></div>
   <a class="top" href="#top">Back to top</a>
 </section>
@@ -466,15 +466,15 @@ atq</code></pre></div>
     </div>
     <label class="done"><input type="checkbox" data-done="8"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>/var/tmp/fstab owned by root, readable by others; harry can read and write; natasha has no access at all.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cp /etc/fstab /var/tmp/fstab
-chown root:root /var/tmp/fstab
-chmod 644 /var/tmp/fstab
-setfacl -m u:harry:rw- /var/tmp/fstab
-setfacl -m u:natasha:--- /var/tmp/fstab
+  <p class="goal"><span>Goal</span>/var/tmp/fstab owned by root, readable by others; harry can read and write; natasha has no access at all.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo cp /etc/fstab /var/tmp/fstab
+sudo chown root:root /var/tmp/fstab
+sudo chmod 644 /var/tmp/fstab
+sudo setfacl -m u:harry:rw- /var/tmp/fstab
+sudo setfacl -m u:natasha:--- /var/tmp/fstab
 getfacl /var/tmp/fstab</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls -l /var/tmp/fstab<span class="c">                                     # note the &quot;+&quot; after the mode</span>
-su - harry   -c &#x27;echo &quot;# harry was here&quot; &gt;&gt; /var/tmp/fstab&#x27; &amp;&amp; echo &quot;harry write OK&quot;
-su - natasha -c &#x27;cat /var/tmp/fstab&#x27;<span class="c">                      # Permission denied</span>
-su -s /bin/bash sarah -c &#x27;head -1 /var/tmp/fstab&#x27;<span class="c">        # readable via &quot;other&quot;</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original used mode 640, which already locked natasha out through &quot;other&quot;, so the natasha ACL proved nothing. With 644, the ACL entry is the only thing denying her.</li><li>/var/tmp survives reboots, while /tmp is cleaned periodically, so use /var/tmp for anything that must still be there for grading.</li><li><code>chmod g-w</code> on a file with ACLs changes the ACL <strong>mask</strong>, which can silently remove harry&#x27;s write. Check <code>getfacl</code> for &quot;#effective:&quot;.</li><li>Remove entries with <code>setfacl -x u:natasha /var/tmp/fstab</code>, or all ACLs with <code>setfacl -b</code>.</li><li>The optional NFS export of /tmp was dropped. Exporting /tmp is poor practice, and the cross-host test depended on matching UIDs and NFSv4 ACL mapping.</li></ul>
+sudo su - harry   -c &#x27;echo &quot;# harry was here&quot; &gt;&gt; /var/tmp/fstab&#x27; &amp;&amp; echo &quot;harry write OK&quot;
+sudo su - natasha -c &#x27;cat /var/tmp/fstab&#x27;<span class="c">                 # Permission denied</span>
+sudo su -s /bin/bash sarah -c &#x27;head -1 /var/tmp/fstab&#x27;<span class="c">   # readable via &quot;other&quot;</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original used mode 640, which already locked natasha out through &quot;other&quot;, so the natasha ACL proved nothing. With 644, the ACL entry is the only thing denying her.</li><li>/var/tmp survives reboots, while /tmp is cleaned periodically, so use /var/tmp for anything that must still be there for grading.</li><li><code>chmod g-w</code> on a file with ACLs changes the ACL <strong>mask</strong>, which can silently remove harry&#x27;s write. Check <code>getfacl</code> for &quot;#effective:&quot;.</li><li>Remove entries with <code>sudo setfacl -x u:natasha /var/tmp/fstab</code>, or all ACLs with <code>sudo setfacl -b</code>.</li><li>The optional NFS export of /tmp was dropped. Exporting /tmp is poor practice, and the cross-host test depended on matching UIDs and NFSv4 ACL mapping.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-9" data-lab="9">
@@ -486,21 +486,21 @@ su -s /bin/bash sarah -c &#x27;head -1 /var/tmp/fstab&#x27;<span class="c">     
     </div>
     <label class="done"><input type="checkbox" data-done="9"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>ServerA keeps its internet time source and serves time to the lab; ServerB syncs only to ServerA.</p><h3>Steps — ServerA (time server)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cat &gt;&gt; /etc/chrony.conf &lt;&lt;&#x27;EOF&#x27;
+  <p class="goal"><span>Goal</span>ServerA keeps its internet time source and serves time to the lab; ServerB syncs only to ServerA.</p><h3>Steps — ServerA (time server)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee -a /etc/chrony.conf &lt;&lt;&#x27;EOF&#x27;
 allow 192.168.1.0/24
 local stratum 10
 EOF
-systemctl restart chronyd
-firewall-cmd --permanent --add-service=ntp
-firewall-cmd --reload</code></pre></div><h3>Steps — ServerB (client)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>dnf -y install chrony
-sed -ri &#x27;s/^(pool|server) /#&amp;/&#x27; /etc/chrony.conf<span class="c">     # comment out the default pool line</span>
-echo &#x27;server servera.lab.local iburst&#x27; &gt;&gt; /etc/chrony.conf
-systemctl enable chronyd
-systemctl restart chronyd
-timedatectl set-ntp true</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>chronyc sources -v<span class="c">        # ServerB: &quot;^* servera.lab.local&quot; (* = selected source)</span>
+sudo systemctl restart chronyd
+sudo firewall-cmd --permanent --add-service=ntp
+sudo firewall-cmd --reload</code></pre></div><h3>Steps — ServerB (client)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install chrony
+sudo sed -ri &#x27;s/^(pool|server) /#&amp;/&#x27; /etc/chrony.conf<span class="c">  # comment out the default pool line</span>
+echo &#x27;server servera.lab.local iburst&#x27; | sudo tee -a /etc/chrony.conf
+sudo systemctl enable chronyd
+sudo systemctl restart chronyd
+sudo timedatectl set-ntp true</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>chronyc sources -v<span class="c">        # ServerB: &quot;^* servera.lab.local&quot; (* = selected source)</span>
 chronyc tracking
 timedatectl<span class="c">               # &quot;System clock synchronized: yes&quot;, &quot;NTP service: active&quot;</span>
-chronyc clients<span class="c">           # ServerA: lists 192.168.1.96</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original <code>sed &#x27;s/^server /# &amp;/&#x27;</code> matched nothing, because RHEL&#x27;s default file uses a <code>pool</code> line. The default pool stayed active alongside the new server.</li><li>chronyd is already running on a default install, so <code>systemctl enable --now</code> didn&#x27;t reload the edited config. Always <code>restart</code> after editing /etc/chrony.conf.</li><li>time.lab.example.com doesn&#x27;t exist in a home lab. On the exam you&#x27;ll be given a real server name, such as classroom.example.com.</li><li><code>local stratum 10</code> lets ServerA keep serving time even when it can&#x27;t reach the internet.</li></ul>
+sudo chronyc clients<span class="c">      # ServerA: lists 192.168.1.96</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original <code>sed &#x27;s/^server /# &amp;/&#x27;</code> matched nothing, because RHEL&#x27;s default file uses a <code>pool</code> line. The default pool stayed active alongside the new server.</li><li>chronyd is already running on a default install, so <code>systemctl enable --now</code> didn&#x27;t reload the edited config. Always <code>restart</code> after editing /etc/chrony.conf.</li><li>time.lab.example.com doesn&#x27;t exist in a home lab. On the exam you&#x27;ll be given a real server name, such as classroom.example.com.</li><li><code>local stratum 10</code> lets ServerA keep serving time even when it can&#x27;t reach the internet.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-10" data-lab="10">
@@ -512,8 +512,8 @@ chronyc clients<span class="c">           # ServerA: lists 192.168.1.96</span></
     </div>
     <label class="done"><input type="checkbox" data-done="10"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>find every file larger than 4 MiB and copy it into /root/find_large_files.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mkdir /root/find_large_files
-find / -xdev -type f -size +4M -exec cp {} /root/find_large_files/ \;</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls -lh /root/find_large_files</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>-xdev</code> keeps find on the root filesystem. Without it, find hits /proc/kcore, which reports a size of terabytes.</li><li>&quot;are the same file&quot; errors are harmless: find is rediscovering files it already copied into /root.</li><li>Exam variant: <code>find / -user harry -type f -exec cp {} /root/harry_files/ \;</code></li></ul>
+  <p class="goal"><span>Goal</span>find every file larger than 4 MiB and copy it into /root/find_large_files.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir /root/find_large_files
+sudo find / -xdev -type f -size +4M -exec cp {} /root/find_large_files/ \;</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ls -lh /root/find_large_files</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>-xdev</code> keeps find on the root filesystem. Without it, find hits /proc/kcore, which reports a size of terabytes.</li><li>&quot;are the same file&quot; errors are harmless: find is rediscovering files it already copied into /root.</li><li>Exam variant: <code>sudo find / -user harry -type f -exec cp {} /root/harry_files/ \;</code></li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-11" data-lab="11">
@@ -525,9 +525,9 @@ find / -xdev -type f -size +4M -exec cp {} /root/find_large_files/ \;</code></pr
     </div>
     <label class="done"><input type="checkbox" data-done="11"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>billy with UID 6969 and a password, identical on both servers.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>getent passwd 6969 || useradd -u 6969 billy<span class="c">      # make sure the UID is free first</span>
-echo &#x27;billy:Billy123&#x27; | chpasswd</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>id billy<span class="c">                  # uid=6969(billy)</span>
-getent passwd billy</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Matching UIDs across hosts is what makes NFS ownership line up.</li><li>If you change a UID later (<code>usermod -u</code>), files under the home directory are updated, but files elsewhere keep the old number. Find them with <code>find / -xdev -nouser</code>.</li></ul>
+  <p class="goal"><span>Goal</span>billy with UID 6969 and a password, identical on both servers.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>getent passwd 6969 || sudo useradd -u 6969 billy<span class="c">  # make sure the UID is free first</span>
+echo &#x27;billy:Billy123&#x27; | sudo chpasswd</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>id billy<span class="c">                  # uid=6969(billy)</span>
+getent passwd billy</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Matching UIDs across hosts is what makes NFS ownership line up.</li><li>If you change a UID later (<code>sudo usermod -u</code>), files under the home directory are updated, but files elsewhere keep the old number. Find them with <code>sudo find / -xdev -nouser</code>.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-12" data-lab="12">
@@ -539,15 +539,15 @@ getent passwd billy</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Matchi
     </div>
     <label class="done"><input type="checkbox" data-done="12"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>create a bzip2-compressed archive /root/backup.tar.bz2 containing /usr/local, then restore it to a separate directory and to its original location.</p><h3>Create</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>tar -cjf /root/backup.tar.bz2 /usr/local</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>file /root/backup.tar.bz2<span class="c">              # bzip2 compressed data</span>
-tar -tjf /root/backup.tar.bz2 | head<span class="c">   # names start with usr/local/, no leading /</span></code></pre></div><h3>Extract to a separate directory</h3><p>Safe: nothing on the system is overwritten. Use this to inspect a backup or pull out one file.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>mkdir -p /root/restore
-tar -xjf /root/backup.tar.bz2 -C /root/restore
-ls -l /root/restore/usr/local
-diff -r /usr/local /root/restore/usr/local<span class="c">   # no output = identical contents</span>
+  <p class="goal"><span>Goal</span>create a bzip2-compressed archive /root/backup.tar.bz2 containing /usr/local, then restore it to a separate directory and to its original location.</p><h3>Create</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tar -cjf /root/backup.tar.bz2 /usr/local</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo file /root/backup.tar.bz2<span class="c">         # bzip2 compressed data</span>
+sudo tar -tjf /root/backup.tar.bz2 | head<span class="c">  # names start with usr/local/, no leading /</span></code></pre></div><h3>Extract to a separate directory</h3><p>Safe: nothing on the system is overwritten. Use this to inspect a backup or pull out one file.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir -p /root/restore
+sudo tar -xjf /root/backup.tar.bz2 -C /root/restore
+sudo ls -l /root/restore/usr/local
+sudo diff -r /usr/local /root/restore/usr/local<span class="c">  # no output = identical contents</span>
 
 <span class="c"># Just one directory or file: name it as the listing shows it</span>
-tar -xjf /root/backup.tar.bz2 -C /root/restore usr/local/bin</code></pre></div><h3>Extract to the original location</h3><p>The names in the archive are relative (<code>usr/local/...</code>), so extracting from <code>/</code> puts them back at <code>/usr/local</code>.</p><p class="callout warn"><strong>Warning:</strong> this overwrites the current files in /usr/local with the archived versions. Files created since the backup are left alone, not deleted.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>tar -xjf /root/backup.tar.bz2 -C /
-restorecon -Rv /usr/local<span class="c">               # fix SELinux labels on restored files</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Without <code>-C</code>, tar extracts into the current directory. <code>-C</code> must point at a directory that already exists.</li><li><strong>Permissions and ownership:</strong> as root, tar restores each file&#x27;s owner, group, mode, and timestamps automatically. As a regular user, extracted files are owned by you and your umask applies; add <code>-p</code> to keep the archived modes.</li><li><strong>SELinux contexts and ACLs are not saved by default.</strong> Either run <code>restorecon -R</code> after restoring to the original location, or add <code>--selinux --acls</code> both when creating and when extracting.</li><li>&quot;Removing leading `/&#x27; from member names&quot; is a normal message. It is why extraction lands under the <code>-C</code> directory instead of overwriting the original paths.</li><li>Mnemonic: z = gzip (.gz), j = bzip2 (.bz2), J = xz (.xz). Use the one the task asks for. When extracting, current tar detects the compression, so <code>tar -xf</code> also works.</li><li>If <code>-j</code> fails, install bzip2: <code>dnf -y install bzip2</code>.</li></ul>
+sudo tar -xjf /root/backup.tar.bz2 -C /root/restore usr/local/bin</code></pre></div><h3>Extract to the original location</h3><p>The names in the archive are relative (<code>usr/local/...</code>), so extracting from <code>/</code> puts them back at <code>/usr/local</code>.</p><p class="callout warn"><strong>Warning:</strong> this overwrites the current files in /usr/local with the archived versions. Files created since the backup are left alone, not deleted.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tar -xjf /root/backup.tar.bz2 -C /
+sudo restorecon -Rv /usr/local<span class="c">          # fix SELinux labels on restored files</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Without <code>-C</code>, tar extracts into the current directory. <code>-C</code> must point at a directory that already exists.</li><li><strong>Permissions and ownership:</strong> run with sudo (as root), tar restores each file&#x27;s owner, group, mode, and timestamps automatically. Without sudo, extracted files are owned by you and your umask applies; add <code>-p</code> to keep the archived modes.</li><li><strong>SELinux contexts and ACLs are not saved by default.</strong> Either run <code>sudo restorecon -R</code> after restoring to the original location, or add <code>--selinux --acls</code> both when creating and when extracting.</li><li>&quot;Removing leading `/&#x27; from member names&quot; is a normal message. It is why extraction lands under the <code>-C</code> directory instead of overwriting the original paths.</li><li>Mnemonic: z = gzip (.gz), j = bzip2 (.bz2), J = xz (.xz). Use the one the task asks for. When extracting, current tar detects the compression, so <code>tar -xf</code> also works.</li><li>If <code>-j</code> fails, install bzip2: <code>sudo dnf -y install bzip2</code>.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-13" data-lab="13">
@@ -559,10 +559,10 @@ restorecon -Rv /usr/local<span class="c">               # fix SELinux labels on 
     </div>
     <label class="done"><input type="checkbox" data-done="13"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>natasha&#x27;s new files are 640 and new directories are 750.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &#x27;umask 027&#x27; &gt;&gt; /home/natasha/.bashrc</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>su - natasha -c &#x27;umask; touch ~/t; mkdir ~/d; ls -ld ~/t ~/d&#x27;
+  <p class="goal"><span>Goal</span>natasha&#x27;s new files are 640 and new directories are 750.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &#x27;umask 027&#x27; | sudo tee -a /home/natasha/.bashrc</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo su - natasha -c &#x27;umask; touch ~/t; mkdir ~/d; ls -ld ~/t ~/d&#x27;
 <span class="c"># 0027</span>
 <span class="c"># -rw-r-----. ... /home/natasha/t</span>
-<span class="c"># drwxr-x---. ... /home/natasha/d</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>~/.bashrc</code> covers both login and non-login shells, because RHEL&#x27;s .bash_profile sources .bashrc. The line is appended at the end, so it runs after /etc/bashrc&#x27;s default.</li><li>Appending as root keeps natasha as the file&#x27;s owner. The original&#x27;s <code>install -d</code> and <code>chown -R</code> of her home directory weren&#x27;t needed.</li><li>For all users, put <code>umask 027</code> in a file under /etc/profile.d/ (for example /etc/profile.d/umask.sh).</li></ul>
+<span class="c"># drwxr-x---. ... /home/natasha/d</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>~/.bashrc</code> covers both login and non-login shells, because RHEL&#x27;s .bash_profile sources .bashrc. The line is appended at the end, so it runs after /etc/bashrc&#x27;s default.</li><li>Appending with <code>sudo tee -a</code> keeps natasha as the file&#x27;s owner. The original&#x27;s <code>install -d</code> and <code>chown -R</code> of her home directory weren&#x27;t needed.</li><li>For all users, put <code>umask 027</code> in a file under /etc/profile.d/ (for example /etc/profile.d/umask.sh).</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-14" data-lab="14">
@@ -574,11 +574,11 @@ restorecon -Rv /usr/local<span class="c">               # fix SELinux labels on 
     </div>
     <label class="done"><input type="checkbox" data-done="14"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>new users must change their password every 20 days.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sed -ri &#x27;s/^PASS_MAX_DAYS\s+.*/PASS_MAX_DAYS\t20/&#x27; /etc/login.defs
-grep ^PASS_MAX_DAYS /etc/login.defs</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>useradd testuser
-chage -l testuser | grep -i maximum<span class="c">      # 20</span>
-userdel -r testuser
-chage -l harry | grep -i maximum<span class="c">         # unchanged: existing users aren&#x27;t affected</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>login.defs applies only to accounts created after the change. Change existing users with <code>chage -M 20 harry</code>.</li><li>Related tasks: force a change at next login with <code>chage -d 0 natasha</code>; set an account expiry with <code>chage -E 2026-12-31 billy</code>.</li></ul>
+  <p class="goal"><span>Goal</span>new users must change their password every 20 days.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo sed -ri &#x27;s/^PASS_MAX_DAYS\s+.*/PASS_MAX_DAYS\t20/&#x27; /etc/login.defs
+grep ^PASS_MAX_DAYS /etc/login.defs</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo useradd testuser
+sudo chage -l testuser | grep -i maximum<span class="c">  # 20</span>
+sudo userdel -r testuser
+sudo chage -l harry | grep -i maximum<span class="c">    # unchanged: existing users aren&#x27;t affected</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>login.defs applies only to accounts created after the change. Change existing users with <code>sudo chage -M 20 harry</code>.</li><li>Related tasks: force a change at next login with <code>sudo chage -d 0 natasha</code>; set an account expiry with <code>sudo chage -E 2026-12-31 billy</code>.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-15" data-lab="15">
@@ -590,11 +590,12 @@ chage -l harry | grep -i maximum<span class="c">         # unchanged: existing u
     </div>
     <label class="done"><input type="checkbox" data-done="15"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>members of admin can run any command with sudo without a password.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &#x27;%admin ALL=(ALL) NOPASSWD: ALL&#x27; &gt; /etc/sudoers.d/admin
-chmod 440 /etc/sudoers.d/admin
-visudo -cf /etc/sudoers.d/admin<span class="c">            # &quot;parsed OK&quot;</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>su - harry   -c &#x27;sudo -n id&#x27;<span class="c">               # uid=0(root), no prompt</span>
-su - natasha -c &#x27;sudo -n id&#x27;<span class="c">               # also works (natasha is in admin)</span>
-su -s /bin/bash sarah -c &#x27;sudo -n id&#x27;<span class="c">      # fails (sarah isn&#x27;t in admin)</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>sudo -n</code> fails instead of prompting, so it proves the rule is really passwordless.</li><li>Mode 440 is what sudo expects; it doesn&#x27;t protect you from syntax errors. A broken drop-in breaks sudo for everyone, so always run <code>visudo -c</code>.</li><li>sudo ignores files in /etc/sudoers.d whose names contain a dot or end in <code>~</code>.</li><li>Variants: <code>usermod -aG wheel user</code> for sudo with a password; <code>%admin ALL=(ALL) /usr/bin/systemctl</code> to allow one command.</li></ul>
+  <p class="goal"><span>Goal</span>members of admin can run any command with sudo without a password.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &#x27;%admin ALL=(ALL) NOPASSWD: ALL&#x27; &gt; /tmp/admin
+sudo visudo -cf /tmp/admin<span class="c">                           # &quot;parsed OK&quot;: check it BEFORE installing</span>
+sudo install -m 440 /tmp/admin /etc/sudoers.d/admin
+sudo ls -l /etc/sudoers.d/admin<span class="c">                      # -r--r-----. root root</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo su - harry   -c &#x27;sudo -n id&#x27;<span class="c">          # uid=0(root), no prompt</span>
+sudo su - natasha -c &#x27;sudo -n id&#x27;<span class="c">          # also works (natasha is in admin)</span>
+sudo su -s /bin/bash sarah -c &#x27;sudo -n id&#x27;<span class="c">  # fails (sarah isn&#x27;t in admin)</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>sudo -n</code> fails instead of prompting, so it proves the rule is really passwordless.</li><li>Mode 440 is what sudo expects; it doesn&#x27;t protect you from syntax errors. A broken drop-in breaks sudo for everyone, including yours, which is why the file is checked in /tmp before it&#x27;s installed. The interactive alternative, <code>sudo visudo -f /etc/sudoers.d/admin</code>, refuses to save a broken file.</li><li>sudo ignores files in /etc/sudoers.d whose names contain a dot or end in <code>~</code>.</li><li>Variants: <code>sudo usermod -aG wheel user</code> for sudo with a password; <code>%admin ALL=(ALL) /usr/bin/systemctl</code> to allow one command.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-16" data-lab="16">
@@ -606,13 +607,13 @@ su -s /bin/bash sarah -c &#x27;sudo -n id&#x27;<span class="c">      # fails (sa
     </div>
     <label class="done"><input type="checkbox" data-done="16"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>a script, runnable from anywhere, that copies files under /usr/share smaller than 1 MiB into /root/find_root_files.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cat &gt; /usr/local/bin/find_small_files.sh &lt;&lt;&#x27;EOF&#x27;
+  <p class="goal"><span>Goal</span>a script, runnable from anywhere, that copies files under /usr/share smaller than 1 MiB into /root/find_root_files.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /usr/local/bin/find_small_files.sh &lt;&lt;&#x27;EOF&#x27;
 #!/bin/bash
 mkdir -p /root/find_root_files
 find /usr/share -type f -size -1048576c -exec cp {} /root/find_root_files/ \;
 EOF
-chmod 755 /usr/local/bin/find_small_files.sh
-find_small_files.sh<span class="c">                        # /usr/local/bin is in root&#x27;s PATH</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls /root/find_root_files | head</code></pre></div><h3>Notes &amp; gotchas</h3><p class="callout warn"><strong>Warning:</strong> <code>find -size -1M</code> matches only <strong>empty</strong> files. find rounds sizes up to whole units, so &quot;less than 1 MiB&quot; becomes &quot;less than one 1-MiB unit&quot;, which is 0. Use bytes (<code>c</code>) for exact limits.</p><ul><li>Putting the script in /usr/local/bin lets you run it by name, which exam tasks often require.</li></ul>
+sudo chmod 755 /usr/local/bin/find_small_files.sh
+sudo /usr/local/bin/find_small_files.sh<span class="c">    # full path: sudo&#x27;s PATH may not include /usr/local/bin</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ls /root/find_root_files | head</code></pre></div><h3>Notes &amp; gotchas</h3><p class="callout warn"><strong>Warning:</strong> <code>find -size -1M</code> matches only <strong>empty</strong> files. find rounds sizes up to whole units, so &quot;less than 1 MiB&quot; becomes &quot;less than one 1-MiB unit&quot;, which is 0. Use bytes (<code>c</code>) for exact limits.</p><ul><li>Putting the script in /usr/local/bin lets you run it by name, which exam tasks often require.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-17" data-lab="17">
@@ -634,7 +635,7 @@ mount -o remount,rw /
 passwd root
 touch /.autorelabel
 sync
-exec /sbin/reboot -f</code></pre></div><h3>Verify</h3><p>Log in as root with the new password after the reboot.</p><h3>Explanation</h3><p>init=/bin/bash starts a root shell as PID 1. Remount / read-write so the password change can be saved, and <code>/.autorelabel</code> relabels the filesystem on the next boot so /etc/shadow gets its correct SELinux context.</p>
+exec /sbin/reboot -f</code></pre></div><h3>Verify</h3><p>Log in as root with the new password after the reboot.</p><h3>Explanation</h3><p>init=/bin/bash starts a root shell as PID 1. Remount / read-write so the password change can be saved, and <code>/.autorelabel</code> relabels the filesystem on the next boot so /etc/shadow gets its correct SELinux context. No <code>sudo</code> in this lab: init=/bin/bash already gives you a root shell.</p>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-18" data-lab="18">
@@ -646,22 +647,22 @@ exec /sbin/reboot -f</code></pre></div><h3>Verify</h3><p>Log in as root with the
     </div>
     <label class="done"><input type="checkbox" data-done="18"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>a persistent 512 MiB swap file, plus the exam-style swap logical volume.</p><h3>Steps — swap file</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>dd if=/dev/zero of=/swapfile bs=1M count=512
-chmod 600 /swapfile
-mkswap /swapfile
+  <p class="goal"><span>Goal</span>a persistent 512 MiB swap file, plus the exam-style swap logical volume.</p><h3>Steps — swap file</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dd if=/dev/zero of=/swapfile bs=1M count=512
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
 ls -Z /swapfile<span class="c">        # if this isn&#x27;t swapfile_t, label it (two lines below)</span>
-semanage fcontext -a -t swapfile_t /swapfile
-restorecon -v /swapfile
-echo &#x27;/swapfile  none  swap  defaults  0 0&#x27; &gt;&gt; /etc/fstab
-systemctl daemon-reload
-swapon -a</code></pre></div><h3>Steps — swap logical volume (do Lab 19 first)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lvcreate -L 256M -n swap datastore
-mkswap /dev/datastore/swap
-echo &quot;UUID=$(blkid -s UUID -o value /dev/datastore/swap)  none  swap  defaults  0 0&quot; &gt;&gt; /etc/fstab
-systemctl daemon-reload
-swapon -a</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>swapon --show
+sudo semanage fcontext -a -t swapfile_t /swapfile
+sudo restorecon -v /swapfile
+echo &#x27;/swapfile  none  swap  defaults  0 0&#x27; | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+sudo swapon -a</code></pre></div><h3>Steps — swap logical volume (do Lab 19 first)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo lvcreate -L 256M -n swap datastore
+sudo mkswap /dev/datastore/swap
+echo &quot;UUID=$(sudo blkid -s UUID -o value /dev/datastore/swap)  none  swap  defaults  0 0&quot; | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+sudo swapon -a</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>swapon --show
 free -h
-findmnt --verify
-reboot<span class="c">                  # then swapon --show again</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Red Hat&#x27;s documentation uses <code>dd</code> for swap files. <code>fallocate</code> can produce files that <code>swapon</code> rejects on some filesystems.</li><li>The SELinux label matters at boot, when systemd (not your shell) activates the swap file. A wrong label shows up as an AVC denial after reboot.</li><li>On the exam, swap is usually requested as a partition or LV of a given size. Practice the LV variant.</li></ul>
+sudo findmnt --verify
+sudo reboot<span class="c">             # then swapon --show again</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>Red Hat&#x27;s documentation uses <code>dd</code> for swap files. <code>fallocate</code> can produce files that <code>swapon</code> rejects on some filesystems.</li><li>The SELinux label matters at boot, when systemd (not your shell) activates the swap file. A wrong label shows up as an AVC denial after reboot.</li><li>On the exam, swap is usually requested as a partition or LV of a given size. Practice the LV variant.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-19" data-lab="19">
@@ -675,27 +676,27 @@ reboot<span class="c">                  # then swapon --show again</span></code>
   </header>
   <p class="goal"><span>Goal</span>VG datastore with 8 MiB extents; LV database of 500 MiB with XFS, mounted persistently at /mnt/database.</p><p class="callout warn"><strong>Warning:</strong> The original built the VG on loop devices. Loop devices don&#x27;t come back after a reboot, so the fstab entry fails and the server boots into emergency mode. Add a real second virtual disk (2 GiB is enough) instead.</p><h3>Steps — partition the new disk</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk<span class="c">                                      # find the new empty disk: vdb, sdb, or nvme0n1</span>
 DISK=/dev/vdb
-parted -s $DISK mklabel gpt
-parted -s $DISK mkpart lvm1 1MiB 1025MiB
-parted -s $DISK set 1 lvm on
-parted -s $DISK mkpart lvm2 1025MiB 100%
-parted -s $DISK set 2 lvm on
-udevadm settle
-lsblk $DISK<span class="c">                                # vdb1 and vdb2 (NVMe: nvme0n1p1 / p2)</span></code></pre></div><h3>Steps — LVM, filesystem, mount</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>pvcreate ${DISK}1 ${DISK}2
-vgcreate -s 8M datastore ${DISK}1 ${DISK}2
-lvcreate -L 500M -n database datastore<span class="c">     # rounds up to 504M (63 x 8M extents)</span>
-<span class="c">#   by extents instead:  lvcreate -l 60 -n database datastore   (60 x 8M = 480M)</span>
-mkfs.xfs /dev/datastore/database
-mkdir -p /mnt/database
-echo &quot;UUID=$(blkid -s UUID -o value /dev/datastore/database)  /mnt/database  xfs  defaults  0 0&quot; &gt;&gt; /etc/fstab
-systemctl daemon-reload
-mount -a
-chmod 1777 /mnt/database<span class="c">                   # AFTER mounting: sets the filesystem&#x27;s root</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>pvs; vgs; lvs
-vgdisplay datastore | grep &#x27;PE Size&#x27;<span class="c">       # 8.00 MiB</span>
+sudo parted -s $DISK mklabel gpt
+sudo parted -s $DISK mkpart lvm1 1MiB 1025MiB
+sudo parted -s $DISK set 1 lvm on
+sudo parted -s $DISK mkpart lvm2 1025MiB 100%
+sudo parted -s $DISK set 2 lvm on
+sudo udevadm settle
+lsblk $DISK<span class="c">                                # vdb1 and vdb2 (NVMe: nvme0n1p1 / p2)</span></code></pre></div><h3>Steps — LVM, filesystem, mount</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo pvcreate ${DISK}1 ${DISK}2
+sudo vgcreate -s 8M datastore ${DISK}1 ${DISK}2
+sudo lvcreate -L 500M -n database datastore<span class="c">  # rounds up to 504M (63 x 8M extents)</span>
+<span class="c">#   by extents instead:  sudo lvcreate -l 60 -n database datastore   (60 x 8M = 480M)</span>
+sudo mkfs.xfs /dev/datastore/database
+sudo mkdir -p /mnt/database
+echo &quot;UUID=$(sudo blkid -s UUID -o value /dev/datastore/database)  /mnt/database  xfs  defaults  0 0&quot; | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+sudo mount -a
+sudo chmod 1777 /mnt/database<span class="c">              # AFTER mounting: sets the filesystem&#x27;s root</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo pvs; sudo vgs; sudo lvs
+sudo vgdisplay datastore | grep &#x27;PE Size&#x27;<span class="c">  # 8.00 MiB</span>
 findmnt /mnt/database
 df -h /mnt/database
-findmnt --verify
-reboot<span class="c">                                      # then findmnt /mnt/database again</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>-L</code> sets a size (500M, 1G); <code>-l</code> sets a count of extents (60) or a percentage (<code>100%FREE</code>).</li><li>The original ran <code>chmod 1777</code> before mounting, which changed the empty mount point that the filesystem then hides.</li><li>If you must use loop devices, add <code>nofail</code> to the fstab options so the boot continues. After each reboot, re-run <code>losetup</code> and <code>vgchange -ay datastore</code>.</li><li>For ext4, use <code>mkfs.ext4</code> and type <code>ext4</code> in fstab. Everything else is the same.</li></ul>
+sudo findmnt --verify
+sudo reboot<span class="c">                                 # then findmnt /mnt/database again</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>-L</code> sets a size (500M, 1G); <code>-l</code> sets a count of extents (60) or a percentage (<code>100%FREE</code>).</li><li>The original ran <code>chmod 1777</code> before mounting, which changed the empty mount point that the filesystem then hides.</li><li>If you must use loop devices, add <code>nofail</code> to the fstab options so the boot continues. After each reboot, re-run <code>sudo losetup</code> and <code>sudo vgchange -ay datastore</code>.</li><li>For ext4, use <code>mkfs.ext4</code> and type <code>ext4</code> in fstab. Everything else is the same.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-20" data-lab="20">
@@ -707,11 +708,11 @@ reboot<span class="c">                                      # then findmnt /mnt/
     </div>
     <label class="done"><input type="checkbox" data-done="20"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>grow LV database by 100 extents and grow the filesystem online.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>vgs datastore<span class="c">                                          # check VFree first</span>
-lvextend -l +100 -r /dev/datastore/database<span class="c">            # +100 x 8M = +800M</span>
-<span class="c">#   by size instead:  lvextend -L +100M -r /dev/datastore/database</span>
-<span class="c">#   to an absolute size:  lvextend -L 1.5G -r /dev/datastore/database</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lvs datastore
-df -h /mnt/database</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>-r</code> grows the filesystem in the same step (xfs_growfs for XFS, resize2fs for ext4).</li><li>The original goal said &quot;100 extents&quot; but the command used <code>-L +100M</code>. Both forms are shown above.</li><li>Not enough free space in the VG? Add a disk: <code>pvcreate /dev/vdc; vgextend datastore /dev/vdc</code>.</li><li>XFS can&#x27;t shrink. ext4 can, offline: <code>lvreduce -r -L 400M ...</code>.</li></ul>
+  <p class="goal"><span>Goal</span>grow LV database by 100 extents and grow the filesystem online.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo vgs datastore<span class="c">                                     # check VFree first</span>
+sudo lvextend -l +100 -r /dev/datastore/database<span class="c">       # +100 x 8M = +800M</span>
+<span class="c">#   by size instead:  sudo lvextend -L +100M -r /dev/datastore/database</span>
+<span class="c">#   to an absolute size:  sudo lvextend -L 1.5G -r /dev/datastore/database</span></code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo lvs datastore
+df -h /mnt/database</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>-r</code> grows the filesystem in the same step (xfs_growfs for XFS, resize2fs for ext4).</li><li>The original goal said &quot;100 extents&quot; but the command used <code>-L +100M</code>. Both forms are shown above.</li><li>Not enough free space in the VG? Add a disk: <code>sudo pvcreate /dev/vdc; sudo vgextend datastore /dev/vdc</code>.</li><li>XFS can&#x27;t shrink. ext4 can, offline: <code>sudo lvreduce -r -L 400M ...</code>.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-21" data-lab="21">
@@ -723,11 +724,11 @@ df -h /mnt/database</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><code>
     </div>
     <label class="done"><input type="checkbox" data-done="21"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>apply the recommended tuned profile; adjust a process&#x27;s nice value.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>dnf -y install tuned
-systemctl enable --now tuned
+  <p class="goal"><span>Goal</span>apply the recommended tuned profile; adjust a process&#x27;s nice value.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install tuned
+sudo systemctl enable --now tuned
 tuned-adm recommended
-tuned-adm profile $(tuned-adm recommended)</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>tuned-adm active
-tuned-adm verify<span class="c">          # &quot;Verification succeeded&quot;</span></code></pre></div><p>Related objective: process priority.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>nice -n 10 sleep 600 &amp;
+sudo tuned-adm profile $(tuned-adm recommended)</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>tuned-adm active
+sudo tuned-adm verify<span class="c">     # &quot;Verification succeeded&quot;</span></code></pre></div><p>Related objective: process priority.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>nice -n 10 sleep 600 &amp;
 ps -o pid,ni,comm -p $!
 renice -n 5 -p $!
 ps -o pid,ni,comm -p $!
@@ -743,18 +744,18 @@ kill $!</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original set <
     </div>
     <label class="done"><input type="checkbox" data-done="22"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>add a Flatpak remote, install an app, update it, then remove the app, its unused runtimes, and the remote.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>dnf -y install flatpak
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+  <p class="goal"><span>Goal</span>add a Flatpak remote, install an app, update it, then remove the app, its unused runtimes, and the remote.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install flatpak
+sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak remotes
-flatpak update --appstream<span class="c">               # refresh app metadata for search</span>
+sudo flatpak update --appstream<span class="c">          # refresh app metadata for search</span>
 flatpak search gimp
-flatpak install -y flathub org.gimp.GIMP
+sudo flatpak install -y flathub org.gimp.GIMP
 flatpak list --app
 flatpak info org.gimp.GIMP
-flatpak update -y</code></pre></div><h3>Remove</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>flatpak uninstall -y org.gimp.GIMP
-flatpak uninstall -y --unused<span class="c">            # runtimes nothing uses anymore</span>
-flatpak remote-delete flathub
-flatpak list<span class="c">                             # empty</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original lab&#x27;s title said &quot;Install &amp; Remove&quot; but it had no removal steps; they&#x27;re added above.</li><li><code>flatpak run org.gimp.GIMP</code> needs a graphical session. On a minimal server, verify with <code>flatpak list</code> and <code>flatpak info</code> instead.</li><li>GIMP plus its runtime is a 1 GB+ download. Pick a smaller app if bandwidth is limited.</li><li>Run as root for system-wide installs, or use <code>--user</code> for a per-user install. <code>flatpak search</code> doesn&#x27;t need root.</li><li>On the exam the remote&#x27;s URL is given to you; Flathub may not be reachable.</li></ul>
+sudo flatpak update -y</code></pre></div><h3>Remove</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo flatpak uninstall -y org.gimp.GIMP
+sudo flatpak uninstall -y --unused<span class="c">       # runtimes nothing uses anymore</span>
+sudo flatpak remote-delete flathub
+flatpak list<span class="c">                             # empty</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>The original lab&#x27;s title said &quot;Install &amp; Remove&quot; but it had no removal steps; they&#x27;re added above.</li><li><code>flatpak run org.gimp.GIMP</code> needs a graphical session. On a minimal server, verify with <code>flatpak list</code> and <code>flatpak info</code> instead.</li><li>GIMP plus its runtime is a 1 GB+ download. Pick a smaller app if bandwidth is limited.</li><li>System-wide installs and removals need <code>sudo</code>. Without sudo, add <code>--user</code> for a per-user install. <code>flatpak search</code>, <code>list</code>, and <code>info</code> don&#x27;t need sudo.</li><li>On the exam the remote&#x27;s URL is given to you; Flathub may not be reachable.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-23" data-lab="23">
@@ -767,24 +768,24 @@ flatpak list<span class="c">                             # empty</span></code></
     <label class="done"><input type="checkbox" data-done="23"> Done</label>
   </header>
   <p class="goal"><span>Goal</span>harry on ServerA can ssh, run remote commands, and scp to ServerB without a password; SELinux stays enforcing.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># Both servers (sshd is normally already running and allowed)</span>
-systemctl enable --now sshd
-firewall-cmd --list-services<span class="c">            # should include ssh</span>
+sudo systemctl enable --now sshd
+sudo firewall-cmd --list-services<span class="c">       # should include ssh</span>
 
 <span class="c"># ServerA, as harry</span>
-su - harry
+sudo su - harry
 ssh-keygen -t ed25519 -N &#x27;&#x27; -f ~/.ssh/id_ed25519
 ssh-copy-id harry@serverb.lab.local<span class="c">     # enter harry&#x27;s password one last time</span></code></pre></div><h3>Verify (as harry on ServerA, no password prompts)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ssh harry@serverb.lab.local hostname
 ssh harry@serverb.lab.local &#x27;df -h /&#x27;
 echo &quot;SSH key-based auth works&quot; &gt; test.txt
 scp test.txt harry@serverb.lab.local:/tmp/
-ssh harry@serverb.lab.local cat /tmp/test.txt</code></pre></div><h3>If it still asks for a password (fix on ServerB)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>chmod 700 /home/harry/.ssh
-chmod 600 /home/harry/.ssh/authorized_keys
-chown -R harry:harry /home/harry/.ssh
-restorecon -Rv /home/harry/.ssh<span class="c">         # must be ssh_home_t</span>
-journalctl -u sshd -n 20<span class="c">                # look for &quot;bad ownership or modes&quot;</span>
-<span class="c"># Client side: ssh -v harry@serverb.lab.local</span></code></pre></div><h3>Optional hardening (only after key login works; keep a root session open)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &#x27;PasswordAuthentication no&#x27; &gt; /etc/ssh/sshd_config.d/01-lab.conf
-sshd -t &amp;&amp; systemctl reload sshd
-<span class="c"># undo: rm /etc/ssh/sshd_config.d/01-lab.conf; systemctl reload sshd</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>SELinux needs no changes for normal key logins. It does matter if ~/.ssh was created with <code>mv</code> or copied from elsewhere and kept the wrong label, which is why <code>restorecon</code> is in the fix list.</li><li>sshd keeps the <strong>first</strong> value it reads for each setting, and drop-ins are read in name order, so a low number like 01- beats the vendor&#x27;s 50-redhat.conf.</li><li>An empty passphrase is fine for this lab and for automation keys. For personal admin keys, use a passphrase with <code>ssh-agent</code>.</li><li>Key-based SSH is an RHCSA objective too, not only RHCE.</li><li>Repeat the steps in the other direction if you need ServerB → ServerA.</li></ul>
+ssh harry@serverb.lab.local cat /tmp/test.txt</code></pre></div><h3>If it still asks for a password (fix on ServerB)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo chmod 700 /home/harry/.ssh
+sudo chmod 600 /home/harry/.ssh/authorized_keys
+sudo chown -R harry:harry /home/harry/.ssh
+sudo restorecon -Rv /home/harry/.ssh<span class="c">    # must be ssh_home_t</span>
+sudo journalctl -u sshd -n 20<span class="c">           # look for &quot;bad ownership or modes&quot;</span>
+<span class="c"># Client side: ssh -v harry@serverb.lab.local</span></code></pre></div><h3>Optional hardening (only after key login works; keep a second session open)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo &#x27;PasswordAuthentication no&#x27; | sudo tee /etc/ssh/sshd_config.d/01-lab.conf
+sudo sshd -t &amp;&amp; sudo systemctl reload sshd
+<span class="c"># undo: sudo rm /etc/ssh/sshd_config.d/01-lab.conf; sudo systemctl reload sshd</span></code></pre></div><h3>Notes &amp; gotchas</h3><ul><li>SELinux needs no changes for normal key logins. It does matter if ~/.ssh was created with <code>mv</code> or copied from elsewhere and kept the wrong label, which is why <code>restorecon</code> is in the fix list.</li><li>sshd keeps the <strong>first</strong> value it reads for each setting, and drop-ins are read in name order, so a low number like 01- beats the vendor&#x27;s 50-redhat.conf.</li><li>An empty passphrase is fine for this lab and for automation keys. For personal admin keys, use a passphrase with <code>ssh-agent</code>.</li><li>Key-based SSH is an RHCSA objective too, not only RHCE.</li><li>Repeat the steps in the other direction if you need ServerB → ServerA.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-24" data-lab="24">
@@ -796,30 +797,30 @@ sshd -t &amp;&amp; systemctl reload sshd
     </div>
     <label class="done"><input type="checkbox" data-done="24"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>answer &quot;what&#x27;s listening, what failed, and who changed what&quot; from memory. Do the scenarios first; the solutions follow.</p><h3>Setup</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>dnf -y install nginx nmap-ncat
-systemctl enable --now nginx
-firewall-cmd --permanent --add-service=http; firewall-cmd --reload
-useradd -m labuser
-echo &#x27;labuser:Labuser123&#x27; | chpasswd</code></pre></div><p class="callout note"><strong>Note:</strong> Run this drill on ServerB. On ServerA, httpd already holds port 80 (Lab 2) and nginx would fail to start.</p><h3>Part 1 — Scenarios</h3><p><strong>Scenario 1: what is listening, and who owns it?</strong> List listening TCP sockets with process info; confirm what owns port 80.</p><p><strong>Scenario 2: who is connected right now?</strong> From ServerA, run <code>while true; do curl -s serverb &gt;/dev/null; sleep 0.2; done</code>. On ServerB, show established connections to port 80, the remote IPs, and the owning process.</p><p><strong>Scenario 3: a service failed. Prove why.</strong> Break nginx with <code>mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.broken</code> and <code>systemctl restart nginx</code>. Show the status, the error explaining the failure, and the last 50 unit log lines.</p><p><strong>Scenario 4: what happened since boot?</strong> Show all errors since boot, nginx logs since boot, and a 5-minute window that includes your failure.</p><p><strong>Scenario 5: who edited a protected file?</strong> Watch /etc/hosts with an audit rule, then change it (commands are in the solution). Find the events, the real user behind the change, and the executable used.</p><p><strong>Scenario 6: find failed logins.</strong> As harry (not root, since root&#x27;s su never asks for a password), run <code>su - labuser</code> and type a wrong password twice. Find the failures in the audit log and the journal.</p><p><strong>Scenario 7: detect a suspicious listener.</strong> Start <code>ncat -lk 5555 &amp;</code>. Prove it&#x27;s listening and get its PID, then kill it and confirm it&#x27;s gone.</p><h3>Part 2 — Solutions</h3><p><strong>Scenario 1</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ss -ltnp<span class="c">                          # -l listening, -t TCP, -n numeric, -p process</span>
-ss -ltnp &#x27;sport = :80&#x27;</code></pre></div><p><strong>Scenario 2</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ss -tnp state established &#x27;( sport = :80 )&#x27;
+  <p class="goal"><span>Goal</span>answer &quot;what&#x27;s listening, what failed, and who changed what&quot; from memory. Do the scenarios first; the solutions follow.</p><h3>Setup</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install nginx nmap-ncat
+sudo systemctl enable --now nginx
+sudo firewall-cmd --permanent --add-service=http; sudo firewall-cmd --reload
+sudo useradd -m labuser
+echo &#x27;labuser:Labuser123&#x27; | sudo chpasswd</code></pre></div><p class="callout note"><strong>Note:</strong> Run this drill on ServerB. On ServerA, httpd already holds port 80 (Lab 2) and nginx would fail to start.</p><h3>Part 1 — Scenarios</h3><p><strong>Scenario 1: what is listening, and who owns it?</strong> List listening TCP sockets with process info; confirm what owns port 80.</p><p><strong>Scenario 2: who is connected right now?</strong> From ServerA, run <code>while true; do curl -s serverb &gt;/dev/null; sleep 0.2; done</code>. On ServerB, show established connections to port 80, the remote IPs, and the owning process.</p><p><strong>Scenario 3: a service failed. Prove why.</strong> Break nginx with <code>sudo mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.broken</code> and <code>sudo systemctl restart nginx</code>. Show the status, the error explaining the failure, and the last 50 unit log lines.</p><p><strong>Scenario 4: what happened since boot?</strong> Show all errors since boot, nginx logs since boot, and a 5-minute window that includes your failure.</p><p><strong>Scenario 5: who edited a protected file?</strong> Watch /etc/hosts with an audit rule, then change it (commands are in the solution). Find the events, the real user behind the change, and the executable used.</p><p><strong>Scenario 6: find failed logins.</strong> As your normal user (not with sudo, since root&#x27;s su never asks for a password), run <code>su - labuser</code> and type a wrong password twice. Find the failures in the audit log and the journal.</p><p><strong>Scenario 7: detect a suspicious listener.</strong> Start <code>ncat -lk 5555 &amp;</code>. Prove it&#x27;s listening and get its PID, then kill it and confirm it&#x27;s gone.</p><h3>Part 2 — Solutions</h3><p><strong>Scenario 1</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ss -ltnp<span class="c">                     # -l listening, -t TCP, -n numeric, -p process</span>
+sudo ss -ltnp &#x27;sport = :80&#x27;</code></pre></div><p><strong>Scenario 2</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ss -tnp state established &#x27;( sport = :80 )&#x27;
 ss -tn  state established &#x27;( sport = :80 )&#x27; | awk &#x27;NR&gt;1 {print $4}&#x27; | cut -d: -f1 | sort -u</code></pre></div><p class="callout note"><strong>Note:</strong> With a <code>state</code> filter, ss drops the State column, so the peer address is column 4, not 5. The original used <code>$5</code>.</p><p><strong>Scenario 3</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>systemctl status nginx --no-pager
-journalctl -xeu nginx --no-pager<span class="c">                       # includes nginx&#x27;s own &quot;[emerg]&quot; line</span>
-journalctl -u nginx --since &quot;-10min&quot; -p err --no-pager # only systemd&#x27;s &quot;Failed to start&quot;
-journalctl -u nginx -n 50 --no-pager
+sudo journalctl -xeu nginx --no-pager<span class="c">                  # includes nginx&#x27;s own &quot;[emerg]&quot; line</span>
+sudo journalctl -u nginx --since &quot;-10min&quot; -p err --no-pager # only systemd&#x27;s &quot;Failed to start&quot;
+sudo journalctl -u nginx -n 50 --no-pager
 <span class="c"># fix</span>
-mv /etc/nginx/nginx.conf.broken /etc/nginx/nginx.conf
-systemctl restart nginx</code></pre></div><p class="callout note"><strong>Note:</strong> nginx writes its error to stderr, which the journal stores at &quot;info&quot; priority. That&#x27;s why <code>-p err</code> alone hides the actual reason.</p><p><strong>Scenario 4</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>journalctl -b -p err --no-pager
-journalctl -b -u nginx --no-pager
-journalctl -u nginx --since &quot;2026-10-01 15:00:00&quot; --until &quot;2026-10-01 15:05:00&quot; --no-pager</code></pre></div><p><strong>Scenario 5</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>auditctl -w /etc/hosts -p wa -k hosts_watch
-echo &quot;# lab test $(date)&quot; &gt;&gt; /etc/hosts
-ausearch -k hosts_watch -i
-ausearch -k hosts_watch -i | grep -E -o &#x27;(auid|uid|exe|comm)=[^ ]+&#x27; | sort -u</code></pre></div><p><code>auid</code> is the user who originally logged in, and it stays the same through sudo and su. <code>uid</code> is who the process ran as (root). For a rule that survives reboot, put <code>-w /etc/hosts -p wa -k hosts_watch</code> in /etc/audit/rules.d/hosts.rules and run <code>augenrules --load</code>.</p><p><strong>Scenario 6</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ausearch -m USER_AUTH,USER_LOGIN,USER_ACCT --success no -ts recent -i
-journalctl --since &quot;-15min&quot; | grep -Ei &#x27;authentication failure|failed password&#x27;
-journalctl -u sshd -n 20 --no-pager</code></pre></div><p><strong>Scenario 7</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ss -ltnp &#x27;sport = :5555&#x27;<span class="c">          # users:((&quot;ncat&quot;,pid=1234,...))</span>
+sudo mv /etc/nginx/nginx.conf.broken /etc/nginx/nginx.conf
+sudo systemctl restart nginx</code></pre></div><p class="callout note"><strong>Note:</strong> nginx writes its error to stderr, which the journal stores at &quot;info&quot; priority. That&#x27;s why <code>-p err</code> alone hides the actual reason.</p><p><strong>Scenario 4</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo journalctl -b -p err --no-pager
+sudo journalctl -b -u nginx --no-pager
+sudo journalctl -u nginx --since &quot;2026-10-01 15:00:00&quot; --until &quot;2026-10-01 15:05:00&quot; --no-pager</code></pre></div><p><strong>Scenario 5</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo auditctl -w /etc/hosts -p wa -k hosts_watch
+echo &quot;# lab test $(date)&quot; | sudo tee -a /etc/hosts
+sudo ausearch -k hosts_watch -i
+sudo ausearch -k hosts_watch -i | grep -E -o &#x27;(auid|uid|exe|comm)=[^ ]+&#x27; | sort -u</code></pre></div><p><code>auid</code> is the user who originally logged in, and it stays the same through sudo and su. <code>uid</code> is who the process ran as (root). For a rule that survives reboot, put <code>-w /etc/hosts -p wa -k hosts_watch</code> in /etc/audit/rules.d/hosts.rules and run <code>sudo augenrules --load</code>.</p><p><strong>Scenario 6</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ausearch -m USER_AUTH,USER_LOGIN,USER_ACCT --success no -ts recent -i
+sudo journalctl --since &quot;-15min&quot; | grep -Ei &#x27;authentication failure|failed password&#x27;
+sudo journalctl -u sshd -n 20 --no-pager</code></pre></div><p><strong>Scenario 7</strong></p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ss -ltnp &#x27;sport = :5555&#x27;<span class="c">     # users:((&quot;ncat&quot;,pid=1234,...))</span>
 kill 1234<span class="c">                         # use the PID from the output</span>
-ss -ltnp &#x27;sport = :5555&#x27;<span class="c">          # no output</span></code></pre></div><h3>Cleanup</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>auditctl -W /etc/hosts -p wa -k hosts_watch
-sed -i &#x27;/^# lab test/d&#x27; /etc/hosts
-userdel -r labuser</code></pre></div>
+sudo ss -ltnp &#x27;sport = :5555&#x27;<span class="c">     # no output</span></code></pre></div><h3>Cleanup</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo auditctl -W /etc/hosts -p wa -k hosts_watch
+sudo sed -i &#x27;/^# lab test/d&#x27; /etc/hosts
+sudo userdel -r labuser</code></pre></div>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-25" data-lab="25">
@@ -832,29 +833,29 @@ userdel -r labuser</code></pre></div>
     <label class="done"><input type="checkbox" data-done="25"> Done</label>
   </header>
   <p class="goal"><span>Goal</span>the VM&#x27;s disk was enlarged in the hypervisor; grow the partition, PV, LV, and filesystem so / uses the new space, without rebooting into rescue mode.</p><h3>Layer model</h3><p>Hypervisor disk → <strong>partition</strong> (growpart) → <strong>PV</strong> (pvresize) → <strong>VG</strong> → <strong>LV + filesystem</strong> (lvextend -r). Every layer has to grow, in that order.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># 0. Before: note the sizes</span>
-lsblk; df -h /; pvs; vgs
+lsblk; df -h /; sudo pvs; sudo vgs
 
 <span class="c"># 1. Enlarge the virtual disk in the hypervisor (remove snapshots/checkpoints first if it refuses)</span>
 
 <span class="c"># 2. Make the kernel see the new disk size (or reboot)</span>
-echo 1 &gt; /sys/class/block/sda/device/rescan<span class="c">    # SCSI/SATA disks; virtio (vda) usually updates by itself</span>
+echo 1 | sudo tee /sys/class/block/sda/device/rescan<span class="c">  # SCSI/SATA disks; virtio (vda) usually updates by itself</span>
 lsblk<span class="c">                                          # disk is bigger; the partition is NOT yet</span>
 
 <span class="c"># 3. Grow the partition holding the PV (here partition 3)</span>
-dnf -y install cloud-utils-growpart
-growpart /dev/sda 3
-<span class="c">#   alternative: parted /dev/sda resizepart 3 100%   (answer Yes), then partprobe</span>
+sudo dnf -y install cloud-utils-growpart
+sudo growpart /dev/sda 3
+<span class="c">#   alternative: sudo parted /dev/sda resizepart 3 100%   (answer Yes), then sudo partprobe</span>
 
 <span class="c"># 4. Grow the PV, then the LV and filesystem together</span>
-pvresize /dev/sda3
-vgs<span class="c">                                            # VFree &gt; 0 now</span>
-lvextend -r -l +100%FREE /dev/rhel/root</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk
-df -h /</code></pre></div><h3>Common failure modes</h3><div class="tablewrap"><table><thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead><tbody><tr><td>lsblk shows the old disk size</td><td>Kernel hasn&#x27;t rescanned</td><td>Rescan the device or reboot</td></tr><tr><td>pvresize reports no change</td><td>Partition wasn&#x27;t grown</td><td>growpart / parted resizepart first</td></tr><tr><td>lvextend: insufficient free extents</td><td>PV not resized</td><td>pvresize</td></tr><tr><td>resize2fs fails with &quot;Bad magic number&quot;</td><td>Filesystem is XFS, not ext4</td><td>Use <code>lvextend -r</code> or <code>xfs_growfs /</code></td></tr><tr><td>growpart can&#x27;t grow the partition</td><td>It isn&#x27;t the last partition on the disk</td><td>Add a new disk instead: pvcreate → vgextend → lvextend -r</td></tr><tr><td>Hypervisor won&#x27;t enlarge the disk</td><td>Snapshots/checkpoints exist</td><td>Delete or merge them first</td></tr></tbody></table></div><h3>Practice variations</h3><ul><li>Root disk expansion as above: grow a 20 GiB disk to 40 GiB.</li><li>Add a new disk instead: <code>pvcreate /dev/sdb; vgextend rhel /dev/sdb; lvextend -r -l +100%FREE /dev/rhel/root</code>.</li></ul><p class="callout note"><strong>Note:</strong> Memory anchor: <strong>disk → growpart → pvresize → lvextend -r</strong>. The original skipped the partition step and used Ubuntu names and resize2fs. RHEL&#x27;s default root is XFS on /dev/rhel/root. Check the names on your system with <code>lvs</code>.</p>
+sudo pvresize /dev/sda3
+sudo vgs<span class="c">                                       # VFree &gt; 0 now</span>
+sudo lvextend -r -l +100%FREE /dev/rhel/root</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk
+df -h /</code></pre></div><h3>Common failure modes</h3><div class="tablewrap"><table><thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead><tbody><tr><td>lsblk shows the old disk size</td><td>Kernel hasn&#x27;t rescanned</td><td>Rescan the device or reboot</td></tr><tr><td>pvresize reports no change</td><td>Partition wasn&#x27;t grown</td><td>growpart / parted resizepart first</td></tr><tr><td>lvextend: insufficient free extents</td><td>PV not resized</td><td>pvresize</td></tr><tr><td>resize2fs fails with &quot;Bad magic number&quot;</td><td>Filesystem is XFS, not ext4</td><td>Use <code>lvextend -r</code> or <code>xfs_growfs /</code></td></tr><tr><td>growpart can&#x27;t grow the partition</td><td>It isn&#x27;t the last partition on the disk</td><td>Add a new disk instead: pvcreate → vgextend → lvextend -r</td></tr><tr><td>Hypervisor won&#x27;t enlarge the disk</td><td>Snapshots/checkpoints exist</td><td>Delete or merge them first</td></tr></tbody></table></div><h3>Practice variations</h3><ul><li>Root disk expansion as above: grow a 20 GiB disk to 40 GiB.</li><li>Add a new disk instead: <code>sudo pvcreate /dev/sdb; sudo vgextend rhel /dev/sdb; sudo lvextend -r -l +100%FREE /dev/rhel/root</code>.</li></ul><p class="callout note"><strong>Note:</strong> Memory anchor: <strong>disk → growpart → pvresize → lvextend -r</strong>. The original skipped the partition step and used Ubuntu names and resize2fs. RHEL&#x27;s default root is XFS on /dev/rhel/root. Check the names on your system with <code>lvs</code>.</p>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="appendix" id="changes">
   <h2>What changed in this revision</h2>
-  <div class="tablewrap"><table><thead><tr><th>Lab</th><th>Change</th></tr></thead><tbody><tr><td>Front</td><td>Added lab order/dependencies, exam habits, and updated standards; removed stray characters from the title.</td></tr><tr><td>1</td><td>Consistent <code>set-hostname</code>; how to find the real connection name; duplicate-safe /etc/hosts; reboot check; SSH warning.</td></tr><tr><td>2</td><td>Fixed <code>$releaserver</code> typo and shell-expanded dnf variables; ISO-based repo with file:// and http:// examples; gpgcheck with key; working verification.</td></tr><tr><td>3</td><td>Fixed missing <code>semanage</code>; localhost firewall test can&#x27;t show denials; port-82 denial now shown before fixing; <code>--line-buffered</code>; configtest; context before/after; persistence check and cleanup; Lab 2 conflict warning.</td></tr><tr><td>4</td><td>Created natasha (used by later labs); <code>-aG</code> gotcha; UID-matching note.</td></tr><tr><td>5</td><td>Group-inheritance verification; sticky bit and default ACL extensions.</td></tr><tr><td>6</td><td>Added missing client packages; removed no-op client chown/chmod and wrong path; auto.master.d drop-in; restart autofs; timeout test; wildcard map.</td></tr><tr><td>7</td><td>harry couldn&#x27;t write the log; safe <code>crontab -l</code> deny test; cron.allow note; at example.</td></tr><tr><td>8</td><td>Mode 644 so the natasha ACL actually matters; /var/tmp for persistence; mask note; dropped /tmp NFS export.</td></tr><tr><td>9</td><td>sed now matches the <code>pool</code> line; restart instead of enable --now; ServerA serves time to ServerB.</td></tr><tr><td>10</td><td>Simplified to a single <code>find -exec cp</code>; <code>-xdev</code> to skip /proc; dropped /root export.</td></tr><tr><td>11</td><td>UID-free check; <code>-nouser</code> note.</td></tr><tr><td>12</td><td>Rewritten as an exam-style task: bzip2 archive of /usr/local; restore to a separate directory and to the original location; permissions and SELinux notes.</td></tr><tr><td>13</td><td>Use .bashrc; removed unneeded chown -R; system-wide option.</td></tr><tr><td>14</td><td>Fixed &quot;Explanation:q=&quot; typo; existing-user and related chage commands.</td></tr><tr><td>15</td><td><code>visudo -c</code> validation; <code>sudo -n</code> test; corrected the claim about mode 440.</td></tr><tr><td>16</td><td><code>-size -1M</code> matches only empty files, so switched to bytes; script in /usr/local/bin; simplified to a single <code>find -exec cp</code>.</td></tr><tr><td>17</td><td>Unchanged (init=/bin/bash method kept as written); formatting only.</td></tr><tr><td>18</td><td>dd instead of fallocate; SELinux label; swap LV variant.</td></tr><tr><td>19</td><td>Loop devices don&#x27;t persist (emergency-mode risk), so use a real disk with parted; chmod after mount; extents example.</td></tr><tr><td>20</td><td>Goal and command now agree (extents); vgextend and shrink notes.</td></tr><tr><td>21</td><td>Apply the recommended profile directly; <code>tuned-adm verify</code>; nice/renice.</td></tr><tr><td>22</td><td>Added the missing removal steps; GUI and download-size notes.</td></tr><tr><td>23</td><td>Uses harry; non-interactive keygen; restorecon and log-based troubleshooting; safe hardening drop-in.</td></tr><tr><td>24</td><td>Moved to ServerB (port 80 conflict); awk column fix; <code>-p err</code> explanation; persistent audit rules; non-root su for failed logins; cleanup; removed chat-style leftovers.</td></tr><tr><td>25</td><td>Added the missing growpart step; RHEL names and XFS; corrected failure table; trimmed off-topic material.</td></tr></tbody></table></div>
+  <div class="tablewrap"><table><thead><tr><th>Lab</th><th>Change</th></tr></thead><tbody><tr><td>Front</td><td>Added lab order/dependencies, exam habits, and updated standards; removed stray characters from the title; all commands written for a regular user with sudo.</td></tr><tr><td>1</td><td>Consistent <code>set-hostname</code>; how to find the real connection name; duplicate-safe /etc/hosts; reboot check; SSH warning.</td></tr><tr><td>2</td><td>Fixed <code>$releaserver</code> typo and shell-expanded dnf variables; ISO-based repo with file:// and http:// examples; gpgcheck with key; working verification.</td></tr><tr><td>3</td><td>Fixed missing <code>semanage</code>; localhost firewall test can&#x27;t show denials; port-82 denial now shown before fixing; <code>--line-buffered</code>; configtest; context before/after; persistence check and cleanup; Lab 2 conflict warning.</td></tr><tr><td>4</td><td>Created natasha (used by later labs); <code>-aG</code> gotcha; UID-matching note.</td></tr><tr><td>5</td><td>Group-inheritance verification; sticky bit and default ACL extensions.</td></tr><tr><td>6</td><td>Added missing client packages; removed no-op client chown/chmod and wrong path; auto.master.d drop-in; restart autofs; timeout test; wildcard map.</td></tr><tr><td>7</td><td>harry couldn&#x27;t write the log; safe <code>crontab -l</code> deny test; cron.allow note; at example.</td></tr><tr><td>8</td><td>Mode 644 so the natasha ACL actually matters; /var/tmp for persistence; mask note; dropped /tmp NFS export.</td></tr><tr><td>9</td><td>sed now matches the <code>pool</code> line; restart instead of enable --now; ServerA serves time to ServerB.</td></tr><tr><td>10</td><td>Simplified to a single <code>find -exec cp</code>; <code>-xdev</code> to skip /proc; dropped /root export.</td></tr><tr><td>11</td><td>UID-free check; <code>-nouser</code> note.</td></tr><tr><td>12</td><td>Rewritten as an exam-style task: bzip2 archive of /usr/local; restore to a separate directory and to the original location; permissions and SELinux notes.</td></tr><tr><td>13</td><td>Use .bashrc; removed unneeded chown -R; system-wide option.</td></tr><tr><td>14</td><td>Fixed &quot;Explanation:q=&quot; typo; existing-user and related chage commands.</td></tr><tr><td>15</td><td><code>visudo -c</code> validation; <code>sudo -n</code> test; corrected the claim about mode 440.</td></tr><tr><td>16</td><td><code>-size -1M</code> matches only empty files, so switched to bytes; script in /usr/local/bin; simplified to a single <code>find -exec cp</code>.</td></tr><tr><td>17</td><td>Unchanged (init=/bin/bash method kept as written); formatting only.</td></tr><tr><td>18</td><td>dd instead of fallocate; SELinux label; swap LV variant.</td></tr><tr><td>19</td><td>Loop devices don&#x27;t persist (emergency-mode risk), so use a real disk with parted; chmod after mount; extents example.</td></tr><tr><td>20</td><td>Goal and command now agree (extents); vgextend and shrink notes.</td></tr><tr><td>21</td><td>Apply the recommended profile directly; <code>tuned-adm verify</code>; nice/renice.</td></tr><tr><td>22</td><td>Added the missing removal steps; GUI and download-size notes.</td></tr><tr><td>23</td><td>Uses harry; non-interactive keygen; restorecon and log-based troubleshooting; safe hardening drop-in.</td></tr><tr><td>24</td><td>Moved to ServerB (port 80 conflict); awk column fix; <code>-p err</code> explanation; persistent audit rules; non-root su for failed logins; cleanup; removed chat-style leftovers.</td></tr><tr><td>25</td><td>Added the missing growpart step; RHEL names and XFS; corrected failure table; trimmed off-topic material.</td></tr></tbody></table></div>
 </section>
 </main>
 </div>
