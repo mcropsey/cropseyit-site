@@ -692,15 +692,17 @@ sudo journalctl -u sshd -n 20 --no-pager</code></pre></div>
   <h2>Boot &amp; root password reset<span class="ix">Lab 17</span></h2>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># At GRUB:</span>
 <span class="c">#   1) press 'e' on the kernel entry</span>
-<span class="c">#   2) append to the linux line:   init=/bin/bash enforcing=0</span>
+<span class="c">#   2) end of the line starting with "linux" (it wraps): delete any</span>
+<span class="c">#      console=ttyS0,... and "rhgb quiet", append:  init=/bin/bash enforcing=0</span>
 <span class="c">#   3) boot with Ctrl+x (or F10)</span>
 
 mount -o remount,rw /     <span class="c"># so the change can actually be saved</span>
 passwd root
 touch /.autorelabel        <span class="c"># relabel on next boot -> correct /etc/shadow context</span>
 sync
-exec /sbin/reboot -f</code></pre></div>
-  <div class="callout"><p><code>init=/bin/bash</code> starts a root shell as PID&nbsp;1. <code>rd.break</code> no longer works on current RHEL. Skip <code>/.autorelabel</code> and SELinux will deny reads of the new <code>/etc/shadow</code>.</p></div>
+exec /sbin/reboot -f
+<span class="c"># didn't reboot?  echo b &gt; /proc/sysrq-trigger   (safe after sync)</span></code></pre></div>
+  <div class="callout"><p><code>init=/bin/bash</code> starts a root shell as PID&nbsp;1. <code>rd.break</code> no longer works on current RHEL. Skip <code>/.autorelabel</code> and SELinux will deny reads of the new <code>/etc/shadow</code>. The relabel boot takes minutes and reboots twice: don't power off. Faster: <code>load_policy -i; restorecon -v /etc/shadow</code> instead of the relabel. Blank screen after Ctrl+x means a <code>console=ttyS0</code> option sent the shell to the serial port.</p></div>
 </section>
 
 <section class="card" id="tools" data-k="find tar gzip bzip2 xz script find_small_files size xdev exec copy archive compress">
