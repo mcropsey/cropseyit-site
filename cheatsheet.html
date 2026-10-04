@@ -207,14 +207,15 @@ nmcli -t -f NAME,DEVICE con show --active
 CON="ens160"   <span class="c"># often the device name, not "Wired connection 1"</span></code></pre></div>
   <h3>Static address + hostname</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo hostnamectl set-hostname servera.lab.local
-sudo nmcli con mod "$CON" ipv4.addresses 192.168.1.95/24 ipv4.gateway 192.168.1.1 \
+sudo nmcli con mod "$CON" ipv4.addresses 192.168.1.103/24 ipv4.gateway 192.168.1.1 \
   ipv4.dns "1.1.1.1 8.8.8.8" ipv4.method manual connection.autoconnect yes
 sudo nmcli con up "$CON"
 
 <span class="c"># duplicate-safe /etc/hosts</span>
 grep -q servera.lab.local /etc/hosts || sudo tee -a /etc/hosts &lt;&lt;'EOF'
-192.168.1.95 servera.lab.local servera
-192.168.1.96 serverb.lab.local serverb
+192.168.1.103 servera.lab.local servera
+192.168.1.104 serverb.lab.local serverb
+192.168.1.105 repo.lab.local repo
 EOF</code></pre></div>
   <h3>Verify</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ip -4 addr show
@@ -224,7 +225,7 @@ hostnamectl; cat /etc/resolv.conf; ping -c 2 serverb</code></pre></div>
   <ul>
     <li>Set <code>ipv4.addresses</code> in the same command as (or before) <code>ipv4.method manual</code> &mdash; manual with no address is rejected.</li>
     <li>RHEL 9/10 store keyfiles in <code>/etc/NetworkManager/system-connections/</code>. ifcfg is deprecated in 9, gone in 10 &mdash; use <code>nmcli</code>/<code>nmtui</code>.</li>
-    <li>IPv6 variant: <code>ipv6.addresses fd00::95/64 ipv6.method manual</code></li>
+    <li>IPv6 variant: <code>ipv6.addresses fd00::103/64 ipv6.method manual</code></li>
   </ul>
 </section>
 
@@ -285,7 +286,7 @@ sudo semanage port -a -t http_port_t -p tcp 82</code></pre></div>
 
 <section class="card" id="dnf" data-k="dnf repo repository gpgcheck gpgkey releasever config-manager iso baseos appstream rpm package module">
   <h2>Software management &amp; repos<span class="ix">Lab 2</span></h2>
-  <h3>Mount the ISO, serve it over HTTP</h3>
+  <h3>Repo server: mount the ISO, serve it over HTTP</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir -p /var/www/html/rhel
 sudo mount -o loop,ro /root/rhel.iso /mnt
 sudo cp -a /mnt/. /var/www/html/rhel/ <span class="c"># ~10 GB; check free space</span>
@@ -295,13 +296,13 @@ sudo restorecon -Rv /var/www/html  <span class="c"># cp -a kept the ISO's labels
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /etc/yum.repos.d/lab.repo &lt;&lt;'EOF'
 [lab-baseos]
 name=Lab BaseOS
-baseurl=http://192.168.1.95/rhel/BaseOS
+baseurl=http://192.168.1.105/rhel/BaseOS
 enabled=1
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
 [lab-appstream]
 name=Lab AppStream
-baseurl=http://192.168.1.95/rhel/AppStream
+baseurl=http://192.168.1.105/rhel/AppStream
 enabled=1
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
@@ -309,7 +310,7 @@ EOF
 sudo dnf clean all
 sudo dnf repolist</code></pre></div>
   <h3>Verify &amp; troubleshoot</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -sI http://192.168.1.95/rhel/BaseOS/repodata/repomd.xml | head -1
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -sI http://192.168.1.105/rhel/BaseOS/repodata/repomd.xml | head -1
 sudo dnf repolist -v | grep -E 'Repo-id|Repo-pkgs'
 sudo dnf info nfs-utils | grep -i repo <span class="c"># which repo would serve it</span>
 sudo dnf --disablerepo=&lt;id&gt; install ... <span class="c"># skip a broken repo</span>
@@ -534,11 +535,11 @@ sudo firewall-cmd --reload
 sudo exportfs -v</code></pre></div>
   <h3>Client &mdash; static mount</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install nfs-utils autofs
-showmount -e 192.168.1.95
+showmount -e 192.168.1.103
 sudo mkdir -p /mnt/public /mnt/private
 sudo tee -a /etc/fstab &lt;&lt;'EOF'
-192.168.1.95:/public   /mnt/public   nfs  defaults,_netdev,ro  0 0
-192.168.1.95:/private  /mnt/private  nfs  defaults,_netdev,rw  0 0
+192.168.1.103:/public   /mnt/public   nfs  defaults,_netdev,ro  0 0
+192.168.1.103:/private  /mnt/private  nfs  defaults,_netdev,rw  0 0
 EOF
 sudo systemctl daemon-reload
 sudo mount -a
@@ -548,8 +549,8 @@ findmnt -t nfs4</code></pre></div>
 echo '/automount /etc/auto.automount --timeout=30' \
   | sudo tee /etc/auto.master.d/automount.autofs
 sudo tee /etc/auto.automount &lt;&lt;'EOF'
-public   -fstype=nfs,ro  192.168.1.95:/public
-private  -fstype=nfs,rw  192.168.1.95:/private
+public   -fstype=nfs,ro  192.168.1.103:/public
+private  -fstype=nfs,rw  192.168.1.103:/private
 EOF
 sudo systemctl enable autofs
 sudo systemctl restart autofs       <span class="c"># RESTART, so maps are re-read</span>
@@ -563,7 +564,7 @@ sleep 40; mount | grep /automount   <span class="c"># gone after 30s idle</span>
 /rhome  /etc/auto.rhome
 
 <span class="c"># /etc/auto.rhome -- &amp; is replaced by the key (the directory name)</span>
-*  -fstype=nfs,rw  192.168.1.95:/rhome/&amp;</code></pre></div>
+*  -fstype=nfs,rw  192.168.1.103:/rhome/&amp;</code></pre></div>
   <div class="callout warn"><p><strong>Traps:</strong> <code>systemctl enable --now autofs</code> does <em>not</em> reload maps if autofs was already running &mdash; restart it. Don't <code>cd</code> into an automount before testing the idle timeout. And <code>chown</code>/<code>chmod</code> on a client mount point is a no-op: the share's own permissions cover it.</p></div>
   <ul><li><code>nfs</code> alone suffices for NFSv4. <code>mountd</code> + <code>rpc-bind</code> are what make <code>showmount -e</code> and NFSv3 work.</li><li>root is squashed to <code>nobody</code> on the client &mdash; expected.</li></ul>
 </section>
@@ -789,8 +790,8 @@ flatpak list                      <span class="c"># empty</span></code></pre></d
   <div class="tablewrap"><table>
     <thead><tr><th>Lab</th><th>Topic</th><th>Host</th><th>Needs first</th><th>Card</th></tr></thead>
     <tbody>
-      <tr><td>1</td><td>Network configuration</td><td>both</td><td>&mdash;</td><td><a href="#net">Networking</a></td></tr>
-      <tr><td>2</td><td>DNF repository over HTTP</td><td>A serves</td><td>1</td><td><a href="#dnf">Software &amp; repos</a></td></tr>
+      <tr><td>1</td><td>Network configuration</td><td>all three</td><td>&mdash;</td><td><a href="#net">Networking</a></td></tr>
+      <tr><td>2</td><td>DNF repository over HTTP</td><td>Repo serves</td><td>1</td><td><a href="#dnf">Software &amp; repos</a></td></tr>
       <tr><td>3</td><td>Apache + SELinux + firewalld</td><td>A</td><td>2</td><td><a href="#selinux">SELinux</a>, <a href="#apache">Apache</a></td></tr>
       <tr><td>4</td><td>Users &amp; groups</td><td>both</td><td>1</td><td><a href="#users">Users</a></td></tr>
       <tr><td>5</td><td>Collaboration dir (SGID)</td><td>both</td><td>4</td><td><a href="#perms">Permissions</a></td></tr>
@@ -798,7 +799,7 @@ flatpak list                      <span class="c"># empty</span></code></pre></d
       <tr><td>7</td><td>cron and at</td><td>both</td><td>4</td><td><a href="#cron">Scheduling</a></td></tr>
       <tr><td>8</td><td>File ACLs</td><td>A</td><td>4</td><td><a href="#perms">Permissions</a></td></tr>
       <tr><td>9</td><td>chrony time sync</td><td>A &rarr; B</td><td>1</td><td><a href="#chrony">chrony</a></td></tr>
-      <tr><td>10</td><td>Find &amp; copy large files</td><td>B</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
+      <tr><td>10</td><td>Find &amp; copy large files</td><td>A</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
       <tr><td>11</td><td>User with specific UID</td><td>both</td><td>&mdash;</td><td><a href="#users">Users</a></td></tr>
       <tr><td>12</td><td>Archive &amp; compress</td><td>A</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
       <tr><td>13</td><td>Default umask</td><td>B</td><td>4</td><td><a href="#users">Users</a></td></tr>
@@ -816,7 +817,7 @@ flatpak list                      <span class="c"># empty</span></code></pre></d
       <tr><td>25</td><td>Grow the root filesystem</td><td>either</td><td>&mdash;</td><td><a href="#lvm">LVM</a></td></tr>
     </tbody>
   </table></div>
-  <div class="callout warn"><p><strong>Lab 3 breaks Lab 2.</strong> Moving Apache off port 80 and off <code>/var/www/html</code> takes the repository away from ServerB. Snapshot ServerA first, then revert &mdash; or restore <code>Listen 80</code> and the original DocumentRoot when you're done. Run Lab 24 on ServerB, since httpd already holds port 80 on ServerA.</p></div>
+  <div class="callout"><p><strong>Three servers.</strong> The repo server (192.168.1.105) only hosts the package repo, like the exam&#x27;s classroom server, so Lab 3&#x27;s Apache changes on ServerA don&#x27;t affect it. Run Lab 24 on ServerB, since Lab 3&#x27;s httpd is on ServerA.</p></div>
 </section>
 
 </div>
@@ -824,7 +825,7 @@ flatpak list                      <span class="c"># empty</span></code></pre></d
 </main>
 
 <footer>
-  Distilled from the <a href="rhcsa.html">RHCSA EX200 Multi-Server Lab Workbook</a> &middot; ServerA 192.168.1.95 &middot; ServerB 192.168.1.96 &middot; press <span class="kbd">Ctrl</span>+<span class="kbd">P</span> for a two-column printable copy
+  Distilled from the <a href="rhcsa.html">RHCSA EX200 Multi-Server Lab Workbook</a> &middot; ServerA 192.168.1.103 &middot; ServerB 192.168.1.104 &middot; Repo 192.168.1.105 &middot; press <span class="kbd">Ctrl</span>+<span class="kbd">P</span> for a two-column printable copy
 </footer>
 
 <script>
