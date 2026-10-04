@@ -247,7 +247,7 @@ sudo firewall-cmd --set-log-denied=off <span class="c"># cleanup</span></code></
 </section>
 
 <section class="card" id="selinux" data-k="selinux semanage fcontext port restorecon chcon ausearch audit2why sealert avc boolean getenforce setenforce autorelabel">
-  <h2>SELinux<span class="ix">Labs 3, 18, 23</span></h2>
+  <h2>SELinux<span class="ix">Labs 3, 23</span></h2>
   <h3>Status &amp; tooling</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>getenforce; sestatus; grep ^SELINUX= /etc/selinux/config
 sudo dnf -y install policycoreutils-python-utils setroubleshoot-server</code></pre></div>
@@ -414,20 +414,22 @@ sudo su - harry -c 'sudo -n id'      <span class="c"># -n = fail, don't prompt</
 </section>
 
 <section class="card" id="lvm" data-k="lvm pvcreate vgcreate lvcreate lvextend lvreduce parted pvs vgs lvs extents vgextend pvresize growpart xfs_growfs resize2fs disk">
-  <h2>LVM &amp; growing storage<span class="ix">Labs 19, 20, 25</span></h2>
+  <h2>LVM &amp; growing storage<span class="ix">Labs 18, 20, 25</span></h2>
   <h3>Partition a new disk for LVM</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk                       <span class="c"># find the empty disk: vdb / sdb / nvme0n1</span>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk                       <span class="c"># the EMPTY 2 GiB disk: vdb / sdb / nvme1n1</span>
 DISK=/dev/vdb
+P=$DISK                     <span class="c"># partition prefix; NVMe: P=${DISK}p</span>
+sudo wipefs -a $DISK        <span class="c"># ERASES it: clears old signatures on a reused disk</span>
 sudo parted -s $DISK mklabel gpt
 sudo parted -s $DISK mkpart lvm1 1MiB 1025MiB
 sudo parted -s $DISK set 1 lvm on
 sudo parted -s $DISK mkpart lvm2 1025MiB 100%
 sudo parted -s $DISK set 2 lvm on
 sudo udevadm settle
-lsblk $DISK                 <span class="c"># NVMe names are nvme0n1p1 / p2</span></code></pre></div>
+lsblk $DISK                 <span class="c"># ${P}1 and ${P}2</span></code></pre></div>
   <h3>PV &rarr; VG &rarr; LV &rarr; filesystem</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo pvcreate ${DISK}1 ${DISK}2
-sudo vgcreate -s 8M datastore ${DISK}1 ${DISK}2 <span class="c"># -s = PE size</span>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo pvcreate ${P}1 ${P}2
+sudo vgcreate -s 8M datastore ${P}1 ${P}2 <span class="c"># -s = PE size</span>
 sudo lvcreate -L 500M -n database datastore  <span class="c"># rounds up to 504M (63 x 8M)</span>
 sudo lvcreate -l 60 -n database datastore    <span class="c"># -l = 60 extents = 480M exactly</span>
 sudo mkfs.xfs /dev/datastore/database
@@ -488,7 +490,7 @@ findmnt /mnt/database; df -h /mnt/database</code></pre></div>
 </section>
 
 <section class="card" id="swap" data-k="swap mkswap swapon partition linux-swap lvcreate parted free existing">
-  <h2>Swap<span class="ix">Lab 18</span></h2>
+  <h2>Swap<span class="ix">Lab 19</span></h2>
   <h3>Swap LV</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>swapon --show                    <span class="c"># note the existing swap first</span>
 sudo lvcreate -L 256M -n swap datastore
@@ -500,8 +502,9 @@ none swap defaults 0 0" | sudo tee -a /etc/fstab</code></pre></div>
 sudo parted -s $SWAPDISK mklabel gpt
 sudo parted -s $SWAPDISK mkpart swap1 linux-swap 1MiB 513MiB   <span class="c"># 512 MiB</span>
 sudo udevadm settle
-sudo mkswap ${SWAPDISK}1
-echo "UUID=$(sudo blkid -s UUID -o value ${SWAPDISK}1) \
+SP=${SWAPDISK}1                  <span class="c"># NVMe: SP=${SWAPDISK}p1</span>
+sudo mkswap $SP
+echo "UUID=$(sudo blkid -s UUID -o value $SP) \
 none swap defaults 0 0" | sudo tee -a /etc/fstab
 
 sudo systemctl daemon-reload
@@ -803,9 +806,9 @@ flatpak list                      <span class="c"># empty</span></code></pre></d
       <tr><td>15</td><td>Passwordless sudo</td><td>A</td><td>4</td><td><a href="#sudo">sudo</a></td></tr>
       <tr><td>16</td><td>Script: find small files</td><td>A</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
       <tr><td>17</td><td>Root password reset</td><td>A</td><td>&mdash;</td><td><a href="#boot">Boot &amp; recovery</a></td></tr>
-      <tr><td>18</td><td>Swap LV + swap partition</td><td>A</td><td>19, third disk</td><td><a href="#swap">Swap</a></td></tr>
-      <tr><td>19</td><td>LVM: VG, LV, mount by UUID</td><td>A</td><td>&mdash;</td><td><a href="#lvm">LVM</a>, <a href="#fstab">fstab</a></td></tr>
-      <tr><td>20</td><td>Extend the LV</td><td>A</td><td>19</td><td><a href="#lvm">LVM</a></td></tr>
+      <tr><td>18</td><td>LVM: VG, LV, mount by UUID</td><td>A</td><td>&mdash;</td><td><a href="#lvm">LVM</a>, <a href="#fstab">fstab</a></td></tr>
+      <tr><td>19</td><td>Swap LV + swap partition</td><td>A</td><td>18, third disk</td><td><a href="#swap">Swap</a></td></tr>
+      <tr><td>20</td><td>Extend the LV</td><td>A</td><td>18</td><td><a href="#lvm">LVM</a></td></tr>
       <tr><td>21</td><td>tuned &amp; process priority</td><td>both</td><td>&mdash;</td><td><a href="#tuned">tuned</a></td></tr>
       <tr><td>22</td><td>Flatpak install &amp; remove</td><td>either</td><td>&mdash;</td><td><a href="#flatpak">Flatpak</a></td></tr>
       <tr><td>23</td><td>Passwordless SSH</td><td>A &rarr; B</td><td>4</td><td><a href="#ssh">SSH</a></td></tr>
