@@ -192,7 +192,7 @@ footer { padding: 10px 24px 50px; color: var(--muted); font-size: .85rem; text-a
   </table></div>
   <h3>Reboot-survival checklist</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo findmnt --verify     <span class="c"># fstab is syntactically sane</span>
-systemctl is-enabled httpd nfs-server chronyd autofs
+systemctl is-enabled httpd chronyd autofs
 sudo semanage fcontext -l -C <span class="c"># your custom file-context rules (-C = local only)</span>
 sudo semanage port -l -C  <span class="c"># your custom port rules</span>
 swapon --show; df -h      <span class="c"># swap and mounts are live</span>
@@ -227,10 +227,9 @@ ping -c 2 server2</code></pre></div>
 </section>
 
 <section class="card" id="firewall" data-k="firewalld firewall-cmd port service zone log-denied">
-  <h2>firewalld<span class="ix">Labs 2, 3, 6, 9</span></h2>
+  <h2>firewalld<span class="ix">Labs 3, 23, 24</span></h2>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo firewall-cmd --permanent --add-service=http
 sudo firewall-cmd --permanent --add-port=82/tcp
-sudo firewall-cmd --permanent --add-service={nfs,mountd,rpc-bind}
 sudo firewall-cmd --reload         <span class="c"># REQUIRED after --permanent</span>
 sudo firewall-cmd --list-all
 sudo firewall-cmd --list-services
