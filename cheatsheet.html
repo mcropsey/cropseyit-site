@@ -206,21 +206,21 @@ sudo ausearch -m avc -ts boot <span class="c"># want: &lt;no matches&gt;</span><
 nmcli -t -f NAME,DEVICE con show --active
 CON="ens160"   <span class="c"># often the device name, not "Wired connection 1"</span></code></pre></div>
   <h3>Static address + hostname</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo hostnamectl set-hostname servera.lab.local
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo hostnamectl set-hostname server1.lab.example.com
 sudo nmcli con mod "$CON" ipv4.addresses 192.168.1.103/24 ipv4.gateway 192.168.1.1 \
-  ipv4.dns "1.1.1.1 8.8.8.8" ipv4.method manual connection.autoconnect yes
+  ipv4.dns "192.168.1.105 1.1.1.1" ipv4.method manual connection.autoconnect yes
 sudo nmcli con up "$CON"
 
 <span class="c"># duplicate-safe /etc/hosts</span>
-grep -q servera.lab.local /etc/hosts || sudo tee -a /etc/hosts &lt;&lt;'EOF'
-192.168.1.103 servera.lab.local servera
-192.168.1.104 serverb.lab.local serverb
-192.168.1.105 repo.lab.local repo
+grep -q utility.lab.example.com /etc/hosts || sudo tee -a /etc/hosts &lt;&lt;'EOF'
+192.168.1.103 server1.lab.example.com server1
+192.168.1.104 server2.lab.example.com server2
+192.168.1.105 utility.lab.example.com utility
 EOF</code></pre></div>
   <h3>Verify</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ip -4 addr show
 nmcli -g ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns con show "$CON"
-hostnamectl; cat /etc/resolv.conf; ping -c 2 serverb</code></pre></div>
+hostnamectl; cat /etc/resolv.conf; ping -c 2 utility</code></pre></div>
   <div class="callout warn"><p><strong>Warning:</strong> over SSH, <code>nmcli con up</code> kills your session when the address changes. Run it from the console.</p></div>
   <ul>
     <li>Set <code>ipv4.addresses</code> in the same command as (or before) <code>ipv4.method manual</code> &mdash; manual with no address is rejected.</li>
@@ -286,38 +286,30 @@ sudo semanage port -a -t http_port_t -p tcp 82</code></pre></div>
 
 <section class="card" id="dnf" data-k="dnf repo repository gpgcheck gpgkey releasever config-manager iso baseos appstream rpm package module">
   <h2>Software management &amp; repos<span class="ix">Lab 2</span></h2>
-  <h3>Repo server: mount the ISO, serve it over HTTP</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir -p /var/www/html/rhel
-sudo mount -o loop,ro /root/rhel.iso /mnt
-sudo cp -a /mnt/. /var/www/html/rhel/ <span class="c"># ~10 GB; check free space</span>
-sudo umount /mnt
-sudo restorecon -Rv /var/www/html  <span class="c"># cp -a kept the ISO's labels</span></code></pre></div>
-  <h3>Repo file (the only shape worth memorising)</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /etc/yum.repos.d/lab.repo &lt;&lt;'EOF'
-[lab-baseos]
-name=Lab BaseOS
-baseurl=http://192.168.1.105/rhel/BaseOS
+  <h3>Repo file pointing at utility</h3>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /etc/yum.repos.d/utility.repo &lt;&lt;'EOF'
+[BaseOS]
+name=RHEL 10 BaseOS (utility)
+baseurl=http://utility.lab.example.com/rhel10/BaseOS
 enabled=1
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
-[lab-appstream]
-name=Lab AppStream
-baseurl=http://192.168.1.105/rhel/AppStream
+gpgcheck=0
+
+[AppStream]
+name=RHEL 10 AppStream (utility)
+baseurl=http://utility.lab.example.com/rhel10/AppStream
 enabled=1
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+gpgcheck=0
 EOF
 sudo dnf clean all
 sudo dnf repolist</code></pre></div>
   <h3>Verify &amp; troubleshoot</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -sI http://192.168.1.105/rhel/BaseOS/repodata/repomd.xml | head -1
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -sI http://utility.lab.example.com/rhel10/BaseOS/repodata/repomd.xml | head -1
 sudo dnf repolist -v | grep -E 'Repo-id|Repo-pkgs'
-sudo dnf info nfs-utils | grep -i repo <span class="c"># which repo would serve it</span>
+sudo dnf info nfs-utils | grep -i repo  <span class="c"># which repo would serve it</span>
 sudo dnf --disablerepo=&lt;id&gt; install ... <span class="c"># skip a broken repo</span>
-sudo dnf config-manager --disable &lt;id&gt;
-sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release</code></pre></div>
-  <div class="callout warn"><p><strong>Two classic errors:</strong> <code>$releasever</code> and <code>$basearch</code> are <em>dnf</em> variables &mdash; in a shell command like <code>mkdir</code> or <code>curl</code> they expand to nothing. And <code>sudo dnf config-manager --add-repo</code> writes no <code>gpgkey=</code> line, so installs fail the signature check until you add it.</p></div>
-  <ul><li>One failing third-party repo stops <em>every</em> dnf command. Use <code>gpgcheck=0</code> only when the task says so.</li></ul>
+sudo dnf config-manager --disable &lt;id&gt;</code></pre></div>
+  <div class="callout warn"><p><strong>Two classic errors:</strong> <code>$releasever</code> and <code>$basearch</code> are <em>dnf</em> variables &mdash; in a shell command like <code>curl</code> they expand to nothing. And <code>sudo dnf config-manager --add-repo</code> writes no <code>gpgcheck=</code>/<code>gpgkey=</code> lines &mdash; check the file it creates.</p></div>
+  <ul><li>One failing repo stops <em>every</em> dnf command. If a task says to verify signatures, use <code>gpgcheck=1</code> plus <code>gpgkey=</code> or <code>sudo rpm --import</code> the key it gives you.</li></ul>
 </section>
 
 <section class="card" id="apache" data-k="apache httpd documentroot listen port configtest welcome.conf">
@@ -519,54 +511,29 @@ swapon --show; free -h           <span class="c"># old swap + LV (/dev/dm-N) + p
 
 <section class="card" id="nfs" data-k="nfs autofs exports exportfs showmount mount automount auto.master wildcard squash">
   <h2>NFS &amp; autofs<span class="ix">Lab 6</span></h2>
-  <h3>Server</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install nfs-utils
-sudo mkdir -p /public /private
-sudo chown -R nobody:nobody /public /private
-sudo chmod 755 /public; sudo chmod 770 /private
-sudo tee -a /etc/exports &lt;&lt;'EOF'
-/public   192.168.1.0/24(ro,sync)
-/private  192.168.1.0/24(rw,sync)
-EOF
-sudo systemctl enable --now nfs-server
-sudo exportfs -rav                  <span class="c"># re-export all, verbose</span>
-sudo firewall-cmd --permanent --add-service={nfs,mountd,rpc-bind}
-sudo firewall-cmd --reload
-sudo exportfs -v</code></pre></div>
-  <h3>Client &mdash; static mount</h3>
+  <h3>Static mounts from utility</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install nfs-utils autofs
-showmount -e 192.168.1.103
-sudo mkdir -p /mnt/public /mnt/private
+showmount -e utility.lab.example.com
+sudo mkdir -p /mnt/data /mnt/docs
 sudo tee -a /etc/fstab &lt;&lt;'EOF'
-192.168.1.103:/public   /mnt/public   nfs  defaults,_netdev,ro  0 0
-192.168.1.103:/private  /mnt/private  nfs  defaults,_netdev,rw  0 0
+utility.lab.example.com:/exports/data  /mnt/data  nfs  defaults,_netdev,rw  0 0
+utility.lab.example.com:/exports/docs  /mnt/docs  nfs  defaults,_netdev,ro  0 0
 EOF
 sudo systemctl daemon-reload
 sudo mount -a
 findmnt -t nfs4</code></pre></div>
-  <h3>Client &mdash; autofs, 30-second timeout</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir -p /automount
-echo '/automount /etc/auto.automount --timeout=30' \
-  | sudo tee /etc/auto.master.d/automount.autofs
-sudo tee /etc/auto.automount &lt;&lt;'EOF'
-public   -fstype=nfs,ro  192.168.1.103:/public
-private  -fstype=nfs,rw  192.168.1.103:/private
-EOF
+  <h3>autofs: remote home dirs, 30-second timeout</h3>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo '/home/guests  /etc/auto.guests  --timeout=30' | sudo tee /etc/auto.master.d/guests.autofs
+echo '*  -fstype=nfs,rw  utility.lab.example.com:/home/guests/&amp;' | sudo tee /etc/auto.guests
 sudo systemctl enable autofs
 sudo systemctl restart autofs       <span class="c"># RESTART, so maps are re-read</span>
 
-ls /automount                       <span class="c"># empty is normal -- keys appear on access</span>
-cat /automount/public/d.txt         <span class="c"># this triggers the mount</span>
-mount | grep /automount
-sleep 40; mount | grep /automount   <span class="c"># gone after 30s idle</span></code></pre></div>
-  <h3>Wildcard map (exam favourite: remote home dirs)</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># /etc/auto.master.d/rhome.autofs</span>
-/rhome  /etc/auto.rhome
-
-<span class="c"># /etc/auto.rhome -- &amp; is replaced by the key (the directory name)</span>
-*  -fstype=nfs,rw  192.168.1.103:/rhome/&amp;</code></pre></div>
-  <div class="callout warn"><p><strong>Traps:</strong> <code>systemctl enable --now autofs</code> does <em>not</em> reload maps if autofs was already running &mdash; restart it. Don't <code>cd</code> into an automount before testing the idle timeout. And <code>chown</code>/<code>chmod</code> on a client mount point is a no-op: the share's own permissions cover it.</p></div>
-  <ul><li><code>nfs</code> alone suffices for NFSv4. <code>mountd</code> + <code>rpc-bind</code> are what make <code>showmount -e</code> and NFSv3 work.</li><li>root is squashed to <code>nobody</code> on the client &mdash; expected.</li></ul>
+ls /home/guests                     <span class="c"># empty is normal -- keys appear on access</span>
+ls /home/guests/&lt;name&gt;              <span class="c"># this triggers the mount</span>
+mount | grep /home/guests
+sleep 40; mount | grep /home/guests <span class="c"># gone after 30s idle</span></code></pre></div>
+  <div class="callout warn"><p><strong>Traps:</strong> <code>systemctl enable --now autofs</code> does <em>not</em> reload maps if autofs was already running &mdash; restart it. Don't <code>cd</code> into an automount before testing the idle timeout. In the wildcard map, <code>*</code> matches the directory name and <code>&amp;</code> is replaced by it.</p></div>
+  <ul><li>utility exports <code>/exports/data</code> (rw), <code>/exports/docs</code> (ro), <code>/home/guests</code> (rw).</li></ul>
 </section>
 
 <section class="card" id="systemd" data-k="systemd systemctl journalctl enable start status unit service failed boot priority">
@@ -614,26 +581,16 @@ atq</code></pre></div>
 
 <section class="card" id="chrony" data-k="chrony chronyd time ntp timedatectl chronyc sources tracking stratum">
   <h2>Time sync: chrony<span class="ix">Lab 9</span></h2>
-  <h3>Serve time</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee -a /etc/chrony.conf &lt;&lt;'EOF'
-allow 192.168.1.0/24
-local stratum 10
-EOF
-sudo systemctl restart chronyd
-sudo firewall-cmd --permanent --add-service=ntp; sudo firewall-cmd --reload
-sudo chronyc clients             <span class="c"># who is syncing from us</span></code></pre></div>
-  <h3>Consume time</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo sed -ri 's/^(pool|server) /#&amp;/' /etc/chrony.conf <span class="c"># kill the defaults</span>
-echo 'server servera.lab.local iburst' | sudo tee -a /etc/chrony.conf
+echo 'server utility.lab.example.com iburst' | sudo tee -a /etc/chrony.conf
 sudo systemctl enable chronyd
 sudo systemctl restart chronyd   <span class="c"># RESTART -- it was already running</span>
 sudo timedatectl set-ntp true
 
-chronyc sources -v               <span class="c"># want "^* servera" (* = selected)</span>
+chronyc sources -v               <span class="c"># want "^* utility" (* = selected)</span>
 chronyc tracking
 timedatectl                      <span class="c"># "System clock synchronized: yes"</span></code></pre></div>
   <div class="callout warn"><p><strong>Two traps:</strong> RHEL's default config uses a <code>pool</code> line, not <code>server</code> &mdash; a sed that only matches <code>^server</code> silently leaves the public pool active alongside your new source. And <code>chronyd</code> is already running on a fresh install, so <code>enable --now</code> will not reload your edited config. Always <code>restart</code>.</p></div>
-  <ul><li><code>local stratum 10</code> lets the server keep serving time when it can't reach the internet.</li></ul>
 </section>
 
 <section class="card" id="ssh" data-k="ssh sshd ssh-keygen ssh-copy-id scp authorized_keys ed25519 passwordauthentication drop-in ssh_home_t">
@@ -643,17 +600,17 @@ sudo firewall-cmd --list-services       <span class="c"># should include ssh</sp
 
 sudo su - harry
 ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519   <span class="c"># -N '' = no passphrase</span>
-ssh-copy-id harry@serverb.lab.local     <span class="c"># last password you'll type</span>
+ssh-copy-id harry@server2.lab.example.com     <span class="c"># last password you'll type</span>
 
-ssh harry@serverb.lab.local hostname
-scp test.txt harry@serverb.lab.local:/tmp/</code></pre></div>
+ssh harry@server2.lab.example.com hostname
+scp test.txt harry@server2.lab.example.com:/tmp/</code></pre></div>
   <h3>Still prompting? Fix on the <em>server</em></h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo chmod 700 /home/harry/.ssh
 sudo chmod 600 /home/harry/.ssh/authorized_keys
 sudo chown -R harry:harry /home/harry/.ssh
 sudo restorecon -Rv /home/harry/.ssh    <span class="c"># must be ssh_home_t</span>
 sudo journalctl -u sshd -n 20           <span class="c"># look for "bad ownership or modes"</span>
-ssh -v harry@serverb.lab.local          <span class="c"># client side</span></code></pre></div>
+ssh -v harry@server2.lab.example.com          <span class="c"># client side</span></code></pre></div>
   <h3>Hardening (only once keys work &mdash; keep a root session open)</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/01-lab.conf
 sudo sshd -t &amp;&amp; sudo systemctl reload sshd
@@ -766,22 +723,21 @@ kill $!</code></pre></div>
 <section class="card" id="flatpak" data-k="flatpak remote flathub install uninstall unused runtime search">
   <h2>Flatpak<span class="ix">Lab 22</span></h2>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install flatpak
-sudo flatpak remote-add --if-not-exists flathub \
-  https://dl.flathub.org/repo/flathub.flatpakrepo
+sudo flatpak remote-add --if-not-exists --no-gpg-verify lab \
+  http://utility.lab.example.com/flatpak/lab.flatpakrepo
 flatpak remotes
-sudo flatpak update --appstream   <span class="c"># refresh metadata so search works</span>
-flatpak search gimp
-sudo flatpak install -y flathub org.gimp.GIMP
-flatpak list --app; flatpak info org.gimp.GIMP
+flatpak remote-ls lab             <span class="c"># what the remote offers</span>
+sudo flatpak install -y lab org.gnome.Calculator
+flatpak list --app; flatpak info org.gnome.Calculator
 sudo flatpak update -y</code></pre></div>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo flatpak uninstall -y org.gimp.GIMP
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo flatpak uninstall -y org.gnome.Calculator
 sudo flatpak uninstall -y --unused <span class="c"># orphaned runtimes</span>
-sudo flatpak remote-delete flathub
+sudo flatpak remote-delete lab
 flatpak list                      <span class="c"># empty</span></code></pre></div>
   <ul>
-    <li>Root for system-wide, <code>--user</code> for per-user. <code>flatpak search</code> needs no root.</li>
+    <li>utility's remote is unsigned, hence <code>--no-gpg-verify</code>. On the exam, use exactly the URL and options the task gives you.</li>
+    <li>sudo for system-wide, <code>--user</code> for per-user. <code>remotes</code>, <code>remote-ls</code>, <code>list</code>, <code>info</code> need no sudo.</li>
     <li><code>flatpak run</code> needs a graphical session &mdash; on a minimal server verify with <code>list</code> and <code>info</code> instead.</li>
-    <li>On the exam the remote URL is given to you; Flathub may be unreachable.</li>
   </ul>
 </section>
 
@@ -790,34 +746,34 @@ flatpak list                      <span class="c"># empty</span></code></pre></d
   <div class="tablewrap"><table>
     <thead><tr><th>Lab</th><th>Topic</th><th>Host</th><th>Needs first</th><th>Card</th></tr></thead>
     <tbody>
-      <tr><td>1</td><td>Network configuration</td><td>all three</td><td>&mdash;</td><td><a href="#net">Networking</a></td></tr>
-      <tr><td>2</td><td>DNF repository over HTTP</td><td>Repo serves</td><td>1</td><td><a href="#dnf">Software &amp; repos</a></td></tr>
-      <tr><td>3</td><td>Apache + SELinux + firewalld</td><td>A</td><td>2</td><td><a href="#selinux">SELinux</a>, <a href="#apache">Apache</a></td></tr>
+      <tr><td>1</td><td>Network configuration</td><td>both</td><td>&mdash;</td><td><a href="#net">Networking</a></td></tr>
+      <tr><td>2</td><td>DNF repository from utility</td><td>both</td><td>1</td><td><a href="#dnf">Software &amp; repos</a></td></tr>
+      <tr><td>3</td><td>Apache + SELinux + firewalld</td><td>1</td><td>2</td><td><a href="#selinux">SELinux</a>, <a href="#apache">Apache</a></td></tr>
       <tr><td>4</td><td>Users &amp; groups</td><td>both</td><td>1</td><td><a href="#users">Users</a></td></tr>
       <tr><td>5</td><td>Collaboration dir (SGID)</td><td>both</td><td>4</td><td><a href="#perms">Permissions</a></td></tr>
-      <tr><td>6</td><td>NFS + static mount + autofs</td><td>A &rarr; B</td><td>1, 2</td><td><a href="#nfs">NFS &amp; autofs</a></td></tr>
+      <tr><td>6</td><td>NFS client + autofs (from utility)</td><td>2</td><td>1, 2</td><td><a href="#nfs">NFS &amp; autofs</a></td></tr>
       <tr><td>7</td><td>cron and at</td><td>both</td><td>4</td><td><a href="#cron">Scheduling</a></td></tr>
-      <tr><td>8</td><td>File ACLs</td><td>A</td><td>4</td><td><a href="#perms">Permissions</a></td></tr>
-      <tr><td>9</td><td>chrony time sync</td><td>A &rarr; B</td><td>1</td><td><a href="#chrony">chrony</a></td></tr>
-      <tr><td>10</td><td>Find &amp; copy large files</td><td>A</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
+      <tr><td>8</td><td>File ACLs</td><td>1</td><td>4</td><td><a href="#perms">Permissions</a></td></tr>
+      <tr><td>9</td><td>chrony client (to utility)</td><td>both</td><td>1</td><td><a href="#chrony">chrony</a></td></tr>
+      <tr><td>10</td><td>Find &amp; copy large files</td><td>1</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
       <tr><td>11</td><td>User with specific UID</td><td>both</td><td>&mdash;</td><td><a href="#users">Users</a></td></tr>
-      <tr><td>12</td><td>Archive &amp; compress</td><td>A</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
-      <tr><td>13</td><td>Default umask</td><td>B</td><td>4</td><td><a href="#users">Users</a></td></tr>
+      <tr><td>12</td><td>Archive &amp; compress</td><td>1</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
+      <tr><td>13</td><td>Default umask</td><td>2</td><td>4</td><td><a href="#users">Users</a></td></tr>
       <tr><td>14</td><td>Password expiration</td><td>both</td><td>&mdash;</td><td><a href="#users">Users</a></td></tr>
-      <tr><td>15</td><td>Passwordless sudo</td><td>A</td><td>4</td><td><a href="#sudo">sudo</a></td></tr>
-      <tr><td>16</td><td>Script: find small files</td><td>A</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
-      <tr><td>17</td><td>Root password reset</td><td>A</td><td>&mdash;</td><td><a href="#boot">Boot &amp; recovery</a></td></tr>
-      <tr><td>18</td><td>LVM: VG, LV, mount by UUID</td><td>A</td><td>&mdash;</td><td><a href="#lvm">LVM</a>, <a href="#fstab">fstab</a></td></tr>
-      <tr><td>19</td><td>Swap LV + swap partition</td><td>A</td><td>18, third disk</td><td><a href="#swap">Swap</a></td></tr>
-      <tr><td>20</td><td>Extend the LV</td><td>A</td><td>18</td><td><a href="#lvm">LVM</a></td></tr>
+      <tr><td>15</td><td>Passwordless sudo</td><td>1</td><td>4</td><td><a href="#sudo">sudo</a></td></tr>
+      <tr><td>16</td><td>Script: find small files</td><td>1</td><td>&mdash;</td><td><a href="#tools">Essential tools</a></td></tr>
+      <tr><td>17</td><td>Root password reset</td><td>1</td><td>&mdash;</td><td><a href="#boot">Boot &amp; recovery</a></td></tr>
+      <tr><td>18</td><td>LVM: VG, LV, mount by UUID</td><td>1</td><td>&mdash;</td><td><a href="#lvm">LVM</a>, <a href="#fstab">fstab</a></td></tr>
+      <tr><td>19</td><td>Swap LV + swap partition</td><td>1</td><td>18, third disk</td><td><a href="#swap">Swap</a></td></tr>
+      <tr><td>20</td><td>Extend the LV</td><td>1</td><td>18</td><td><a href="#lvm">LVM</a></td></tr>
       <tr><td>21</td><td>tuned &amp; process priority</td><td>both</td><td>&mdash;</td><td><a href="#tuned">tuned</a></td></tr>
       <tr><td>22</td><td>Flatpak install &amp; remove</td><td>either</td><td>&mdash;</td><td><a href="#flatpak">Flatpak</a></td></tr>
-      <tr><td>23</td><td>Passwordless SSH</td><td>A &rarr; B</td><td>4</td><td><a href="#ssh">SSH</a></td></tr>
-      <tr><td>24</td><td>Diagnostics drill</td><td>B</td><td>2</td><td><a href="#diag">Diagnostics</a>, <a href="#systemd">Journal</a></td></tr>
+      <tr><td>23</td><td>Passwordless SSH</td><td>1 &rarr; 2</td><td>4</td><td><a href="#ssh">SSH</a></td></tr>
+      <tr><td>24</td><td>Diagnostics drill</td><td>2</td><td>2</td><td><a href="#diag">Diagnostics</a>, <a href="#systemd">Journal</a></td></tr>
       <tr><td>25</td><td>Grow the root filesystem</td><td>either</td><td>&mdash;</td><td><a href="#lvm">LVM</a></td></tr>
     </tbody>
   </table></div>
-  <div class="callout"><p><strong>Three servers.</strong> The repo server (192.168.1.105) only hosts the package repo, like the exam&#x27;s classroom server, so Lab 3&#x27;s Apache changes on ServerA don&#x27;t affect it. Run Lab 24 on ServerB, since Lab 3&#x27;s httpd is on ServerA.</p></div>
+  <div class="callout"><p><strong>utility (192.168.1.105)</strong> is pre-built like the exam&#x27;s classroom server: repos, NFS exports, NTP, Flatpak remote. You only configure server1 and server2 to use it. Run Lab 24 on server2, since Lab 3&#x27;s httpd is on server1.</p></div>
 </section>
 
 </div>
@@ -825,7 +781,7 @@ flatpak list                      <span class="c"># empty</span></code></pre></d
 </main>
 
 <footer>
-  Distilled from the <a href="rhcsa.html">RHCSA EX200 Multi-Server Lab Workbook</a> &middot; ServerA 192.168.1.103 &middot; ServerB 192.168.1.104 &middot; Repo 192.168.1.105 &middot; press <span class="kbd">Ctrl</span>+<span class="kbd">P</span> for a two-column printable copy
+  Distilled from the <a href="rhcsa.html">RHCSA EX200 Multi-Server Lab Workbook</a> &middot; server1 192.168.1.103 &middot; server2 192.168.1.104 &middot; utility 192.168.1.105 &middot; press <span class="kbd">Ctrl</span>+<span class="kbd">P</span> for a two-column printable copy
 </footer>
 
 <script>
