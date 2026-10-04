@@ -722,10 +722,14 @@ find / -xdev -nouser</code></pre></div>
   <h3>Archive &amp; compress</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>tar -cjf /root/backup.tar.bz2 /usr/local
 file /root/backup.tar.bz2                  <span class="c"># bzip2 compressed data</span>
-tar -tjf /root/backup.tar.bz2 | head       <span class="c"># list</span></code></pre></div>
+tar -tjf /root/backup.tar.bz2 | head       <span class="c"># list</span>
+tar -xjf /root/backup.tar.bz2 -C /root/restore   <span class="c"># extract to a separate dir (must exist)</span>
+tar -xjf /root/backup.tar.bz2 -C /               <span class="c"># restore to original location (overwrites)</span>
+restorecon -Rv /usr/local                  <span class="c"># fix SELinux labels after restoring in place</span></code></pre></div>
   <ul>
     <li>Mnemonic: <strong>z</strong>&nbsp;=&nbsp;gzip (.gz), <strong>j</strong>&nbsp;=&nbsp;bzip2 (.bz2), <strong>J</strong>&nbsp;=&nbsp;xz (.xz). Use the one the task asks for.</li>
     <li>If <code>-j</code> fails, <code>dnf -y install bzip2</code>.</li>
+    <li>As root, extract keeps owner, group, mode, and timestamps. As a user, add <code>-p</code> to keep modes. SELinux contexts and ACLs need <code>--selinux --acls</code> on both create and extract.</li>
   </ul>
   <h3>Script runnable by name</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cat &gt; /usr/local/bin/find_small_files.sh &lt;&lt;'EOF'
