@@ -183,7 +183,7 @@ footer { padding: 10px 24px 50px; color: var(--muted); font-size: .85rem; text-a
     <tbody>
       <tr><td><strong>1. Graded after reboot</strong></td><td>Make the change, <strong>verify it</strong>, then <strong>reboot and verify again</strong>. Anything that doesn't survive a reboot scores zero.</td></tr>
       <tr><td><strong>2. Guard every fstab edit</strong></td><td>Run <code>findmnt --verify</code> before any reboot that follows an <code>/etc/fstab</code> change. One bad line drops the box into emergency mode.</td></tr>
-      <tr><td><strong>3. Never disable SELinux</strong></td><td>Read the denial, then fix the <em>label</em>, <em>port</em>, or <em>boolean</em>. <code>setenforce 0</code> is a diagnostic, never a fix.</td></tr>
+      <tr><td><strong>3. Never disable SELinux</strong></td><td>Read the denial, then fix the <em>label</em>, <em>port</em>, or <em>boolean</em>. <code>sudo setenforce 0</code> is a diagnostic, never a fix.</td></tr>
       <tr><td><strong>4. Persistent, not temporary</strong></td><td><code>semanage</code> + <code>restorecon</code> over <code>chcon</code>; <code>firewall-cmd --permanent</code> + <code>--reload</code>; <code>systemctl enable --now</code>, not just <code>start</code>.</td></tr>
       <tr><td><strong>5. Docs are on the exam</strong></td><td><code>man &lt;cmd&gt;</code>, <code>man 5 &lt;file&gt;</code>, the EXAMPLES section of <code>man semanage-fcontext</code>, and <code>/usr/share/doc/</code>.</td></tr>
       <tr><td><strong>6. Match UIDs across hosts</strong></td><td>Create users in the same order on both servers. NFS maps ownership by number, not name.</td></tr>
@@ -315,7 +315,7 @@ sudo dnf info nfs-utils | grep -i repo <span class="c"># which repo would serve 
 sudo dnf --disablerepo=&lt;id&gt; install ... <span class="c"># skip a broken repo</span>
 sudo dnf config-manager --disable &lt;id&gt;
 sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release</code></pre></div>
-  <div class="callout warn"><p><strong>Two classic errors:</strong> <code>$releasever</code> and <code>$basearch</code> are <em>dnf</em> variables &mdash; in a shell command like <code>mkdir</code> or <code>curl</code> they expand to nothing. And <code>dnf config-manager --add-repo</code> writes no <code>gpgkey=</code> line, so installs fail the signature check until you add it.</p></div>
+  <div class="callout warn"><p><strong>Two classic errors:</strong> <code>$releasever</code> and <code>$basearch</code> are <em>dnf</em> variables &mdash; in a shell command like <code>mkdir</code> or <code>curl</code> they expand to nothing. And <code>sudo dnf config-manager --add-repo</code> writes no <code>gpgkey=</code> line, so installs fail the signature check until you add it.</p></div>
   <ul><li>One failing third-party repo stops <em>every</em> dnf command. Use <code>gpgcheck=0</code> only when the task says so.</li></ul>
 </section>
 
@@ -358,7 +358,7 @@ getent passwd sarah | cut -d: -f7   <span class="c"># /sbin/nologin</span>
 sudo su - sarah                     <span class="c"># "account is currently not available"</span></code></pre></div>
   <h3>Password aging</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># default for FUTURE users only</span>
-sudo sed -ri 's/^PASS_MAX_DAYS\s+.*/PASS_MAX_DAYS\t20/' /etc/login.defs
+sudo vi /etc/login.defs        <span class="c"># set: PASS_MAX_DAYS   20</span>
 
 sudo chage -l harry            <span class="c"># inspect</span>
 sudo chage -M 20 harry         <span class="c"># max days, existing user</span>
@@ -409,7 +409,7 @@ sudo su - harry -c 'sudo -n id'      <span class="c"># -n = fail, don't prompt</
     <li><code>sudo -n</code> is the only honest test that a rule is truly passwordless.</li>
     <li>A broken drop-in breaks sudo for <em>everyone</em>. Including yours: check the file in /tmp first, or use <code>sudo visudo -f /etc/sudoers.d/admin</code>, which refuses to save a broken file.</li>
     <li>sudo <strong>ignores</strong> files in <code>/etc/sudoers.d</code> whose names contain a dot or end in <code>~</code>.</li>
-    <li>Variants: <code>usermod -aG wheel user</code> (sudo with password); <code>%admin ALL=(ALL) /usr/bin/systemctl</code> (one command).</li>
+    <li>Variants: <code>sudo usermod -aG wheel user</code> (sudo with password); <code>%admin ALL=(ALL) /usr/bin/systemctl</code> (one command).</li>
   </ul>
 </section>
 
@@ -458,13 +458,13 @@ sudo lvextend -r -l +100%FREE /dev/rhel/root     <span class="c">#    grow LV + 
       <tr><td><code>lsblk</code> shows old size</td><td>Kernel hasn't rescanned</td><td>Rescan the device, or reboot</td></tr>
       <tr><td><code>pvresize</code>: no change</td><td>Partition wasn't grown</td><td><code>growpart</code> / <code>resizepart</code> first</td></tr>
       <tr><td>insufficient free extents</td><td>PV not resized</td><td><code>pvresize</code></td></tr>
-      <tr><td><code>resize2fs</code>: bad magic number</td><td>It's XFS, not ext4</td><td><code>lvextend -r</code> or <code>xfs_growfs /</code></td></tr>
+      <tr><td><code>resize2fs</code>: bad magic number</td><td>It's XFS, not ext4</td><td><code>lvextend -r</code> or <code>sudo xfs_growfs /</code></td></tr>
       <tr><td><code>growpart</code> can't grow it</td><td>Not the last partition</td><td>Add a disk: <code>pvcreate</code> &rarr; <code>vgextend</code> &rarr; <code>lvextend -r</code></td></tr>
       <tr><td>Hypervisor won't resize</td><td>Snapshots exist</td><td>Delete or merge them first</td></tr>
     </tbody>
   </table></div>
-  <div class="callout warn"><p><strong>Warning:</strong> never build an exam VG on loop devices &mdash; they don't come back after a reboot, the fstab entry fails, and the server lands in emergency mode. If you must, add <code>nofail</code>, then <code>losetup</code> + <code>vgchange -ay</code> after each boot.</p></div>
-  <ul><li><code>-r</code> grows the filesystem in the same step (<code>xfs_growfs</code> for XFS, <code>resize2fs</code> for ext4).</li><li>XFS <strong>cannot shrink</strong>. ext4 can, offline: <code>lvreduce -r -L 400M ...</code></li></ul>
+  <div class="callout warn"><p><strong>Warning:</strong> never build an exam VG on loop devices &mdash; they don't come back after a reboot, the fstab entry fails, and the server lands in emergency mode. If you must, add <code>nofail</code>, then <code>sudo losetup</code> + <code>sudo vgchange -ay</code> after each boot.</p></div>
+  <ul><li><code>-r</code> grows the filesystem in the same step (<code>xfs_growfs</code> for XFS, <code>resize2fs</code> for ext4).</li><li>XFS <strong>cannot shrink</strong>. ext4 can, offline: <code>sudo lvreduce -r -L 400M ...</code></li></ul>
 </section>
 
 <section class="card" id="fstab" data-k="fstab mount uuid blkid findmnt xfs ext4 mkfs netdev daemon-reload nofail">
@@ -571,13 +571,13 @@ systemctl is-enabled httpd; systemctl is-active crond
 systemctl status nginx --no-pager
 sudo systemctl daemon-reload     <span class="c"># after editing fstab or unit files</span></code></pre></div>
   <div class="tablewrap"><table class="kv"><tbody>
-    <tr><td><code>journalctl -xeu nginx</code></td><td>the one to reach for: unit logs + explanations, jumped to the end</td></tr>
-    <tr><td><code>journalctl -u nginx -n 50</code></td><td>last 50 lines for one unit</td></tr>
-    <tr><td><code>journalctl -b -p err</code></td><td>all errors since boot</td></tr>
-    <tr><td><code>journalctl --since "-10min"</code></td><td>relative window</td></tr>
-    <tr><td><code>journalctl --since "2026-10-01 15:00:00" --until "&hellip; 15:05:00"</code></td><td>absolute window</td></tr>
-    <tr><td><code>journalctl -k -f</code></td><td>follow kernel messages</td></tr>
-    <tr><td><code>journalctl -t setroubleshoot</code></td><td>by syslog tag</td></tr>
+    <tr><td><code>sudo journalctl -xeu nginx</code></td><td>the one to reach for: unit logs + explanations, jumped to the end</td></tr>
+    <tr><td><code>sudo journalctl -u nginx -n 50</code></td><td>last 50 lines for one unit</td></tr>
+    <tr><td><code>sudo journalctl -b -p err</code></td><td>all errors since boot</td></tr>
+    <tr><td><code>sudo journalctl --since "-10min"</code></td><td>relative window</td></tr>
+    <tr><td><code>sudo journalctl --since "2026-10-01 15:00:00" --until "&hellip; 15:05:00"</code></td><td>absolute window</td></tr>
+    <tr><td><code>sudo journalctl -k -f</code></td><td>follow kernel messages</td></tr>
+    <tr><td><code>sudo journalctl -t setroubleshoot</code></td><td>by syslog tag</td></tr>
   </tbody></table></div>
   <div class="callout warn"><p><strong>Why <code>-p err</code> can hide the real reason:</strong> nginx writes its <code>[emerg]</code> line to stderr, which the journal stores at <em>info</em> priority. Filtering on <code>err</code> leaves you with only systemd's useless "Failed to start". Use <code>-xeu &lt;unit&gt;</code>.</p></div>
 </section>
@@ -728,8 +728,8 @@ sudo tar -xjf /root/backup.tar.bz2 -C /          <span class="c"># restore to or
 sudo restorecon -Rv /usr/local             <span class="c"># fix SELinux labels after restoring in place</span></code></pre></div>
   <ul>
     <li>Mnemonic: <strong>z</strong>&nbsp;=&nbsp;gzip (.gz), <strong>j</strong>&nbsp;=&nbsp;bzip2 (.bz2), <strong>J</strong>&nbsp;=&nbsp;xz (.xz). Use the one the task asks for.</li>
-    <li>If <code>-j</code> fails, <code>dnf -y install bzip2</code>.</li>
-    <li>As root, extract keeps owner, group, mode, and timestamps. As a user, add <code>-p</code> to keep modes. SELinux contexts and ACLs need <code>--selinux --acls</code> on both create and extract.</li>
+    <li>If <code>-j</code> fails, <code>sudo dnf -y install bzip2</code>.</li>
+    <li>With sudo (as root), extract keeps owner, group, mode, and timestamps. As a user, add <code>-p</code> to keep modes. SELinux contexts and ACLs need <code>--selinux --acls</code> on both create and extract.</li>
   </ul>
   <h3>Script runnable by name</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /usr/local/bin/find_small_files.sh &lt;&lt;'EOF'

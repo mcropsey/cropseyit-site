@@ -574,7 +574,7 @@ sudo restorecon -Rv /usr/local<span class="c">          # fix SELinux labels on 
     </div>
     <label class="done"><input type="checkbox" data-done="14"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>new users must change their password every 20 days.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo sed -ri &#x27;s/^PASS_MAX_DAYS\s+.*/PASS_MAX_DAYS\t20/&#x27; /etc/login.defs
+  <p class="goal"><span>Goal</span>new users must change their password every 20 days.</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo vi /etc/login.defs<span class="c">           # change the PASS_MAX_DAYS line to: PASS_MAX_DAYS   20</span>
 grep ^PASS_MAX_DAYS /etc/login.defs</code></pre></div><h3>Verify</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo useradd testuser
 sudo chage -l testuser | grep -i maximum<span class="c">  # 20</span>
 sudo userdel -r testuser
