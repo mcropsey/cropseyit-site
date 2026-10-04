@@ -208,23 +208,20 @@ CON="ens160"   <span class="c"># often the device name, not "Wired connection 1"
   <h3>Static address + hostname</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo hostnamectl set-hostname server1.lab.example.com
 sudo nmcli con mod "$CON" ipv4.addresses 192.168.1.103/24 ipv4.gateway 192.168.1.1 \
-  ipv4.dns "192.168.1.105 1.1.1.1" ipv4.method manual connection.autoconnect yes
-sudo nmcli con up "$CON"
-
-<span class="c"># duplicate-safe /etc/hosts</span>
-grep -q utility.lab.example.com /etc/hosts || sudo tee -a /etc/hosts &lt;&lt;'EOF'
-192.168.1.103 server1.lab.example.com server1
-192.168.1.104 server2.lab.example.com server2
-192.168.1.105 utility.lab.example.com utility
-EOF</code></pre></div>
+  ipv4.dns 192.168.1.105 ipv4.dns-search lab.example.com \
+  ipv4.method manual connection.autoconnect yes
+sudo nmcli con up "$CON"</code></pre></div>
   <h3>Verify</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ip -4 addr show
 nmcli -g ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns con show "$CON"
-hostnamectl; cat /etc/resolv.conf; ping -c 2 utility</code></pre></div>
+hostnamectl; cat /etc/resolv.conf
+getent hosts utility             <span class="c"># resolves via DNS (search domain), not /etc/hosts</span>
+ping -c 2 server2</code></pre></div>
   <div class="callout warn"><p><strong>Warning:</strong> over SSH, <code>nmcli con up</code> kills your session when the address changes. Run it from the console.</p></div>
   <ul>
     <li>Set <code>ipv4.addresses</code> in the same command as (or before) <code>ipv4.method manual</code> &mdash; manual with no address is rejected.</li>
     <li>RHEL 9/10 store keyfiles in <code>/etc/NetworkManager/system-connections/</code>. ifcfg is deprecated in 9, gone in 10 &mdash; use <code>nmcli</code>/<code>nmtui</code>.</li>
+    <li><code>ipv4.dns-search</code> is what makes short names resolve. No DNS answer? Check <code>/etc/resolv.conf</code> before anything else.</li>
     <li>IPv6 variant: <code>ipv6.addresses fd00::103/64 ipv6.method manual</code></li>
   </ul>
 </section>
