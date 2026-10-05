@@ -296,16 +296,18 @@ baseurl=http://utility.lab.example.com/rhel10/AppStream
 enabled=1
 gpgcheck=0
 EOF
+sudo dnf config-manager --set-disabled baseos appstream extras epel   <span class="c"># exam conditions: utility only</span>
 sudo dnf clean all
 sudo dnf repolist</code></pre></div>
   <h3>Verify &amp; troubleshoot</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>curl -sI http://utility.lab.example.com/rhel10/BaseOS/repodata/repomd.xml | head -1
 sudo dnf repolist -v | grep -E 'Repo-id|Repo-pkgs'
-sudo dnf info nfs-utils | grep -i repo  <span class="c"># which repo would serve it</span>
+sudo dnf --repo BaseOS --repo AppStream list --available | head -3   <span class="c"># utility serves packages</span>
+sudo dnf info --available nginx | grep -i ^Repo   <span class="c"># which repo would serve it</span>
 sudo dnf --disablerepo=&lt;id&gt; install ... <span class="c"># skip a broken repo</span>
 sudo dnf config-manager --set-disabled &lt;id&gt;  <span class="c"># --disable needs --save</span></code></pre></div>
   <div class="callout warn"><p><strong>Two classic errors:</strong> <code>$releasever</code> and <code>$basearch</code> are <em>dnf</em> variables &mdash; in a shell command like <code>curl</code> they expand to nothing. And <code>sudo dnf config-manager --add-repo</code> writes no <code>gpgcheck=</code>/<code>gpgkey=</code> lines &mdash; check the file it creates.</p></div>
-  <ul><li>One failing repo stops <em>every</em> dnf command. If a task says to verify signatures, use <code>gpgcheck=1</code> plus <code>gpgkey=</code> or <code>sudo rpm --import</code> the key it gives you.</li></ul>
+  <ul><li>Back to normal later: <code>sudo dnf config-manager --set-enabled baseos appstream extras epel</code>.</li><li>One failing repo stops <em>every</em> dnf command. If a task says to verify signatures, use <code>gpgcheck=1</code> plus <code>gpgkey=</code> or <code>sudo rpm --import</code> the key it gives you.</li></ul>
 </section>
 
 <section class="card" id="apache" data-k="apache httpd documentroot listen port configtest welcome.conf">
