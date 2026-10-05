@@ -534,9 +534,9 @@ sudo systemctl restart autofs       <span class="c"># RESTART, so maps are re-re
 ls /home/guests                     <span class="c"># empty is normal -- keys appear on access</span>
 sudo su - remoteuser1 -c pwd       <span class="c"># login triggers the mount</span>
 mount | grep /home/guests
-sleep 40; mount | grep /home/guests <span class="c"># gone after 30s idle</span></code></pre></div>
-  <div class="callout warn"><p><strong>Traps:</strong> <code>systemctl enable --now autofs</code> does <em>not</em> reload maps if autofs was already running &mdash; restart it. Don't <code>cd</code> into an automount before testing the idle timeout. In the wildcard map, <code>*</code> matches the directory name and <code>&amp;</code> is replaced by it.</p></div>
-  <ul><li>utility exports <code>/exports/data</code> (rw), <code>/exports/docs</code> (ro), <code>/home/guests</code> (rw, holds remoteuser1, UID 5000).</li><li>SSH logins into NFS homes also need <code>sudo setsebool -P use_nfs_home_dirs on</code>.</li></ul>
+mount | grep '/home/guests type autofs'  <span class="c"># timeout=30 is set</span></code></pre></div>
+  <div class="callout warn"><p><strong>Traps:</strong> <code>systemctl enable --now autofs</code> does <em>not</em> reload maps if autofs was already running &mdash; restart it. On these VMs the idle unmount never happens: services in private mount namespaces hold copies of the mount, so check <code>timeout=30</code> on the autofs mount instead. In the wildcard map, <code>*</code> matches the directory name and <code>&amp;</code> is replaced by it.</p></div>
+  <ul><li>utility exports <code>/exports/data</code> (rw), <code>/exports/docs</code> (ro), <code>/home/guests</code> (rw, holds remoteuser1, UID 5000).</li><li>SSH logins into NFS homes also need <code>sudo setsebool -P use_nfs_home_dirs on</code>.</li><li>Never <code>userdel -r remoteuser1</code>: <code>/home/guests</code> isn't root-squashed, so <code>-r</code> deletes the real home on utility.</li></ul>
 </section>
 
 <section class="card" id="systemd" data-k="systemd systemctl journalctl enable start status unit service failed boot priority">
