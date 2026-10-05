@@ -628,8 +628,8 @@ sudo ss -ltnp 'sport = :5555' <span class="c"># suspicious listener -&gt; gives 
 sudo ss -tnp state established '( sport = :80 )'
 <span class="c"># peer IPs. NOTE: with a state filter ss drops the State column,</span>
 <span class="c"># so the peer address is field 4, not 5.</span>
-ss -tn state established '( sport = :80 )' \
-  | awk 'NR&gt;1 {print $4}' | cut -d: -f1 | sort -u</code></pre></div>
+ss -Htn state established '( sport = :80 )' \
+  | awk '{print $4}' | sed 's/:[0-9]*$//' | sort -u</code></pre></div>
   <h3>Who changed a protected file</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo auditctl -w /etc/hosts -p wa -k hosts_watch <span class="c"># runtime only</span>
 sudo ausearch -k hosts_watch -i
