@@ -714,13 +714,15 @@ sudo /usr/local/bin/find_small_files.sh  <span class="c"># full path: sudo's PAT
 tuned-adm list
 tuned-adm recommend              <span class="c"># NOT "recommended"</span>
 sudo tuned-adm profile $(tuned-adm recommend)
-tuned-adm active
-sudo tuned-adm verify            <span class="c"># "Verification succeeded"</span></code></pre></div>
+tuned-adm active                 <span class="c"># the check that matters</span>
+cat /etc/tuned/active_profile
+sudo tuned-adm verify            <span class="c"># can fail on VMs (CPU boost); see note</span></code></pre></div>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>nice -n 10 sleep 600 &amp;           <span class="c"># start with a nice value</span>
 ps -o pid,ni,comm -p $!
-renice -n 5 -p $!                <span class="c"># change a running process</span>
+renice -n 15 -p $!               <span class="c"># raise niceness: any user</span>
+sudo renice -n 5 -p $!           <span class="c"># lower it: root only</span>
 kill $!</code></pre></div>
-  <ul><li>Use the profile the task <em>names</em>; use <code>tuned-adm recommend</code> only when the task says "recommended". The choice persists in <code>/etc/tuned/active_profile</code> automatically.</li></ul>
+  <ul><li>Use the profile the task <em>names</em>; use <code>tuned-adm recommend</code> only when the task says "recommended". The choice persists in <code>/etc/tuned/active_profile</code> automatically.</li><li><code>verify</code> fails on Hyper-V VMs because they don't expose CPU boost; the profile is still applied. Check <code>tuned-adm active</code>.</li><li>Users can only <em>raise</em> nice values; lowering one needs root. Range: -20 (highest priority) to 19.</li></ul>
 </section>
 
 <section class="card" id="flatpak" data-k="flatpak remote flathub install uninstall unused runtime search">
