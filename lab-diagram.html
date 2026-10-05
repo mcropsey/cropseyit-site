@@ -172,10 +172,10 @@ pre.term .c { color: var(--term-dim); }
   <text class="mono muted" x="56" y="402" font-size="13">server1.lab.example.com (hv-rocky-linux-6)</text>
   <g font-size="13.5">
     <text x="56" y="430" font-weight="700">Disks</text>
-    <text class="mono" x="56" y="452">sdb 127G  root: / /boot /home (VG rl)</text>
-    <text class="mono warnfill" x="56" y="472" font-size="12.5">&#9888; sdb is the OS disk, never wipe it</text>
-    <text class="mono" x="56" y="494">sda   5G  empty &#8594; Lab 18 LVM</text>
-    <text class="mono" x="56" y="514">sdc   5G  empty &#8594; Lab 19 swap</text>
+    <text class="mono" x="56" y="452">LUN 0 127G  OS: / /boot /home (VG rl)</text>
+    <text class="mono warnfill" x="56" y="472" font-size="12.5">&#9888; pick disks by LUN; sdX names can change</text>
+    <text class="mono" x="56" y="494">LUN 3   5G  empty &#8594; Lab 18 LVM</text>
+    <text class="mono" x="56" y="514">LUN 2   5G  empty &#8594; Lab 19 swap</text>
     <text x="56" y="544" font-weight="700">Labs mainly here</text>
     <text x="56" y="566">3 Apache &#183; 8 &#183; 10 &#183; 12 &#183; 15&#8211;20 &#183; 25</text>
   </g>
@@ -234,9 +234,10 @@ pre.term .c { color: var(--term-dim); }
     <ul><li>Rocky Linux 10.2, 8 vCPU, 3.6 GiB RAM</li><li>SELinux enforcing, firewalld on</li><li>User <code>mcropsey</code> in <code>wheel</code> (sudo)</li></ul>
     <h4>Disks</h4>
     <ul>
-      <li><code>sdb</code> 127 GiB: the OS disk (VG <code>rl</code>: root 70G, swap 3.9G, home 50.5G). <span class="danger">Never wipe or partition it.</span></li>
-      <li><code>sda</code> 5 GiB, empty: Lab 18 LVM (<code>datastore</code>)</li>
-      <li><code>sdc</code> 5 GiB, empty: Lab 19 swap partition</li>
+      <li><strong>LUN 0</strong>, 127 GiB (today <code>sdb</code>): the OS disk (VG <code>rl</code>: root 70G, swap 3.9G, home 50.5G). <span class="danger">Never wipe or partition it.</span></li>
+      <li><strong>LUN 3</strong>, 5 GiB, empty (today <code>sda</code>): Lab 18 LVM (<code>datastore</code>)</li>
+      <li><strong>LUN 2</strong>, 5 GiB, empty (today <code>sdc</code>): Lab 19 swap partition</li>
+      <li>The sdX names follow detection order at boot and can change. Find a disk by slot with <code>ls -l /dev/disk/by-path/</code>.</li>
     </ul>
     <h4>Installed by the labs</h4>
     <ul>
@@ -273,10 +274,10 @@ curl -sI http://utility.lab.example.com/rhel10/BaseOS/repodata/repomd.xml | head
 showmount -e utility.lab.example.com                    <span class="c"># /exports/data, /exports/docs, /home/guests</span>
 chronyc sources                                         <span class="c"># after Lab 9: ^* utility</span></pre></li>
   <li><strong>A sudo user on server1 and server2.</strong> The workbook runs everything as a regular user in <code>wheel</code> with <code>sudo</code>.</li>
-  <li><strong>Two empty extra disks on server1</strong>, at least 2 GiB and 1 GiB (here: <code>sda</code> and <code>sdc</code>, 5 GiB each). Confirm with <code>lsblk</code> that they have no partitions before Lab 18.
-    <p class="callout warn"><strong>Warning:</strong> on server1 the OS lives on <code>sdb</code>, not <code>sda</code>. Disk names follow the order the hypervisor attached them, so always pick the disk by size and &quot;no partitions&quot;, never by name alone.</p></li>
+  <li><strong>Two empty extra disks on server1</strong>, at least 2 GiB and 1 GiB (here: Hyper-V LUNs 3 and 2, 5 GiB each). Confirm with <code>lsblk</code> that they have no partitions before Lab 18.
+    <p class="callout warn"><strong>Warning:</strong> on server1 the OS disk is LUN 0 but currently named <code>sdb</code>, and the names can change at the next boot. Pick disks by slot (<code>/dev/disk/by-path/</code>) and confirm size and &quot;no partitions&quot; with <code>lsblk</code>, never by sdX name alone.</p></li>
   <li><strong>Snapshots</strong> of server1 and server2 after Lab 1 and again before Lab 3, so you can roll back.</li>
-  <li><strong>For Lab 25 only:</strong> the ability to enlarge server1&#x27;s OS disk in the hypervisor (Hyper-V refuses while checkpoints exist).</li>
+  <li><strong>For Lab 25 only:</strong> the ability to enlarge server1&#x27;s OS disk in the hypervisor. Hyper-V refuses while checkpoints exist, so delete the Lab 1 / Lab 3 checkpoints first.</li>
   <li><strong>For Lab 17 only:</strong> console access to server1 (the VM window), since you work at the GRUB menu.</li>
 </ol>
 </section>

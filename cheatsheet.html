@@ -405,8 +405,9 @@ sudo su - harry -c 'sudo -n id'      <span class="c"># -n = fail, don't prompt</
 <section class="card" id="lvm" data-k="lvm pvcreate vgcreate lvcreate lvextend lvreduce parted pvs vgs lvs extents vgextend pvresize growpart xfs_growfs resize2fs disk">
   <h2>LVM &amp; growing storage<span class="ix">Labs 18, 20, 25</span></h2>
   <h3>Partition a new disk for LVM</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk                       <span class="c"># an EMPTY disk; server1: sda (NOT sdb = OS disk)</span>
-DISK=/dev/sda
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls -l /dev/disk/by-path/    <span class="c"># slot (LUN) -&gt; sdX; sdX names can change at boot</span>
+DISK=$(readlink -f /dev/disk/by-path/acpi-MSFT1000:00-scsi-0:0:0:3)   <span class="c"># server1 LUN 3</span>
+lsblk $DISK                 <span class="c"># 5G, NO partitions, or STOP</span>
 P=$DISK                     <span class="c"># partition prefix; NVMe: P=${DISK}p</span>
 sudo wipefs -a $DISK        <span class="c"># ERASES it: clears old signatures on a reused disk</span>
 sudo parted -s $DISK mklabel gpt
@@ -435,12 +436,15 @@ sudo lvextend -r -l +100%FREE /dev/rl/root    <span class="c"># take everything 
 sudo pvcreate /dev/sdd; sudo vgextend datastore /dev/sdd</code></pre></div>
   <h3>Grow / after the hypervisor disk was enlarged</h3>
   <div class="callout"><p><strong>Memory anchor:</strong> disk &rarr; <code>growpart</code> &rarr; <code>pvresize</code> &rarr; <code>lvextend -r</code>. Every layer has to grow, in that order.</p></div>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk; df -h /; sudo pvs; sudo vgs              <span class="c"># 0. before</span>
-echo 1 | sudo tee /sys/class/block/sdb/device/rescan <span class="c"># 2. SCSI/SATA rescan</span>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ROOTPV=$(sudo pvs --noheadings -o pv_name -S vg_name=rl | tr -d ' ')  <span class="c"># 0. e.g. /dev/sdb3</span>
+DISK=$(lsblk -dno pkname $ROOTPV)                    <span class="c">#    e.g. sdb</span>
+PART=$(cat /sys/class/block/${ROOTPV#/dev/}/partition)  <span class="c">#    e.g. 3</span>
+<span class="c"># 1. expand the disk in the hypervisor (Hyper-V: delete checkpoints first)</span>
+echo 1 | sudo tee /sys/class/block/$DISK/device/rescan  <span class="c"># 2. SCSI rescan</span>
 sudo dnf -y install cloud-utils-growpart         <span class="c"># 3. grow the partition</span>
-sudo growpart /dev/sdb 3
-<span class="c">#   alt: sudo parted /dev/sdb resizepart 3 100% (answer Yes), then sudo partprobe</span>
-sudo pvresize /dev/sdb3                          <span class="c"># 4. grow PV</span>
+sudo growpart /dev/$DISK $PART
+<span class="c">#   alt: sudo parted /dev/$DISK resizepart $PART 100% (Fix, then Yes), then sudo partprobe</span>
+sudo pvresize $ROOTPV                            <span class="c"># 4. grow PV</span>
 sudo vgs                                         <span class="c">#    VFree &gt; 0 now</span>
 sudo lvextend -r -l +100%FREE /dev/rl/root     <span class="c">#    grow LV + FS</span></code></pre></div>
   <div class="tablewrap"><table>
@@ -487,7 +491,8 @@ sudo mkswap /dev/datastore/swap
 echo "UUID=$(sudo blkid -s UUID -o value /dev/datastore/swap) \
 none swap defaults 0 0" | sudo tee -a /etc/fstab</code></pre></div>
   <h3>Swap partition</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>SWAPDISK=/dev/sdc                <span class="c"># server1&#x27;s other empty disk (lsblk)</span>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>SWAPDISK=$(readlink -f /dev/disk/by-path/acpi-MSFT1000:00-scsi-0:0:0:2)   <span class="c"># server1 LUN 2</span>
+lsblk $SWAPDISK                  <span class="c"># 5G, NO partitions, or STOP</span>
 sudo parted -s $SWAPDISK mklabel gpt
 sudo parted -s $SWAPDISK mkpart swap1 linux-swap 1MiB 513MiB   <span class="c"># 512 MiB</span>
 sudo udevadm settle
