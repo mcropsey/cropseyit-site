@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RHCSA Lab Diagram</title>
+<meta name="description" content="The three-VM RHCSA practice lab: what runs on server1, server2, and utility, and what to have ready before starting.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d5c63'/%3E%3Ctext x='6' y='22' font-family='monospace' font-size='16' fill='%23e8f1ee'%3E%23_%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --paper: #eef2f1; --sheet: #ffffff; --ink: #17242a; --muted: #56666c; --rule: #d3dcda;
+  --teal: #0d5c63; --teal-soft: #dcebea; --amber: #a4520f; --amber-soft: #fbeedf;
+  --term: #15211f; --term-ink: #d6e4de; --term-dim: #7d978f; --inline: #7b2d26; --inline-bg: #f1e9e6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111a1d; --sheet: #172327; --ink: #dbe5e3; --muted: #93a5a6; --rule: #2a3a3f;
+    --teal: #5fb3b0; --teal-soft: #1b3436; --amber: #e3a15d; --amber-soft: #33261a;
+    --term: #0b1214; --term-ink: #d6e4de; --term-dim: #6f8a83; --inline: #f0b3a8; --inline-bg: #2a2224;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111a1d; --sheet: #172327; --ink: #dbe5e3; --muted: #93a5a6; --rule: #2a3a3f;
+  --teal: #5fb3b0; --teal-soft: #1b3436; --amber: #e3a15d; --amber-soft: #33261a;
+  --term: #0b1214; --term-ink: #d6e4de; --term-dim: #6f8a83; --inline: #f0b3a8; --inline-bg: #2a2224;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 "Segoe UI", "Noto Sans", "Helvetica Neue", system-ui, sans-serif; }
+code, pre { font-family: "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+a { color: var(--teal); }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+:not(pre) > code { background: var(--inline-bg); color: var(--inline); padding: 1px 5px; border-radius: 4px; font-size: .88em; overflow-wrap: anywhere; }
+
+header.top { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 14px 24px; border-bottom: 1px solid var(--rule); background: var(--sheet); }
+header.top strong { font-size: 1.05rem; margin-right: auto; }
+header.top a { font-size: .9rem; }
+.theme { background: none; border: 1px solid var(--rule); color: var(--ink); border-radius: 6px; padding: 4px 9px; font: inherit; font-size: .85rem; cursor: pointer; }
+
+main { max-width: 1100px; margin: 0 auto; padding: 28px 24px 70px; }
+h1 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); line-height: 1.15; margin: 0 0 6px; letter-spacing: -.01em; }
+.sub { color: var(--muted); margin: 0 0 24px; font-size: 1.05rem; max-width: 76ch; }
+h2 { font-size: 1.3rem; margin: 36px 0 10px; }
+section.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 22px 24px; margin-bottom: 24px; }
+p, li { max-width: 80ch; }
+ul { padding-left: 1.3em; }
+li { margin: 4px 0; }
+
+/* diagram */
+.diagram { width: 100%; height: auto; display: block; }
+.diagram text { font-family: "Segoe UI", "Noto Sans", system-ui, sans-serif; fill: var(--ink); }
+.diagram .mono { font-family: "JetBrains Mono", Menlo, Consolas, monospace; }
+.diagram .muted { fill: var(--muted); }
+.diagram .node { fill: var(--sheet); stroke: var(--teal); stroke-width: 2; }
+.diagram .node.util { stroke: var(--amber); }
+.diagram .head { fill: var(--teal); }
+.diagram .head.util { fill: var(--amber); }
+.diagram .headtext { fill: var(--sheet); font-weight: 700; }
+.diagram .chip { fill: var(--teal-soft); }
+.diagram .chip.util { fill: var(--amber-soft); }
+.diagram .net { stroke: var(--muted); stroke-width: 6; stroke-linecap: round; }
+.diagram .drop { stroke: var(--muted); stroke-width: 2; }
+.diagram .flow { stroke: var(--amber); stroke-width: 2; fill: none; stroke-dasharray: 6 5; }
+.diagram .peer { stroke: var(--teal); stroke-width: 2; fill: none; stroke-dasharray: 6 5; }
+.diagram .arrow-a { fill: var(--amber); }
+.diagram .arrow-t { fill: var(--teal); }
+.diagram .warnfill { fill: var(--amber); font-weight: 700; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: .88rem; color: var(--muted); margin-top: 10px; }
+.legend span::before { content: ""; display: inline-block; width: 22px; height: 0; border-top: 2px dashed; vertical-align: middle; margin-right: 7px; }
+.legend .l-util::before { border-color: var(--amber); }
+.legend .l-peer::before { border-color: var(--teal); }
+.figscroll { overflow-x: auto; }
+.figscroll svg { min-width: 680px; }
+.swipe { display: none; font-size: .85rem; color: var(--muted); margin: 0 0 6px; }
+@media (max-width: 720px) { .swipe { display: block; } }
+
+/* node cards */
+.nodes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 960px) { .nodes { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--sheet); border: 1px solid var(--rule); border-top: 5px solid var(--teal); border-radius: 10px; padding: 16px 18px; }
+.card.util { border-top-color: var(--amber); }
+.card h3 { margin: 0; font-size: 1.2rem; }
+.card .addr { font-family: "JetBrains Mono", Menlo, Consolas, monospace; font-size: .84rem; color: var(--muted); margin: 2px 0 10px; }
+.role { display: inline-block; font-size: .78rem; font-weight: 700; letter-spacing: .02em; border-radius: 4px; padding: 1px 8px; margin-bottom: 8px; background: var(--teal-soft); color: var(--teal); }
+.card.util .role { background: var(--amber-soft); color: var(--amber); }
+.card h4 { font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 4px; }
+.card ul { margin: 0; padding-left: 1.1em; font-size: .92rem; }
+.card li { margin: 3px 0; }
+.danger { color: var(--amber); font-weight: 700; }
+
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--rule); }
+th { font-weight: 700; border-bottom: 2px solid var(--teal); }
+
+ol.checks { padding-left: 1.4em; }
+ol.checks li { margin: 10px 0; }
+.callout { border-left: 4px solid var(--teal); background: var(--teal-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; }
+.callout.warn { border-left-color: var(--amber); background: var(--amber-soft); }
+.callout.warn strong:first-child { color: var(--amber); }
+pre.term { background: var(--term); color: var(--term-ink); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: .84rem; line-height: 1.55; border-left: 4px solid var(--teal); margin: 8px 0 0; }
+pre.term .c { color: var(--term-dim); }
+
+@media (max-width: 600px) {
+  header.top, main { padding-left: 16px; padding-right: 16px; }
+  section.panel { padding: 16px; }
+}
+@media print {
+  header.top .theme { display: none; }
+  body { background: #fff; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <strong>RHCSA Lab Diagram</strong>
+  <a href="rhcsa.html">Workbook</a>
+  <a href="cheatsheet.html">Cheat sheet</a>
+  <a href="/">Cropsey IT home</a>
+  <button class="theme" type="button" id="theme">Switch to dark</button>
+</header>
+<main>
+<h1>The lab at a glance</h1>
+<p class="sub">Three Rocky Linux 10.2 VMs on one network. You do every lab on <strong>server1</strong> and <strong>server2</strong>. <strong>utility</strong> plays the exam&#x27;s classroom server: it is pre-built, and you only point the other two at it.</p>
+
+<section class="panel" aria-labelledby="topo">
+<h2 id="topo" style="margin-top:0">Topology</h2>
+<p class="swipe">Swipe sideways to see the whole diagram.</p>
+<div class="figscroll">
+<svg class="diagram" viewBox="0 0 960 600" role="img" aria-labelledby="dtitle ddesc">
+  <title id="dtitle">Lab topology</title>
+  <desc id="ddesc">utility at 192.168.1.105 provides DNS, the package repo, NFS, NTP, and a Flatpak remote to server1 at 192.168.1.103 and server2 at 192.168.1.104, all on the 192.168.1.0/24 network. server1 and server2 talk to each other over SSH and HTTP.</desc>
+  <defs>
+    <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-a" d="M0 0 L10 5 L0 10 z"/></marker>
+    <marker id="mt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-t" d="M0 0 L10 5 L0 10 z"/></marker>
+  </defs>
+
+  <!-- utility -->
+  <rect class="node util" x="290" y="14" width="380" height="196" rx="10"/>
+  <rect class="head util" x="290" y="14" width="380" height="40" rx="10"/>
+  <rect class="head util" x="290" y="40" width="380" height="14"/>
+  <text class="headtext" x="306" y="40" font-size="17">utility &#183; classroom server</text>
+  <text class="headtext mono" x="654" y="40" font-size="13" text-anchor="end">.105</text>
+  <text class="mono muted" x="306" y="76" font-size="13">utility.lab.example.com &#183; pre-built</text>
+  <g font-size="13.5">
+    <rect class="chip util" x="306" y="90" width="170" height="30" rx="6"/><text x="318" y="110">DNS &#183; dnsmasq :53</text>
+    <rect class="chip util" x="484" y="90" width="170" height="30" rx="6"/><text x="496" y="110">Repo &#183; httpd :80</text>
+    <rect class="chip util" x="306" y="128" width="170" height="30" rx="6"/><text x="318" y="148">NFS &#183; nfs-server</text>
+    <rect class="chip util" x="484" y="128" width="170" height="30" rx="6"/><text x="496" y="148">NTP &#183; chronyd :123</text>
+    <rect class="chip util" x="306" y="166" width="348" height="30" rx="6"/><text x="318" y="186">Flatpak remote &#183; httpd /flatpak</text>
+  </g>
+
+  <!-- network -->
+  <line class="drop" x1="480" y1="210" x2="480" y2="300"/>
+  <line class="net" x1="40" y1="300" x2="920" y2="300"/>
+  <text class="muted mono" x="44" y="290" font-size="13">192.168.1.0/24 &#183; gw .1</text>
+
+  <!-- service flows from utility -->
+  <path class="flow" d="M290 150 C 250 150, 250 220, 250 292" marker-end="url(#ma)"/>
+  <path class="flow" d="M670 150 C 710 150, 710 220, 710 292" marker-end="url(#ma)"/>
+  <text class="muted" x="150" y="200" font-size="12.5">DNS, repo,</text>
+  <text class="muted" x="150" y="216" font-size="12.5">NTP, Flatpak</text>
+  <text class="muted" x="726" y="200" font-size="12.5">DNS, repo, NTP,</text>
+  <text class="muted" x="726" y="216" font-size="12.5">NFS + autofs</text>
+
+  <!-- server1 -->
+  <line class="drop" x1="250" y1="300" x2="250" y2="340"/>
+  <rect class="node" x="40" y="340" width="400" height="244" rx="10"/>
+  <rect class="head" x="40" y="340" width="400" height="40" rx="10"/>
+  <rect class="head" x="40" y="366" width="400" height="14"/>
+  <text class="headtext" x="56" y="366" font-size="17">server1 &#183; exam node</text>
+  <text class="headtext mono" x="424" y="366" font-size="13" text-anchor="end">.103</text>
+  <text class="mono muted" x="56" y="402" font-size="13">server1.lab.example.com (hv-rocky-linux-6)</text>
+  <g font-size="13.5">
+    <text x="56" y="430" font-weight="700">Disks</text>
+    <text class="mono" x="56" y="452">sdb 127G  root: / /boot /home (VG rl)</text>
+    <text class="mono warnfill" x="56" y="472" font-size="12.5">&#9888; sdb is the OS disk, never wipe it</text>
+    <text class="mono" x="56" y="494">sda   5G  empty &#8594; Lab 18 LVM</text>
+    <text class="mono" x="56" y="514">sdc   5G  empty &#8594; Lab 19 swap</text>
+    <text x="56" y="544" font-weight="700">Labs mainly here</text>
+    <text x="56" y="566">3 Apache &#183; 8 &#183; 10 &#183; 12 &#183; 15&#8211;20 &#183; 25</text>
+  </g>
+
+  <!-- server2 -->
+  <line class="drop" x1="710" y1="300" x2="710" y2="340"/>
+  <rect class="node" x="520" y="340" width="400" height="244" rx="10"/>
+  <rect class="head" x="520" y="340" width="400" height="40" rx="10"/>
+  <rect class="head" x="520" y="366" width="400" height="14"/>
+  <text class="headtext" x="536" y="366" font-size="17">server2 &#183; exam node</text>
+  <text class="headtext mono" x="904" y="366" font-size="13" text-anchor="end">.104</text>
+  <text class="mono muted" x="536" y="402" font-size="13">server2.lab.example.com (hv-rocky-linux-7)</text>
+  <g font-size="13.5">
+    <text x="536" y="430" font-weight="700">Disks</text>
+    <text class="mono" x="536" y="452">sda 127G  root only, no spare disks</text>
+    <text x="536" y="490" font-weight="700">Labs mainly here</text>
+    <text x="536" y="512">6 NFS + autofs &#183; 13 umask</text>
+    <text x="536" y="534">24 diagnostics (nginx :80)</text>
+    <text x="536" y="566" class="muted">Both servers: 1, 2, 4, 5, 7, 9, 11, 14, 21, 22</text>
+  </g>
+
+  <!-- server1 <-> server2 -->
+  <path class="peer" d="M440 470 L520 470" marker-start="url(#mt)" marker-end="url(#mt)"/>
+  <text class="muted" x="480" y="458" font-size="12" text-anchor="middle">ssh 23</text>
+  <text class="muted" x="480" y="492" font-size="12" text-anchor="middle">http 3, 24</text>
+</svg>
+</div>
+<div class="legend"><span class="l-util">services utility provides</span><span class="l-peer">traffic between the exam nodes (lab numbers)</span></div>
+</section>
+
+<h2>What&#x27;s on each node</h2>
+<div class="nodes">
+  <article class="card util">
+    <span class="role">CLASSROOM SERVER &middot; PRE-BUILT</span>
+    <h3>utility</h3>
+    <p class="addr">192.168.1.105 &middot; utility.lab.example.com</p>
+    <h4>System</h4>
+    <ul><li>Rocky Linux 10.2, 8 vCPU, 3.6 GiB RAM, one 127 GiB disk</li><li>Don&#x27;t do lab tasks here. It only serves the other two.</li></ul>
+    <h4>Services</h4>
+    <ul>
+      <li><strong>dnsmasq (DNS)</strong>: answers for <code>lab.example.com</code>, forwards everything else to 1.1.1.1 / 8.8.8.8. Config: <code>/etc/dnsmasq.d/lab.conf</code></li>
+      <li><strong>httpd (repo)</strong>: BaseOS + AppStream at <code>/rhel10/</code> (8.7 GB), drop-in at <code>/rhel10.repo</code></li>
+      <li><strong>httpd (Flatpak)</strong>: remote at <code>/flatpak/lab.flatpakrepo</code>, GNOME Calculator, unsigned</li>
+      <li><strong>nfs-server</strong>: <code>/exports/data</code> rw, <code>/exports/docs</code> ro, <code>/home/guests</code> rw (holds <code>remoteuser1</code>)</li>
+      <li><strong>chronyd (NTP)</strong>: serves 192.168.1.0/24, <code>local stratum 10</code></li>
+    </ul>
+    <h4>Firewall</h4>
+    <ul><li>dns, http, https, nfs, mountd, rpc-bind, ntp, ssh, cockpit</li></ul>
+  </article>
+
+  <article class="card">
+    <span class="role">EXAM NODE</span>
+    <h3>server1</h3>
+    <p class="addr">192.168.1.103 &middot; server1.lab.example.com</p>
+    <h4>System</h4>
+    <ul><li>Rocky Linux 10.2, 8 vCPU, 3.6 GiB RAM</li><li>SELinux enforcing, firewalld on</li><li>User <code>mcropsey</code> in <code>wheel</code> (sudo)</li></ul>
+    <h4>Disks</h4>
+    <ul>
+      <li><code>sdb</code> 127 GiB: the OS disk (VG <code>rl</code>: root 70G, swap 3.9G, home 50.5G). <span class="danger">Never wipe or partition it.</span></li>
+      <li><code>sda</code> 5 GiB, empty: Lab 18 LVM (<code>datastore</code>)</li>
+      <li><code>sdc</code> 5 GiB, empty: Lab 19 swap partition</li>
+    </ul>
+    <h4>Installed by the labs</h4>
+    <ul>
+      <li>httpd, policycoreutils-python-utils, setroubleshoot-server (Lab 3)</li>
+      <li>at (Lab 7), tuned (Lab 21), flatpak (Lab 22), cloud-utils-growpart (Lab 25)</li>
+      <li>Apache on port 82 serving <code>/webdata</code> after Lab 3</li>
+    </ul>
+  </article>
+
+  <article class="card">
+    <span class="role">EXAM NODE</span>
+    <h3>server2</h3>
+    <p class="addr">192.168.1.104 &middot; server2.lab.example.com</p>
+    <h4>System</h4>
+    <ul><li>Rocky Linux 10.2, 8 vCPU, 3.6 GiB RAM</li><li>SELinux enforcing, firewalld on</li><li>User <code>mcropsey</code> in <code>wheel</code> (sudo)</li></ul>
+    <h4>Disks</h4>
+    <ul><li><code>sda</code> 127 GiB: OS only. No spare disks needed.</li></ul>
+    <h4>Installed by the labs</h4>
+    <ul>
+      <li>nfs-utils, autofs (Lab 6): mounts <code>/mnt/data</code>, <code>/mnt/docs</code>, automounts <code>/home/guests</code></li>
+      <li>nginx, nmap-ncat (Lab 24): nginx on port 80</li>
+      <li>at (Lab 7), tuned (Lab 21), flatpak (Lab 22)</li>
+    </ul>
+  </article>
+</div>
+
+<h2>Prerequisites</h2>
+<section class="panel">
+<ol class="checks">
+  <li><strong>Three VMs on one network.</strong> server1 (.103), server2 (.104), and utility (.105) on 192.168.1.0/24 with gateway 192.168.1.1. RHEL 10 or Rocky Linux 10 on all three.</li>
+  <li><strong>utility is up and serving.</strong> Check from server1 or server2 before you start:
+<pre class="term">dig +short @192.168.1.105 utility.lab.example.com      <span class="c"># 192.168.1.105</span>
+curl -sI http://utility.lab.example.com/rhel10/BaseOS/repodata/repomd.xml | head -1   <span class="c"># 200 OK</span>
+showmount -e utility.lab.example.com                    <span class="c"># /exports/data, /exports/docs, /home/guests</span>
+chronyc sources                                         <span class="c"># after Lab 9: ^* utility</span></pre></li>
+  <li><strong>A sudo user on server1 and server2.</strong> The workbook runs everything as a regular user in <code>wheel</code> with <code>sudo</code>.</li>
+  <li><strong>Two empty extra disks on server1</strong>, at least 2 GiB and 1 GiB (here: <code>sda</code> and <code>sdc</code>, 5 GiB each). Confirm with <code>lsblk</code> that they have no partitions before Lab 18.
+    <p class="callout warn"><strong>Warning:</strong> on server1 the OS lives on <code>sdb</code>, not <code>sda</code>. Disk names follow the order the hypervisor attached them, so always pick the disk by size and &quot;no partitions&quot;, never by name alone.</p></li>
+  <li><strong>Snapshots</strong> of server1 and server2 after Lab 1 and again before Lab 3, so you can roll back.</li>
+  <li><strong>For Lab 25 only:</strong> the ability to enlarge server1&#x27;s OS disk in the hypervisor (Hyper-V refuses while checkpoints exist).</li>
+  <li><strong>For Lab 17 only:</strong> console access to server1 (the VM window), since you work at the GRUB menu.</li>
+</ol>
+</section>
+
+<h2>Ports &amp; traffic</h2>
+<section class="panel">
+<div class="tablewrap"><table>
+<thead><tr><th>Service</th><th>Port</th><th>From &rarr; to</th><th>Labs</th></tr></thead>
+<tbody>
+<tr><td>DNS</td><td>53 udp/tcp</td><td>server1, server2 &rarr; utility</td><td>1 and every name lookup</td></tr>
+<tr><td>Package repo</td><td>80 tcp</td><td>server1, server2 &rarr; utility</td><td>2 and every <code>dnf install</code></td></tr>
+<tr><td>NFS</td><td>2049 tcp (+ 111, mountd for <code>showmount</code>)</td><td>server2 &rarr; utility</td><td>6</td></tr>
+<tr><td>NTP</td><td>123 udp</td><td>server1, server2 &rarr; utility</td><td>9</td></tr>
+<tr><td>Flatpak remote</td><td>80 tcp</td><td>server1 or server2 &rarr; utility</td><td>22</td></tr>
+<tr><td>Apache (lab)</td><td>80, then 82 tcp</td><td>server2 &rarr; server1</td><td>3</td></tr>
+<tr><td>SSH</td><td>22 tcp</td><td>server1 &rarr; server2</td><td>23</td></tr>
+<tr><td>nginx (drill)</td><td>80 tcp</td><td>server1 &rarr; server2</td><td>24</td></tr>
+</tbody></table></div>
+</section>
+</main>
+<script>
+(function () {
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  var root = document.documentElement, tbtn = document.getElementById('theme');
+  function isDark() {
+    var t = root.getAttribute('data-theme');
+    return t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function label() { tbtn.textContent = isDark() ? 'Switch to light' : 'Switch to dark'; }
+  var pref = store.get('rhcsa-theme');
+  if (pref) root.setAttribute('data-theme', pref);
+  label();
+  tbtn.addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next); store.set('rhcsa-theme', next); label();
+  });
+})();
+</script>
+</body>
+</html>

@@ -405,8 +405,8 @@ sudo su - harry -c 'sudo -n id'      <span class="c"># -n = fail, don't prompt</
 <section class="card" id="lvm" data-k="lvm pvcreate vgcreate lvcreate lvextend lvreduce parted pvs vgs lvs extents vgextend pvresize growpart xfs_growfs resize2fs disk">
   <h2>LVM &amp; growing storage<span class="ix">Labs 18, 20, 25</span></h2>
   <h3>Partition a new disk for LVM</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk                       <span class="c"># the EMPTY 2 GiB disk: vdb / sdb / nvme1n1</span>
-DISK=/dev/vdb
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk                       <span class="c"># an EMPTY disk; server1: sda (NOT sdb = OS disk)</span>
+DISK=/dev/sda
 P=$DISK                     <span class="c"># partition prefix; NVMe: P=${DISK}p</span>
 sudo wipefs -a $DISK        <span class="c"># ERASES it: clears old signatures on a reused disk</span>
 sudo parted -s $DISK mklabel gpt
@@ -429,20 +429,20 @@ sudo vgdisplay datastore | grep 'PE Size'</code></pre></div>
 sudo lvextend -l +100 -r /dev/datastore/database <span class="c"># +100 extents, grow FS too</span>
 sudo lvextend -L +100M -r /dev/datastore/database <span class="c"># by size</span>
 sudo lvextend -L 1.5G  -r /dev/datastore/database <span class="c"># to absolute size</span>
-sudo lvextend -r -l +100%FREE /dev/rhel/root    <span class="c"># take everything left</span>
+sudo lvextend -r -l +100%FREE /dev/rl/root    <span class="c"># take everything left</span>
 
 <span class="c"># out of space in the VG? add a disk:</span>
-sudo pvcreate /dev/vdd; sudo vgextend datastore /dev/vdd</code></pre></div>
+sudo pvcreate /dev/sdd; sudo vgextend datastore /dev/sdd</code></pre></div>
   <h3>Grow / after the hypervisor disk was enlarged</h3>
   <div class="callout"><p><strong>Memory anchor:</strong> disk &rarr; <code>growpart</code> &rarr; <code>pvresize</code> &rarr; <code>lvextend -r</code>. Every layer has to grow, in that order.</p></div>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>lsblk; df -h /; sudo pvs; sudo vgs              <span class="c"># 0. before</span>
-echo 1 | sudo tee /sys/class/block/sda/device/rescan <span class="c"># 2. SCSI/SATA rescan</span>
+echo 1 | sudo tee /sys/class/block/sdb/device/rescan <span class="c"># 2. SCSI/SATA rescan</span>
 sudo dnf -y install cloud-utils-growpart         <span class="c"># 3. grow the partition</span>
-sudo growpart /dev/sda 3
-<span class="c">#   alt: sudo parted /dev/sda resizepart 3 100% (answer Yes), then sudo partprobe</span>
-sudo pvresize /dev/sda3                          <span class="c"># 4. grow PV</span>
+sudo growpart /dev/sdb 3
+<span class="c">#   alt: sudo parted /dev/sdb resizepart 3 100% (answer Yes), then sudo partprobe</span>
+sudo pvresize /dev/sdb3                          <span class="c"># 4. grow PV</span>
 sudo vgs                                         <span class="c">#    VFree &gt; 0 now</span>
-sudo lvextend -r -l +100%FREE /dev/rhel/root     <span class="c">#    grow LV + FS</span></code></pre></div>
+sudo lvextend -r -l +100%FREE /dev/rl/root     <span class="c">#    grow LV + FS</span></code></pre></div>
   <div class="tablewrap"><table>
     <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
     <tbody>
@@ -487,7 +487,7 @@ sudo mkswap /dev/datastore/swap
 echo "UUID=$(sudo blkid -s UUID -o value /dev/datastore/swap) \
 none swap defaults 0 0" | sudo tee -a /etc/fstab</code></pre></div>
   <h3>Swap partition</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>SWAPDISK=/dev/vdc                <span class="c"># the small extra disk (lsblk)</span>
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>SWAPDISK=/dev/sdc                <span class="c"># server1&#x27;s other empty disk (lsblk)</span>
 sudo parted -s $SWAPDISK mklabel gpt
 sudo parted -s $SWAPDISK mkpart swap1 linux-swap 1MiB 513MiB   <span class="c"># 512 MiB</span>
 sudo udevadm settle
@@ -525,7 +525,7 @@ sudo systemctl enable autofs
 sudo systemctl restart autofs       <span class="c"># RESTART, so maps are re-read</span>
 
 ls /home/guests                     <span class="c"># empty is normal -- keys appear on access</span>
-ls /home/guests/&lt;name&gt;              <span class="c"># this triggers the mount</span>
+ls /home/guests/remoteuser1         <span class="c"># this triggers the mount</span>
 mount | grep /home/guests
 sleep 40; mount | grep /home/guests <span class="c"># gone after 30s idle</span></code></pre></div>
   <div class="callout warn"><p><strong>Traps:</strong> <code>systemctl enable --now autofs</code> does <em>not</em> reload maps if autofs was already running &mdash; restart it. Don't <code>cd</code> into an automount before testing the idle timeout. In the wildcard map, <code>*</code> matches the directory name and <code>&amp;</code> is replaced by it.</p></div>
