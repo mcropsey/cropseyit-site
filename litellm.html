@@ -156,8 +156,8 @@ th { font-weight: 700; border-bottom: 2px solid var(--teal); }
 <aside id="sidebar">
   <div class="brand"><strong>LiteLLM Gateway Labs</strong><span>docker .100 &nbsp;/&nbsp; gateway .101:4000</span></div>
   <input class="search" type="search" placeholder="Search labs (e.g. fallbacks, mcp)" aria-label="Search labs">
-  <div class="progress"><span id="prog">0 of 13 labs done</span><div class="bar"><i id="progbar"></i></div></div>
-  <nav aria-label="Labs"><ul><li><a href="#lab-1" data-lab="1"><span class="num">1</span><span class="nm">Discover the Existing Gateway (read-only)</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-2" data-lab="2"><span class="num">2</span><span class="nm">Supporting Services on .100: Postgres &amp; Redis</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-3" data-lab="3"><span class="num">3</span><span class="nm">Wire Up LiteLLM: Models, Database, Cache, Guardrail, MCP</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-4" data-lab="4"><span class="num">4</span><span class="nm">Unified API: One Client, Two Providers</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-5" data-lab="5"><span class="num">5</span><span class="nm">Fallbacks, Retries &amp; Load Balancing</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-6" data-lab="6"><span class="num">6</span><span class="nm">Virtual Keys, Teams &amp; Budgets</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-7" data-lab="7"><span class="num">7</span><span class="nm">Response Caching with Redis</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-8" data-lab="8"><span class="num">8</span><span class="nm">Custom Guardrail: Block SSNs</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-9" data-lab="9"><span class="num">9</span><span class="nm">Observability: Spend Logs &amp; Langfuse</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-10" data-lab="10"><span class="num">10</span><span class="nm">MCP Gateway: DeepWiki Through LiteLLM</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-11" data-lab="11"><span class="num">11</span><span class="nm">Claude Code Through /v1/messages</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-12" data-lab="12"><span class="num">12</span><span class="nm">A2A Agent Gateway: hello-agent</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-13" data-lab="13"><span class="num">13</span><span class="nm">Health Checks &amp; the Admin UI</span><span class="tick" aria-hidden="true"></span></a></li></ul><p class="empty" id="empty">No lab mentions that.</p></nav>
+  <div class="progress"><span id="prog">0 of 14 labs done</span><div class="bar"><i id="progbar"></i></div></div>
+  <nav aria-label="Labs"><ul><li><a href="#lab-0" data-lab="0"><span class="num">0</span><span class="nm">Install LiteLLM (skip if it is already running)</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-1" data-lab="1"><span class="num">1</span><span class="nm">Discover the Existing Gateway (read-only)</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-2" data-lab="2"><span class="num">2</span><span class="nm">Supporting Services on .100: Postgres &amp; Redis</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-3" data-lab="3"><span class="num">3</span><span class="nm">Wire Up LiteLLM: Models, Database, Cache, Guardrail, MCP</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-4" data-lab="4"><span class="num">4</span><span class="nm">Unified API: One Client, Two Providers</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-5" data-lab="5"><span class="num">5</span><span class="nm">Fallbacks, Retries &amp; Load Balancing</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-6" data-lab="6"><span class="num">6</span><span class="nm">Virtual Keys, Teams &amp; Budgets</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-7" data-lab="7"><span class="num">7</span><span class="nm">Response Caching with Redis</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-8" data-lab="8"><span class="num">8</span><span class="nm">Custom Guardrail: Block SSNs</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-9" data-lab="9"><span class="num">9</span><span class="nm">Observability: Spend Logs &amp; Langfuse</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-10" data-lab="10"><span class="num">10</span><span class="nm">MCP Gateway: DeepWiki Through LiteLLM</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-11" data-lab="11"><span class="num">11</span><span class="nm">Claude Code Through /v1/messages</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-12" data-lab="12"><span class="num">12</span><span class="nm">A2A Agent Gateway: hello-agent</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-13" data-lab="13"><span class="num">13</span><span class="nm">Health Checks &amp; the Admin UI</span><span class="tick" aria-hidden="true"></span></a></li></ul><p class="empty" id="empty">No lab mentions that.</p></nav>
   <div class="side-links">
     <a href="/"><strong>Cropsey IT</strong> home</a>
     <a href="rhcsa.html"><strong>RHCSA Labs</strong></a>
@@ -173,10 +173,10 @@ th { font-weight: 700; border-bottom: 2px solid var(--teal); }
   <h1>LiteLLM AI Gateway Labs</h1>
   <p class="sub">Hands-on labs for running an AI gateway in a two-host home lab: one API for many models, fallbacks, virtual keys and budgets, caching, guardrails, observability, MCP, Claude Code and A2A agents.</p>
   <p>Hosts: <strong>docker</strong> = 192.168.1.100 (Postgres, Redis, Langfuse, the A2A agent) | <strong>gateway</strong> = 192.168.1.101 (an <em>existing</em> LiteLLM proxy on port 4000) | <strong>workstation</strong> = wherever you run curl, jq and the check scripts.</p>
-  <p>These labs assume LiteLLM is already running and add to it rather than replacing it. Lab 1 is read-only, Lab 2 only touches .100, and Lab 3 is the one change window on .101, with a backup taken first and a rollback in <a href="#readme">Appendix B</a>. Labs 4&ndash;13 exercise what Lab 3 turned on, and each ends with a small check script so you can re-run every lab at once (<a href="#runner">Appendix A</a>).</p>
+  <p>These labs assume LiteLLM is already running and add to it rather than replacing it. If you don&#x27;t have one yet, Lab 0 installs it. Lab 1 is read-only, Lab 2 only touches .100, and Lab 3 is the one change window on .101, with a backup taken first and a rollback in <a href="#readme">Appendix B</a>. Labs 4&ndash;13 exercise what Lab 3 turned on, and each ends with a small check script so you can re-run every lab at once (<a href="#runner">Appendix A</a>).</p>
   <h2>What runs where</h2>
-  <p>Only LiteLLM needs to exist before you start. You build everything on .100 during the labs.</p>
-  <div class="tablewrap"><table><thead><tr><th>Host</th><th>Service</th><th>Port</th><th>Set up in</th><th>Used by</th></tr></thead><tbody><tr><td>192.168.1.101</td><td>LiteLLM proxy + admin UI (<code>/ui</code>)</td><td>4000</td><td><strong>Already running</strong> (prerequisite); config changed in Lab 3</td><td>every lab</td></tr><tr><td>192.168.1.100</td><td>Postgres 16 (virtual keys, teams, spend logs)</td><td>5432</td><td>Lab 2, <strong>skip</strong> if Lab 1 shows <code>&quot;db&quot;: &quot;connected&quot;</code></td><td>Labs 3, 6, 9</td></tr><tr><td>192.168.1.100</td><td>Redis 7 (response cache)</td><td>6379</td><td>Lab 2</td><td>Labs 3, 7</td></tr><tr><td>192.168.1.100</td><td>Langfuse web</td><td>3000</td><td>Lab 9, Part B (optional)</td><td>Lab 9</td></tr><tr><td>192.168.1.100</td><td>A2A Hello World agent</td><td>9999</td><td>Lab 12</td><td>Lab 12</td></tr><tr><td>internet</td><td>OpenAI, Anthropic, mcp.deepwiki.com</td><td>443</td><td>Nothing to install; you need OpenAI and Anthropic API keys</td><td>Labs 4&ndash;12</td></tr></tbody></table></div>
+  <p>Only LiteLLM needs to exist before you start, and Lab 0 installs it if it doesn&#x27;t. You build everything on .100 during the labs.</p>
+  <div class="tablewrap"><table><thead><tr><th>Host</th><th>Service</th><th>Port</th><th>Set up in</th><th>Used by</th></tr></thead><tbody><tr><td>192.168.1.101</td><td>LiteLLM proxy + admin UI (<code>/ui</code>)</td><td>4000</td><td><strong>Already running</strong>, or install it in Lab 0; config changed in Lab 3</td><td>every lab</td></tr><tr><td>192.168.1.100</td><td>Postgres 16 (virtual keys, teams, spend logs)</td><td>5432</td><td>Lab 2, <strong>skip</strong> if Lab 1 shows <code>&quot;db&quot;: &quot;connected&quot;</code></td><td>Labs 3, 6, 9</td></tr><tr><td>192.168.1.100</td><td>Redis 7 (response cache)</td><td>6379</td><td>Lab 2</td><td>Labs 3, 7</td></tr><tr><td>192.168.1.100</td><td>Langfuse web</td><td>3000</td><td>Lab 9, Part B (optional)</td><td>Lab 9</td></tr><tr><td>192.168.1.100</td><td>A2A Hello World agent</td><td>9999</td><td>Lab 12</td><td>Lab 12</td></tr><tr><td>internet</td><td>OpenAI, Anthropic, mcp.deepwiki.com</td><td>443</td><td>Nothing to install; you need OpenAI and Anthropic API keys</td><td>Labs 4&ndash;12</td></tr></tbody></table></div>
   <h2>Ground rules</h2>
   <ul>
     <li><strong>Look before you change.</strong> Don&#x27;t modify or restart the existing LiteLLM until you&#x27;ve read its config (Lab 1) and backed it up (Lab 3).</li>
@@ -187,7 +187,7 @@ th { font-weight: 700; border-bottom: 2px solid var(--teal); }
   </ul>
   <h2>What you need</h2>
   <ul>
-    <li>SSH with sudo on both hosts. Docker with the Compose plugin on .100. LiteLLM on .101 (Docker, Podman, systemd or a venv; Lab 1 finds out which).</li>
+    <li>SSH with sudo on both hosts. Docker with the Compose plugin on .100. LiteLLM on .101 (Docker, Podman, systemd or a venv; Lab 1 finds out which), or let Lab 0 install it.</li>
     <li>An OpenAI API key and an Anthropic API key for the <code>gpt-mini</code> and <code>claude-fast</code> aliases. No cloud keys? Point both aliases at local models instead (see Lab 3 notes); everything except the provider names still works.</li>
     <li>On the workstation: <code>curl</code>, <code>jq</code> and <code>bash</code>. Python 3 is optional (Lab 4).</li>
     <li>LiteLLM <strong>1.80 or newer</strong> for the A2A gateway. These labs were written against <strong>v1.103.0</strong>. All features used here are in the open-source build; none need an enterprise license.</li>
@@ -222,9 +222,97 @@ export GW=http://192.168.1.101:4000
 read -rsp &#x27;Master key: &#x27; MK; echo; export MK
 echo &quot;master key ****${MK: -4}&quot;</code></pre></div>
   <h2>Lab order &amp; dependencies</h2>
-  <div class="tablewrap"><table><thead><tr><th>Lab</th><th>Needs first</th><th>Notes</th></tr></thead><tbody><tr><td>1 Discover</td><td>none</td><td>Read-only; tells you which parts of Labs 2&ndash;3 you can skip</td></tr><tr><td>2 Services on .100</td><td>1</td><td>Postgres + Redis; skip Postgres if Lab 1 shows a working database</td></tr><tr><td>3 Wire up LiteLLM</td><td>1, 2</td><td>The only change to .101; adds models, cache, guardrail, MCP</td></tr><tr><td>4&ndash;8, 10, 13</td><td>3</td><td>Independent of each other; any order</td></tr><tr><td>9 Observability</td><td>3</td><td>Langfuse part is optional and needs ~4 GB free RAM on .100</td></tr><tr><td>11 Claude Code</td><td>3, 6</td><td>Uses a virtual key, so do Lab 6 first</td></tr><tr><td>12 A2A</td><td>3</td><td>Builds the agent on .100, registers it on .101</td></tr></tbody></table></div>
+  <div class="tablewrap"><table><thead><tr><th>Lab</th><th>Needs first</th><th>Notes</th></tr></thead><tbody><tr><td>0 Install</td><td>none</td><td>Only if LiteLLM isn&#x27;t running yet; gives it its own Postgres on .101</td></tr><tr><td>1 Discover</td><td>none</td><td>Read-only; tells you which parts of Labs 2&ndash;3 you can skip</td></tr><tr><td>2 Services on .100</td><td>1</td><td>Postgres + Redis; skip Postgres if Lab 1 shows a working database</td></tr><tr><td>3 Wire up LiteLLM</td><td>1, 2</td><td>The only change to .101; adds models, cache, guardrail, MCP</td></tr><tr><td>4&ndash;8, 10, 13</td><td>3</td><td>Independent of each other; any order</td></tr><tr><td>9 Observability</td><td>3</td><td>Langfuse part is optional and needs ~4 GB free RAM on .100</td></tr><tr><td>11 Claude Code</td><td>3, 6</td><td>Uses a virtual key, so do Lab 6 first</td></tr><tr><td>12 A2A</td><td>3</td><td>Builds the agent on .100, registers it on .101</td></tr></tbody></table></div>
 </section>
 
+<section class="lab" id="lab-0" data-lab="0">
+  <header class="labhead">
+    <div class="labnum" aria-hidden="true">0</div>
+    <div class="labtitle">
+      <h2>Lab 0: Install LiteLLM (skip if it is already running)</h2>
+      <span class="hosts">192.168.1.101</span>
+    </div>
+    <label class="done"><input type="checkbox" data-done="0"> Done</label>
+  </header>
+  <p class="goal"><span>Goal</span>install a LiteLLM proxy on .101 from scratch: a pinned image, its own Postgres for keys and spend logs, a master key, and the admin UI, all with Docker Compose (or Podman), so the rest of the labs have something to work on.</p><p class="callout note"><strong>Already have LiteLLM?</strong> If <code>curl http://192.168.1.101:4000/health/liveliness</code> already answers, skip to Lab 1. Lab 1 examines the gateway you already have, whoever installed it.</p><h3>1. A container runtime with Compose</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ssh &quot;$USER&quot;@192.168.1.101<span class="c">   # your login on .101</span>
+
+<span class="c"># Option A: Docker (a fresh Rocky/RHEL 9 or 10 host)</span>
+sudo dnf -y install dnf-plugins-core
+sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo systemctl enable --now docker
+COMPOSE=&quot;sudo docker compose&quot;
+
+<span class="c"># Option B: the host already runs Podman (don&#x27;t install Docker beside it)</span>
+sudo dnf -y install epel-release &amp;&amp; sudo dnf -y install podman-compose
+COMPOSE=&quot;sudo podman compose&quot;
+
+$COMPOSE version</code></pre></div><h3>2. Secrets in .env</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo mkdir -p /opt/litellm &amp;&amp; cd /opt/litellm
+sudo touch .env &amp;&amp; sudo chmod 600 .env
+read -rsp &#x27;Admin UI password: &#x27; UIP; echo
+printf &#x27;%s\n&#x27; \
+  &quot;LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)&quot; \
+  &quot;LITELLM_SALT_KEY=sk-$(openssl rand -hex 24)&quot; \
+  &quot;POSTGRES_PASSWORD=$(openssl rand -hex 24)&quot; \
+  &quot;UI_USERNAME=admin&quot; &quot;UI_PASSWORD=$UIP&quot; | sudo tee .env &gt;/dev/null
+unset UIP
+sudo sed -E &#x27;s/=(.*)(.{4})$/=****\2/&#x27; .env<span class="c">       # masked check</span></code></pre></div><h3>3. A starter config.yaml</h3><p>One mock model is enough to prove the install works, with no provider keys yet. Lab 3 adds the real models.</p><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /opt/litellm/config.yaml &gt;/dev/null &lt;&lt;&#x27;EOF&#x27;
+model_list:
+  - model_name: echo-test<span class="c">             # answers without calling any provider</span>
+    litellm_params:
+      model: openai/echo-test
+      mock_response: &quot;Hello from LiteLLM. The install works.&quot;
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+EOF</code></pre></div><h3>4. compose.yml: LiteLLM + Postgres</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo tee /opt/litellm/compose.yml &gt;/dev/null &lt;&lt;&#x27;EOF&#x27;
+name: litellm
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.103.3
+    restart: unless-stopped
+    command: [&quot;--config&quot;, &quot;/app/config.yaml&quot;, &quot;--port&quot;, &quot;4000&quot;]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@db:5432/litellm
+    ports: [&quot;0.0.0.0:4000:4000&quot;]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro,Z
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: docker.io/library/postgres:16.15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: litellm
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: [&quot;CMD-SHELL&quot;, &quot;pg_isready -U litellm -d litellm&quot;]
+      interval: 10s
+      retries: 5
+
+volumes:
+  pgdata:
+EOF</code></pre></div><h3>5. Start it</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>cd /opt/litellm
+$COMPOSE up -d
+$COMPOSE logs -f litellm 2&gt;&amp;1 | grep -m1 -E &#x27;Uvicorn running|Error|Traceback&#x27;<span class="c">    # first start: 1-2 min of DB migrations</span>
+$COMPOSE ps</code></pre></div><h3>Verify (from the workstation)</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>GW=http://192.168.1.101:4000
+curl -s $GW/health/liveliness; echo<span class="c">                    # &quot;I&#x27;m alive!&quot;</span>
+curl -s $GW/health/readiness | jq &#x27;{status, db}&#x27;<span class="c">        # db: &quot;connected&quot;</span>
+curl -s $GW/openapi.json | jq -r .info.version<span class="c">          # 1.103.3</span>
+read -rsp &#x27;Master key (from /opt/litellm/.env): &#x27; MK; echo; export MK GW
+curl -s $GW/v1/chat/completions -H &quot;Authorization: Bearer $MK&quot; -H &#x27;Content-Type: application/json&#x27; \
+  -d &#x27;{&quot;model&quot;:&quot;echo-test&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;hi&quot;}]}&#x27; | jq -r &#x27;.choices[0].message.content&#x27;</code></pre></div><p>Then open <code>http://192.168.1.101:4000/ui</code> and log in as <code>admin</code> with the UI password you chose.</p><h3>Notes &amp; gotchas</h3><p class="callout warn"><strong>Warning:</strong> Pin the version. <code>v1.103.3</code> was the newest patch of the release these labs were tested on (v1.104.0 also existed). Don&#x27;t use <code>main-latest</code> or <code>main-stable</code>, and never <code>pip install litellm</code> without a version: compromised releases were published to PyPI in March 2026. For full reproducibility, pin the digest: <code>sudo docker image inspect --format &#x27;{{index .RepoDigests 0}}&#x27; ghcr.io/berriai/litellm:v1.103.3</code>.</p><ul><li>With this install, LiteLLM&#x27;s database runs right here on .101, so <strong>skip Postgres in Lab 2</strong> and set up only Redis there.</li><li><code>LITELLM_SALT_KEY</code> encrypts provider keys stored in the database. Set it before adding any model or credential in the UI and never change it afterwards, or the stored keys become unreadable.</li><li>The master key must start with <code>sk-</code>. Keep it for admin work only; Labs 6, 11 and 12 show how to hand out limited virtual keys instead.</li><li>Postgres isn&#x27;t published to the network; only LiteLLM reaches it, over the compose network by the name <code>db</code>.</li><li>If the workstation can&#x27;t reach port 4000 but <code>curl localhost:4000/health/liveliness</code> works on .101, open the firewall: <code>sudo firewall-cmd --permanent --add-port=4000/tcp &amp;&amp; sudo firewall-cmd --reload</code>.</li><li><strong>Lab 3 with this install:</strong> secrets go in <code>/opt/litellm/.env</code> (not <code>litellm.env</code>). Instead of writing <code>run-litellm.sh</code>, add <code>- ./guard.py:/app/guard.py:ro,Z</code> under <code>volumes:</code> and run <code>$COMPOSE up -d</code>, which recreates the container whenever <code>.env</code> or <code>compose.yml</code> changes. After editing only <code>config.yaml</code>, run <code>$COMPOSE restart litellm</code>.</li><li>Upgrade: change the image tag, then <code>$COMPOSE pull &amp;&amp; $COMPOSE up -d</code>. Back up first with <code>$COMPOSE exec db pg_dump -U litellm litellm &gt; litellm-$(date +%F).sql</code>. Uninstall: <code>$COMPOSE down</code> (add <code>-v</code> only to delete the database).</li><li>No Docker or Podman? <code>pip install &#x27;litellm[proxy]==1.103.3&#x27;</code> in a venv, then <code>litellm --config config.yaml --port 4000</code>, works too. You&#x27;d run Postgres separately and write a systemd unit to keep it running.</li></ul>
+  <a class="top" href="#top">Back to top</a>
+</section>
 <section class="lab" id="lab-1" data-lab="1">
   <header class="labhead">
     <div class="labnum" aria-hidden="true">1</div>
@@ -334,7 +422,7 @@ unset RP</code></pre></div><h3>Notes &amp; gotchas</h3><ul><li><strong>Skip Post
     </div>
     <label class="done"><input type="checkbox" data-done="3"> Done</label>
   </header>
-  <p class="goal"><span>Goal</span>back up the running config, add two model aliases, the database, a fallback, the Redis cache, an SSN guardrail and the DeepWiki MCP server, then recreate LiteLLM on a pinned image and confirm it&#x27;s healthy.</p><p class="callout note"><strong>Layout:</strong> These steps assume a container with the config file bind-mounted at <code>/app/config.yaml</code> and secrets in an env file, a common setup. For a systemd/venv install, the YAML is the same: put <code>guard.py</code> next to the config file, add the variables to the unit&#x27;s <code>EnvironmentFile</code>, and run <code>systemctl restart</code> instead of step 6.</p><h3>1. Back up everything you&#x27;re about to touch</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>CTR=&quot;sudo podman&quot;; C=litellm; D=/opt/litellm<span class="c">        # from Lab 1</span>
+  <p class="goal"><span>Goal</span>back up the running config, add two model aliases, the database, a fallback, the Redis cache, an SSN guardrail and the DeepWiki MCP server, then recreate LiteLLM on a pinned image and confirm it&#x27;s healthy.</p><p class="callout note"><strong>Layout:</strong> Installed with Lab 0? Follow the &quot;Lab 3 with this install&quot; note at the end of Lab 0 for steps 1, 3 and 6. These steps assume a container with the config file bind-mounted at <code>/app/config.yaml</code> and secrets in an env file, a common setup. For a systemd/venv install, the YAML is the same: put <code>guard.py</code> next to the config file, add the variables to the unit&#x27;s <code>EnvironmentFile</code>, and run <code>systemctl restart</code> instead of step 6.</p><h3>1. Back up everything you&#x27;re about to touch</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>CTR=&quot;sudo podman&quot;; C=litellm; D=/opt/litellm<span class="c">        # from Lab 1</span>
 TS=$(date +%Y%m%d-%H%M%S)
 sudo cp -a $D/config.yaml   $D/config.yaml.bak-$TS
 sudo cp -a $D/litellm.env   $D/litellm.env.bak-$TS 2&gt;/dev/null
@@ -970,6 +1058,7 @@ cd ~/litellm-lab/a2a-hello &amp;&amp; docker compose up -d
 <span class="c">#   ...stop with &quot;docker compose down&quot; in each directory. Add -v only to DELETE the data volumes.</span>
 
 <span class="c"># 192.168.1.101</span>
+<span class="c"># installed with Lab 0: cd /opt/litellm &amp;&amp; sudo docker compose stop | start | up -d</span>
 sudo podman stop litellm<span class="c">        # stop</span>
 sudo podman start litellm<span class="c">       # start (same container, same settings)</span>
 sudo /opt/litellm/run-litellm.sh<span class="c">   # recreate (after editing litellm.env or the image)</span>
@@ -1078,7 +1167,7 @@ At the end, give me a short README covering what&#x27;s running where, ports, ho
   });
 
   // Done checkboxes (saved in this browser only)
-  var total = 13;
+  var total = 14;
   var saved = {};
   try { saved = JSON.parse(store.get('litellm-done') || '{}') || {}; } catch (e) { saved = {}; }
   function render() {
