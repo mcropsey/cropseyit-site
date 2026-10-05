@@ -602,9 +602,9 @@ sudo firewall-cmd --list-services       <span class="c"># should include ssh</sp
 
 sudo su - harry
 ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519   <span class="c"># -N '' = no passphrase</span>
-ssh-copy-id harry@server2.lab.example.com     <span class="c"># last password you'll type</span>
+ssh-copy-id harry@server2.lab.example.com     <span class="c"># "yes" to the host key, then the last password</span>
 
-ssh harry@server2.lab.example.com hostname
+ssh -o BatchMode=yes harry@server2.lab.example.com hostname   <span class="c"># fails, never prompts</span>
 scp test.txt harry@server2.lab.example.com:/tmp/</code></pre></div>
   <h3>Still prompting? Fix on the <em>server</em></h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo chmod 700 /home/harry/.ssh
@@ -613,11 +613,12 @@ sudo chown -R harry:harry /home/harry/.ssh
 sudo restorecon -Rv /home/harry/.ssh    <span class="c"># must be ssh_home_t</span>
 sudo journalctl -u sshd -n 20           <span class="c"># look for "bad ownership or modes"</span>
 ssh -v harry@server2.lab.example.com          <span class="c"># client side</span></code></pre></div>
-  <h3>Hardening (only once keys work &mdash; keep a root session open)</h3>
+  <h3>Hardening (only once keys work &mdash; keep a second session open)</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/01-lab.conf
 sudo sshd -t &amp;&amp; sudo systemctl reload sshd
 <span class="c"># undo: sudo rm /etc/ssh/sshd_config.d/01-lab.conf; sudo systemctl reload sshd</span></code></pre></div>
   <ul>
+    <li><strong>Hardening blocks password SSH for every user</strong>, you included. Install your own key first.</li>
     <li>sshd keeps the <strong>first</strong> value it reads per setting, and drop-ins load in name order &mdash; so <code>01-</code> beats the vendor's <code>50-redhat.conf</code>.</li>
     <li>SELinux needs no changes for normal key logins. It only bites when <code>~/.ssh</code> was created with <code>mv</code> or copied in and kept the wrong label.</li>
   </ul>
