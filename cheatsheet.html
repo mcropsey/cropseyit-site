@@ -186,8 +186,8 @@ footer { padding: 10px 24px 50px; color: var(--muted); font-size: .85rem; text-a
       <tr><td><strong>3. Never disable SELinux</strong></td><td>Read the denial, then fix the <em>label</em>, <em>port</em>, or <em>boolean</em>. <code>sudo setenforce 0</code> is a diagnostic, never a fix.</td></tr>
       <tr><td><strong>4. Persistent, not temporary</strong></td><td><code>semanage</code> + <code>restorecon</code> over <code>chcon</code>; <code>firewall-cmd --permanent</code> + <code>--reload</code>; <code>systemctl enable --now</code>, not just <code>start</code>.</td></tr>
       <tr><td><strong>5. Docs are on the exam</strong></td><td><code>man &lt;cmd&gt;</code>, <code>man 5 &lt;file&gt;</code>, the EXAMPLES section of <code>man semanage-fcontext</code>, and <code>/usr/share/doc/</code>.</td></tr>
-      <tr><td><strong>6. Match UIDs across hosts</strong></td><td>Create users in the same order on both servers. NFS maps ownership by number, not name.</td></tr>
-      <tr><td><strong>7. Snapshot before you break things</strong></td><td>Snapshot both servers after Lab 1, and again before Lab 3.</td></tr>
+      <tr><td><strong>6. Match UIDs across hosts</strong></td><td>Create users in the same order on both servers, and before Labs 6 and 11 (they add UIDs 5000 and 6969, after which <code>useradd</code> numbers new users above them). NFS maps ownership by number, not name.</td></tr>
+      <tr><td><strong>7. Snapshot before you break things</strong></td><td>Snapshot both servers after Lab 1, and again before Lab 3. Delete those snapshots (Hyper-V checkpoints) before Lab 25, or the hypervisor refuses to enlarge the disk.</td></tr>
     </tbody>
   </table></div>
   <h3>Reboot-survival checklist</h3>
