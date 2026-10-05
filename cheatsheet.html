@@ -459,7 +459,7 @@ sudo lvextend -r -l +100%FREE /dev/rl/root     <span class="c">#    grow LV + FS
     </tbody>
   </table></div>
   <div class="callout warn"><p><strong>Warning:</strong> never build an exam VG on loop devices &mdash; they don't come back after a reboot, the fstab entry fails, and the server lands in emergency mode. If you must, add <code>nofail</code>, then <code>sudo losetup</code> + <code>sudo vgchange -ay</code> after each boot.</p></div>
-  <ul><li><code>-r</code> grows the filesystem in the same step (<code>xfs_growfs</code> for XFS, <code>resize2fs</code> for ext4).</li><li>XFS <strong>cannot shrink</strong>. ext4 can, offline: <code>sudo lvreduce -r -L 400M ...</code></li></ul>
+  <ul><li><code>lvcreate</code> asks <code>Wipe it? [y/n]</code>? A leftover filesystem from an earlier attempt. Answer <code>y</code>, or use <code>lvcreate -y</code>. When tearing down: <code>wipefs -a</code> each LV before <code>vgremove</code>.</li><li><code>-r</code> grows the filesystem in the same step (<code>xfs_growfs</code> for XFS, <code>resize2fs</code> for ext4).</li><li>XFS <strong>cannot shrink</strong>. ext4 can, offline: <code>sudo lvreduce -r -L 400M ...</code></li></ul>
 </section>
 
 <section class="card" id="fstab" data-k="fstab mount uuid blkid findmnt xfs ext4 mkfs netdev daemon-reload nofail">
@@ -505,6 +505,7 @@ sudo systemctl daemon-reload
 sudo swapon -a
 swapon --show; free -h           <span class="c"># old swap + LV (/dev/dm-N) + partition</span></code></pre></div>
   <ul>
+    <li><code>findmnt --verify</code> warns <code>[W] target specified more than once</code> with several swap lines (all target <code>none</code>). Harmless.</li>
     <li>Keep the existing swap: only <strong>add</strong> fstab lines.</li>
     <li>Partition end = start + size (1MiB + 512MiB = 513MiB). MBR: <code>mklabel msdos</code>, <code>mkpart primary linux-swap ...</code>.</li>
   </ul>
