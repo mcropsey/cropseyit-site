@@ -565,7 +565,8 @@ sudo /usr/local/bin/find_small_files.sh<span class="c">    # full path: sudo&#x2
     <label class="done"><input type="checkbox" data-done="17"> Done</label>
   </header>
   <p class="goal"><span>Goal</span>reset the root password from GRUB using init=/bin/bash (rd.break no longer works).</p><h3>Steps</h3><div class="term"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code><span class="c"># GRUB steps:</span>
-<span class="c"># 1) Press &#x27;e&#x27; on the kernel entry.</span>
+<span class="c"># 1) Press &#x27;e&#x27; on the kernel entry. No menu? It&#x27;s hidden by default:</span>
+<span class="c">#    press Esc (or hold Shift) right after the VM starts.</span>
 <span class="c"># 2) Go to the end of the line that starts with &quot;linux&quot; (it wraps).</span>
 <span class="c">#    Delete any console=ttyS0,... and &quot;rhgb quiet&quot;, then append: init=/bin/bash enforcing=0</span>
 <span class="c"># 3) Boot with Ctrl+x or F10.</span>
@@ -576,7 +577,7 @@ passwd root
 touch /.autorelabel
 sync
 exec /sbin/reboot -f
-<span class="c"># if that prints an error instead of rebooting:  echo b &gt; /proc/sysrq-trigger</span></code></pre></div><h3>Verify</h3><p>The next boot runs the SELinux relabel. It takes a few minutes and then reboots again on its own, so don&#x27;t power off the VM. Then log in as root with the new password.</p><h3>Explanation</h3><p>init=/bin/bash starts a root shell as PID 1. Remount / read-write so the password change can be saved, and <code>/.autorelabel</code> relabels the filesystem on the next boot so /etc/shadow gets its correct SELinux context. No <code>sudo</code> in this lab: init=/bin/bash already gives you a root shell.</p><h3>Notes &amp; gotchas</h3><ul><li>Blank screen after Ctrl+x: a <code>console=ttyS0,...</code> option on the linux line sends the shell to the serial port. Remove it and boot again.</li><li><code>echo b &gt; /proc/sysrq-trigger</code> reboots instantly without unmounting, which is safe only after <code>sync</code>.</li><li>Faster than a full relabel: instead of <code>touch /.autorelabel</code>, run <code>load_policy -i</code> then <code>restorecon -v /etc/shadow</code> before rebooting. If in doubt, use the relabel.</li></ul>
+<span class="c"># if that prints an error instead of rebooting:  echo b &gt; /proc/sysrq-trigger</span></code></pre></div><h3>Verify</h3><p>The next boot runs the SELinux relabel. It takes a few minutes and then reboots again on its own, so don&#x27;t power off the VM. Then log in as root with the new password at the VM console, or with <code>su -</code> from your own account. Not over SSH: these VMs refuse root password logins over SSH, so it fails even when the reset worked.</p><h3>Explanation</h3><p>init=/bin/bash starts a root shell as PID 1. Remount / read-write so the password change can be saved, and <code>/.autorelabel</code> relabels the filesystem on the next boot so /etc/shadow gets its correct SELinux context. No <code>sudo</code> in this lab: init=/bin/bash already gives you a root shell.</p><h3>Notes &amp; gotchas</h3><ul><li>Blank screen after Ctrl+x: a <code>console=ttyS0,...</code> option on the linux line sends the shell to the serial port. Remove it and boot again.</li><li><code>echo b &gt; /proc/sysrq-trigger</code> reboots instantly without unmounting, which is safe only after <code>sync</code>.</li><li>Faster than a full relabel: instead of <code>touch /.autorelabel</code>, run <code>load_policy -i</code> then <code>restorecon -v /etc/shadow</code> before rebooting. If in doubt, use the relabel.</li></ul>
   <a class="top" href="#top">Back to top</a>
 </section>
 <section class="lab" id="lab-18" data-lab="18">
