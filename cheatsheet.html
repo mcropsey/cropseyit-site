@@ -375,7 +375,7 @@ ls -ld /srv/common_admin          <span class="c"># drwxrws--- root admin</span>
 sudo setfacl -m u:harry:rw- /var/tmp/fstab
 sudo setfacl -m u:natasha:--- /var/tmp/fstab
 getfacl /var/tmp/fstab
-ls -l /var/tmp/fstab              <span class="c"># note the trailing "+"</span>
+ls -l /var/tmp/fstab              <span class="c"># -rw-rw-r--+ : group bits show the ACL mask</span>
 
 sudo setfacl -x u:natasha /var/tmp/fstab <span class="c"># remove one entry</span>
 sudo setfacl -b /var/tmp/fstab        <span class="c"># remove all ACLs</span></code></pre></div>
