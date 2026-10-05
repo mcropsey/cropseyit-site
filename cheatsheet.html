@@ -258,7 +258,7 @@ sudo dnf -y install policycoreutils-python-utils setroubleshoot-server</code></p
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo ausearch -m avc -ts recent -i     <span class="c"># "recent" = last 10 minutes</span>
 sudo ausearch -m avc -ts recent | sudo audit2why <span class="c"># SELinux explains the cause</span>
 sudo sealert -a /var/log/audit/audit.log <span class="c"># analysis + suggested fix</span>
-sudo journalctl -t setroubleshoot --since "-10min"</code></pre></div>
+sudo journalctl -t setroubleshoot --since "-10min"  <span class="c"># empty? wait a few seconds</span></code></pre></div>
   <h3>Fix a file-context denial</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>ls -Zd /webdata                        <span class="c"># default_t = wrong</span>
 sudo semanage fcontext -a -t httpd_sys_content_t "/webdata(/.*)?"
