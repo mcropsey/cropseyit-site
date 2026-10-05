@@ -204,7 +204,7 @@ sudo ausearch -m avc -ts boot <span class="c"># want: &lt;no matches&gt;</span><
   <h3>Find the real connection name first</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>nmcli con show
 nmcli -t -f NAME,DEVICE con show --active
-CON="ens160"   <span class="c"># often the device name, not "Wired connection 1"</span></code></pre></div>
+CON="eth0"     <span class="c"># your VMs: eth0. Often the device name, not "Wired connection 1"</span></code></pre></div>
   <h3>Static address + hostname</h3>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo hostnamectl set-hostname server1.lab.example.com
 sudo nmcli con mod "$CON" ipv4.addresses 192.168.1.103/24 ipv4.gateway 192.168.1.1 \
@@ -303,7 +303,7 @@ sudo dnf repolist</code></pre></div>
 sudo dnf repolist -v | grep -E 'Repo-id|Repo-pkgs'
 sudo dnf info nfs-utils | grep -i repo  <span class="c"># which repo would serve it</span>
 sudo dnf --disablerepo=&lt;id&gt; install ... <span class="c"># skip a broken repo</span>
-sudo dnf config-manager --disable &lt;id&gt;</code></pre></div>
+sudo dnf config-manager --set-disabled &lt;id&gt;  <span class="c"># --disable needs --save</span></code></pre></div>
   <div class="callout warn"><p><strong>Two classic errors:</strong> <code>$releasever</code> and <code>$basearch</code> are <em>dnf</em> variables &mdash; in a shell command like <code>curl</code> they expand to nothing. And <code>sudo dnf config-manager --add-repo</code> writes no <code>gpgcheck=</code>/<code>gpgkey=</code> lines &mdash; check the file it creates.</p></div>
   <ul><li>One failing repo stops <em>every</em> dnf command. If a task says to verify signatures, use <code>gpgcheck=1</code> plus <code>gpgkey=</code> or <code>sudo rpm --import</code> the key it gives you.</li></ul>
 </section>
@@ -519,17 +519,18 @@ sudo systemctl daemon-reload
 sudo mount -a
 findmnt -t nfs4</code></pre></div>
   <h3>autofs: remote home dirs, 30-second timeout</h3>
-  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>echo '/home/guests  /etc/auto.guests  --timeout=30' | sudo tee /etc/auto.master.d/guests.autofs
+  <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo useradd -u 5000 -M -d /home/guests/remoteuser1 remoteuser1   <span class="c"># UID must match utility's</span>
+echo '/home/guests  /etc/auto.guests  --timeout=30' | sudo tee /etc/auto.master.d/guests.autofs
 echo '*  -fstype=nfs,rw  utility.lab.example.com:/home/guests/&amp;' | sudo tee /etc/auto.guests
 sudo systemctl enable autofs
 sudo systemctl restart autofs       <span class="c"># RESTART, so maps are re-read</span>
 
 ls /home/guests                     <span class="c"># empty is normal -- keys appear on access</span>
-ls /home/guests/remoteuser1         <span class="c"># this triggers the mount</span>
+sudo su - remoteuser1 -c pwd       <span class="c"># login triggers the mount</span>
 mount | grep /home/guests
 sleep 40; mount | grep /home/guests <span class="c"># gone after 30s idle</span></code></pre></div>
   <div class="callout warn"><p><strong>Traps:</strong> <code>systemctl enable --now autofs</code> does <em>not</em> reload maps if autofs was already running &mdash; restart it. Don't <code>cd</code> into an automount before testing the idle timeout. In the wildcard map, <code>*</code> matches the directory name and <code>&amp;</code> is replaced by it.</p></div>
-  <ul><li>utility exports <code>/exports/data</code> (rw), <code>/exports/docs</code> (ro), <code>/home/guests</code> (rw).</li></ul>
+  <ul><li>utility exports <code>/exports/data</code> (rw), <code>/exports/docs</code> (ro), <code>/home/guests</code> (rw, holds remoteuser1, UID 5000).</li><li>SSH logins into NFS homes also need <code>sudo setsebool -P use_nfs_home_dirs on</code>.</li></ul>
 </section>
 
 <section class="card" id="systemd" data-k="systemd systemctl journalctl enable start status unit service failed boot priority">
@@ -705,15 +706,15 @@ sudo /usr/local/bin/find_small_files.sh  <span class="c"># full path: sudo's PAT
   <h2>tuned &amp; process priority<span class="ix">Lab 21</span></h2>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>sudo dnf -y install tuned; sudo systemctl enable --now tuned
 tuned-adm list
-tuned-adm recommended
-sudo tuned-adm profile $(tuned-adm recommended)
+tuned-adm recommend              <span class="c"># NOT "recommended"</span>
+sudo tuned-adm profile $(tuned-adm recommend)
 tuned-adm active
 sudo tuned-adm verify            <span class="c"># "Verification succeeded"</span></code></pre></div>
   <div class="t"><button class="copy" type="button" aria-label="Copy commands">Copy</button><pre><code>nice -n 10 sleep 600 &amp;           <span class="c"># start with a nice value</span>
 ps -o pid,ni,comm -p $!
 renice -n 5 -p $!                <span class="c"># change a running process</span>
 kill $!</code></pre></div>
-  <ul><li>Use the profile the task <em>names</em>; use <code>recommended</code> only when the task says "recommended". The choice persists in <code>/etc/tuned/active_profile</code> automatically.</li></ul>
+  <ul><li>Use the profile the task <em>names</em>; use <code>tuned-adm recommend</code> only when the task says "recommended". The choice persists in <code>/etc/tuned/active_profile</code> automatically.</li></ul>
 </section>
 
 <section class="card" id="flatpak" data-k="flatpak remote flathub install uninstall unused runtime search">
