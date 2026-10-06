@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Build litellm.html (LiteLLM AI Gateway Lab Workbook) in the style of rhcsa.html.
+"""Build litellm.html (LiteLLM Gateway Labs: chat and agents) in the style of rhcsa.html.
 
 Usage: python3 tools/gen_litellm.py [SITE_DIR]
-Reads rhcsa.html for the shared <style> and <script>, writes litellm.html. Edit the
-lab content here, regenerate, then copy litellm.html to /var/www/html.
+Reads rhcsa.html for the shared <style> and <script>, and the Python programs the labs
+publish from tools/litellm-src/, then writes litellm.html. Edit the lab content here (or
+the programs in litellm-src, which were tested against LiteLLM v1.104.0), regenerate,
+then copy litellm.html to /var/www/html.
 """
 import html
 import os
@@ -14,14 +16,19 @@ SITE = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.
 rh = open(f'{SITE}/rhcsa.html', encoding='utf-8').read()
 STYLE = re.search(r'<style>.*?</style>', rh, re.S).group(0)
 SCRIPT = re.search(r'<script>.*?</script>', rh, re.S).group(0)
+SRC = f'{SITE}/tools/litellm-src'
 
 e = html.escape
 
 
-def code(src):
+def src(name):
+    return open(f'{SRC}/{name}', encoding='utf-8').read().rstrip('\n')
+
+
+def code(text):
     """Escape a code block and dim full-line and trailing '  # ' comments."""
     out = []
-    for line in src.strip('\n').split('\n'):
+    for line in text.strip('\n').split('\n'):
         s = line.lstrip()
         if s.startswith('#') and not s.startswith('#!'):
             out.append(f'<span class="c">{e(line)}</span>')
@@ -35,8 +42,18 @@ def code(src):
             '<pre><code>' + '\n'.join(out) + '</code></pre></div>')
 
 
+def write_file(path, name, sudo=False):
+    """A code block that saves one of the tested programs to PATH with a heredoc."""
+    cmd = f"sudo tee {path} >/dev/null <<'EOF'" if sudo else f"cat > {path} <<'EOF'"
+    return code(f"{cmd}\n{src(name)}\nEOF")
+
+
 def ul(items):
     return '<ul>' + ''.join(f'<li>{i}</li>' for i in items) + '</ul>'
+
+
+def ol(items):
+    return '<ol>' + ''.join(f'<li>{i}</li>' for i in items) + '</ol>'
 
 
 def table(head, rows):
@@ -86,1340 +103,1048 @@ def lab(n, title, hosts, *parts):
 '''
 
 
-C = '<code>{}</code>'.format
-
 # ---------------------------------------------------------------- overview
 overview = f'''<section class="intro" id="overview">
-  <h1>LiteLLM AI Gateway Labs</h1>
-  <p class="sub">Hands-on labs for running an AI gateway in a two-host home lab: one API for many models, fallbacks, virtual keys and budgets, caching, guardrails, observability, MCP, Claude Code and A2A agents.</p>
-  <p>Hosts: <strong>docker</strong> = 192.168.1.100 (Postgres, Redis, Langfuse, the A2A agent) | <strong>gateway</strong> = 192.168.1.101 (an <em>existing</em> LiteLLM proxy on port 4000) | <strong>workstation</strong> = wherever you run curl, jq and the check scripts.</p>
-  <p>These labs assume LiteLLM is already running and add to it rather than replacing it. If you don&#x27;t have one yet, Lab 0 installs it. Lab 1 is read-only, Lab 2 only touches .100, and Lab 3 is the one change window on .101, with a backup taken first and a rollback in <a href="#readme">Appendix B</a>. Labs 4&ndash;13 exercise what Lab 3 turned on, and each ends with a small check script so you can re-run every lab at once (<a href="#runner">Appendix A</a>).</p>
-  <h2>What runs where</h2>
-  <p>Only LiteLLM needs to exist before you start, and Lab 0 installs it if it doesn&#x27;t. You build everything on .100 during the labs.</p>
-  {table(['Host', 'Service', 'Port', 'Set up in', 'Used by'], [
-      ['192.168.1.101', 'LiteLLM proxy + admin UI (<code>/ui</code>)', '4000', '<strong>Already running</strong>, or install it in Lab 0; config changed in Lab 3', 'every lab'],
-      ['192.168.1.100', 'Postgres 16 (virtual keys, teams, spend logs)', '5432', 'Lab 2, <strong>skip</strong> if Lab 1 shows <code>&quot;db&quot;: &quot;connected&quot;</code>', 'Labs 3, 6, 9'],
-      ['192.168.1.100', 'Redis 7 (response cache)', '6379', 'Lab 2', 'Labs 3, 7'],
-      ['192.168.1.100', 'Langfuse web', '3000', 'Lab 9, Part B (optional)', 'Lab 9'],
-      ['192.168.1.100', 'A2A Hello World agent', '9999', 'Lab 12', 'Lab 12'],
-      ['internet', 'OpenAI, Anthropic, mcp.deepwiki.com', '443', 'Nothing to install; you need OpenAI and Anthropic API keys', 'Labs 4&ndash;12'],
-  ])}
-  <h2>Ground rules</h2>
-  <ul>
-    <li><strong>Look before you change.</strong> Don&#x27;t modify or restart the existing LiteLLM until you&#x27;ve read its config (Lab 1) and backed it up (Lab 3).</li>
-    <li><strong>Never print a key in full.</strong> Read secrets with <code>read -rsp</code> so they stay out of shell history, and show only the last four characters: <code>echo &quot;****${{KEY: -4}}&quot;</code>.</li>
-    <li><strong>Pin every image.</strong> No <code>latest</code>, <code>main-stable</code> or bare major tags. LiteLLM had a PyPI supply-chain incident in March 2026, so know exactly which build you run and pin it by version or digest.</li>
-    <li><strong>Use real IPs across hosts.</strong> From .101, the services on .100 are <code>192.168.1.100</code>. Inside a container, <code>localhost</code> and <code>host.docker.internal</code> point at that container or its own host, never at the other machine.</li>
-    <li><strong>One phase at a time.</strong> Finish a lab, verify it, then move on. If something fails, find out whether it&#x27;s networking, config, version or license tier before you change anything.</li>
-  </ul>
-  <h2>What you need</h2>
-  <ul>
-    <li>SSH with sudo on both hosts. Docker with the Compose plugin on .100. LiteLLM on .101 (Docker, Podman, systemd or a venv; Lab 1 finds out which), or let Lab 0 install it.</li>
-    <li>An OpenAI API key and an Anthropic API key for the <code>gpt-mini</code> and <code>claude-fast</code> aliases. No cloud keys? Point both aliases at local models instead (see Lab 3 notes); everything except the provider names still works.</li>
-    <li>On the workstation: <code>curl</code>, <code>jq</code> and <code>bash</code>. Python 3 is optional (Lab 4).</li>
-    <li>LiteLLM <strong>1.80 or newer</strong> for the A2A gateway. These labs were written against <strong>v1.103.0</strong>. All features used here are in the open-source build; none need an enterprise license.</li>
-  </ul>
-  <h2>Workstation setup (do this once per shell)</h2>
-  <p>Every check script sources a shared <code>labs/common.sh</code>. Create it now, then export the gateway URL and master key in each new shell.</p>
-  {code(r"""
-mkdir -p ~/litellm-labs/labs && cd ~/litellm-labs
-cat > labs/common.sh <<'EOF'
-# labs/common.sh: sourced by every check script
-GW=${GW:-http://192.168.1.101:4000}
-: "${MK:?set the master key first: read -rsp 'Master key: ' MK; export MK}"
-OUT=${TMPDIR:-/tmp}/litellm-lab.$$.json
-HDR=${TMPDIR:-/tmp}/litellm-lab.$$.hdr
-trap 'rm -f "$OUT" "$HDR"' EXIT
-mask() { printf '****%s' "${1: -4}"; }
-# chat KEY MODEL PROMPT [EXTRA_JSON]: prints the HTTP code; body in $OUT, headers in $HDR
-chat() {
-  local extra=${4:-}; [ -n "$extra" ] || extra='{}'
-  curl -s -o "$OUT" -D "$HDR" -w '%{http_code}' "$GW/v1/chat/completions" \
-    -H "Authorization: Bearer $1" -H 'Content-Type: application/json' \
-    -d "$(jq -n --arg m "$2" --arg p "$3" --argjson x "$extra" \
-          '{model:$m, messages:[{role:"user", content:$p}]} + $x')"
-}
-# api METHOD PATH [JSON]: admin call with the master key
-api() { curl -s -X "$1" "$GW$2" -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' ${3:+-d "$3"}; }
-hdr() { grep -i "^$1:" "$HDR" | head -1 | cut -d' ' -f2- | tr -d '\r'; }
-pass() { echo "PASS  $*"; exit 0; }
-fail() { echo "FAIL  $*"; exit 1; }
-EOF
+  <h1>LiteLLM Gateway Labs: Chat &amp; Agents</h1>
+  <p class="sub">Hands-on labs for sending every chat and every AI agent in a home lab through one LiteLLM gateway: one address, one key per app, and one log of who asked what.</p>
+  <p>You&#x27;ll start with plain chat requests, put a chat web UI in front of the gateway, then build five agents: a single tool-using agent, agents running as always-on services, agents published through the gateway over A2A, an agent whose tools come from an MCP server, and a coordinator that hands work to the other agents. Lab 10 then points a coding agent at the gateway too.</p>
 
-export GW=http://192.168.1.101:4000
-read -rsp 'Master key: ' MK; echo; export MK
-echo "master key ****${MK: -4}"
-""")}
-  <h2>Lab order &amp; dependencies</h2>
-  {table(['Lab', 'Needs first', 'Notes'], [
-      ['0 Install', 'none', 'Only if LiteLLM isn&#x27;t running yet; gives it its own Postgres on .101'],
-      ['1 Discover', 'none', 'Read-only; tells you which parts of Labs 2&ndash;3 you can skip'],
-      ['2 Services on .100', '1', 'Postgres + Redis; skip Postgres if Lab 1 shows a working database'],
-      ['3 Wire up LiteLLM', '1, 2', 'The only change to .101; adds models, cache, guardrail, MCP'],
-      ['4&ndash;8, 10, 13', '3', 'Independent of each other; any order'],
-      ['9 Observability', '3', 'Langfuse part is optional and needs ~4 GB free RAM on .100'],
-      ['11 Claude Code', '3, 6', 'Uses a virtual key, so do Lab 6 first'],
-      ['12 A2A', '3', 'Builds the agent on .100, registers it on .101'],
+  <h2>The hosts</h2>
+  {table(['Host', 'Role', 'What runs there'], [
+      ['<strong>gateway</strong> 192.168.1.101', 'The LiteLLM gateway, port 4000', 'LiteLLM and its Postgres database. <strong>Assumed to be running already</strong>; Lab 0 shows a basic install if it isn&#x27;t.'],
+      ['<strong>agent host</strong> 192.168.1.100', 'Everything you build, and where you type the commands', 'Open WebUI (3000), ops-agent (8601), writer-agent (8602), the lab-tools MCP server (8701), and your Python scripts'],
+      ['<strong>model server</strong> 192.168.1.194', 'Where the model actually runs', 'LM Studio on port 1234 serving <code>qwen/qwen3.8-27b</code>. Any OpenAI-compatible server, or a cloud provider, works the same way.'],
+  ])}
+  <p>Nothing talks to the model server directly. The chat UI, the agents and the coding agent all send their requests to the gateway, and the gateway checks the key and forwards the request to the model. That&#x27;s what lets you swap models, limit an app, or see what an agent did, in one place.</p>
+
+  <h2>Podman, and keeping things running after a reboot</h2>
+  <p>Every container in these labs runs under <strong>rootful Podman</strong> (<code>sudo podman</code>); there&#x27;s no Docker anywhere. A container started with plain <code>podman run</code> stops when the host reboots and stays stopped, because there&#x27;s no always-running daemon to bring it back, as there is with Docker. There are two ways to fix that:</p>
+  {table(['Approach', 'How it works', 'Use it when'], [
+      ['<strong>Quadlet</strong> (used in every lab)', 'You write a small <code>.container</code> file in <code>/etc/containers/systemd/</code>. Podman turns it into a normal systemd service, so <code>systemctl start</code>, <code>status</code>, <code>restart</code> and <code>journalctl</code> all work, and the <code>[Install]</code> section starts it at boot.', 'Anything that should keep running. This is the Red Hat-recommended way on Podman 4.4 and newer (Rocky 9 and 10 have Podman 5).'],
+      ['<code>podman run --restart=always</code> plus <code>podman-restart.service</code>', '<code>--restart=always</code> restarts a crashed container. After a reboot, <code>podman-restart.service</code> (if it&#x27;s enabled) starts every container that has that restart policy.', 'A quick fix for a container someone already started by hand. Lab 1 shows how to check for this and how to convert to a Quadlet.'],
+  ])}
+  <p>A Quadlet file has three sections: <code>[Unit]</code> (a description and what it depends on), <code>[Container]</code> (everything you&#x27;d otherwise type after <code>podman run</code>: image, ports, volumes, environment), and <code>[Service]</code>/<code>[Install]</code> (systemd&#x27;s restart policy and &quot;start at boot&quot;). After adding or changing one, run <code>sudo systemctl daemon-reload</code> so systemd regenerates the service. You don&#x27;t run <code>systemctl enable</code> on Quadlet services; the <code>[Install]</code> section takes care of that.</p>
+
+  <h2>Before you start</h2>
+  <ul>
+    <li>SSH with sudo on 192.168.1.100 and 192.168.1.101, both Rocky Linux 9 or 10 with Podman 5.</li>
+    <li>LiteLLM running on .101 with a <strong>master key</strong> and a <strong>database</strong> (virtual keys, used from Lab 3 on, need the database). Lab 1 checks both.</li>
+    <li>A model that can call tools. These labs use <code>qwen/qwen3.8-27b</code> in LM Studio. In LM Studio, set its default <strong>context length to at least 32k</strong> (gear icon on the model, then Context Length). LM Studio loads models on demand with that setting, and a small default leaves a &quot;thinking&quot; model no room to answer.</li>
+    <li>The labs were tested with LiteLLM <strong>v1.104.0</strong>, Podman 5.8, Python 3.12, <code>openai</code> 3.24, <code>mcp</code> 2.3 and <code>a2a-sdk</code> 1.2.</li>
+  </ul>
+
+  <h2>Lab order</h2>
+  {table(['Lab', 'What you build', 'Needs'], [
+      ['0', 'A basic LiteLLM install with Podman (reference; skip if you have one)', 'none'],
+      ['1', 'Check the gateway, make it survive reboots, add the lab model names', '0 or an existing gateway'],
+      ['2&ndash;4', 'Chat: curl and Python, virtual keys, a chat web UI', '1'],
+      ['5&ndash;9', 'Agents: first agent, agents as services, A2A through the gateway, MCP tools, a coordinator', '1, 3'],
+      ['10', 'A coding agent (opencode or Claude Code) through the gateway', '1, 3 (8 for MCP)'],
+      ['11', 'Operate it: reboot test, logs, usage per agent, kill switch, upgrades', 'any'],
   ])}
 </section>
 '''
 
-
 # ---------------------------------------------------------------- lab 0
-L0 = lab(0, 'Install LiteLLM (skip if it is already running)', '192.168.1.101',
-    goal('install a LiteLLM proxy on .101 from scratch: a pinned image, its own Postgres for keys and spend logs, a master key, and the admin UI, all with Docker Compose (or Podman), so the rest of the labs have something to work on.'),
-    note('If <code>curl http://192.168.1.101:4000/health/liveliness</code> already answers, skip to Lab 1. Lab 1 examines the gateway you already have, whoever installed it.', 'Already have LiteLLM?'),
-    h3('1. A container runtime with Compose'),
+L0 = lab(0, 'A Basic LiteLLM Install with Podman', '192.168.1.101 (skip if LiteLLM is already running)',
+    goal('see what a minimal LiteLLM install looks like: a config file, an env file of secrets, and two Quadlet units (LiteLLM and its Postgres database) that start at boot.'),
+    note('If <code>curl -s http://192.168.1.101:4000/health/liveliness</code> already answers, read this lab for reference and go to Lab 1.', 'Already have LiteLLM?'),
+    h3('1. Podman and a directory for the gateway'),
     code(r"""
-ssh "$USER"@192.168.1.101   # your login on .101
-
-# Option A: Docker (a fresh Rocky/RHEL 9 or 10 host)
-sudo dnf -y install dnf-plugins-core
-sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
-sudo systemctl enable --now docker
-COMPOSE="sudo docker compose"
-
-# Option B: the host already runs Podman (don't install Docker beside it)
-sudo dnf -y install epel-release && sudo dnf -y install podman-compose
-COMPOSE="sudo podman compose"
-
-$COMPOSE version
+sudo dnf -y install podman
+podman --version                           # 5.x
+sudo mkdir -p /opt/litellm
 """),
-    h3('2. Secrets in .env'),
+    h3('2. Secrets'),
+    p('Two env files hold everything secret. Podman reads them when it starts each container, so the secrets never appear in the config file or in <code>ps</code> output. <code>openssl rand -hex 24</code> generates a random password; the master key must start with <code>sk-</code>.'),
     code(r"""
-sudo mkdir -p /opt/litellm && cd /opt/litellm
-sudo touch .env && sudo chmod 600 .env
-read -rsp 'Admin UI password: ' UIP; echo
+sudo install -m 600 /dev/null /opt/litellm/litellm.env      # create both files, readable by root only
+sudo install -m 600 /dev/null /opt/litellm/db.env
+DBPASS=$(openssl rand -hex 24)
+read -rsp 'Admin UI password: ' UIPASS; echo
+
+printf '%s\n' "POSTGRES_USER=litellm" "POSTGRES_PASSWORD=$DBPASS" "POSTGRES_DB=litellm" \
+  | sudo tee /opt/litellm/db.env >/dev/null
+
 printf '%s\n' \
   "LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)" \
   "LITELLM_SALT_KEY=sk-$(openssl rand -hex 24)" \
-  "POSTGRES_PASSWORD=$(openssl rand -hex 24)" \
-  "UI_USERNAME=admin" "UI_PASSWORD=$UIP" | sudo tee .env >/dev/null
-unset UIP
-sudo sed -E 's/=(.*)(.{4})$/=****\2/' .env       # masked check
+  "DATABASE_URL=postgresql://litellm:$DBPASS@litellm-db:5432/litellm" \
+  "UI_USERNAME=admin" "UI_PASSWORD=$UIPASS" \
+  "LMSTUDIO_API_BASE=http://192.168.1.194:1234/v1" \
+  | sudo tee /opt/litellm/litellm.env >/dev/null
+unset DBPASS UIPASS
 """),
-    h3('3. A starter config.yaml'),
-    p('One mock model is enough to prove the install works, with no provider keys yet. Lab 3 adds the real models.'),
+    h3('3. The config file'),
+    p('<code>model_list</code> maps the names clients ask for (<code>lab-chat</code>, <code>lab-agent</code>) to a real model. <code>os.environ/NAME</code> tells LiteLLM to read a value from the environment. Lab 1 explains these names.'),
     code(r"""
 sudo tee /opt/litellm/config.yaml >/dev/null <<'EOF'
 model_list:
-  - model_name: echo-test             # answers without calling any provider
+  - model_name: lab-chat
     litellm_params:
-      model: openai/echo-test
-      mock_response: "Hello from LiteLLM. The install works."
+      model: openai/qwen/qwen3.8-27b       # "openai/" = speak the OpenAI API to this server
+      api_base: os.environ/LMSTUDIO_API_BASE
+      api_key: not-needed
+  - model_name: lab-agent
+    litellm_params:
+      model: openai/qwen/qwen3.8-27b
+      api_base: os.environ/LMSTUDIO_API_BASE
+      api_key: not-needed
 
 litellm_settings:
-  drop_params: true
+  drop_params: true          # ignore request options the model server doesn't support
+  request_timeout: 600       # local models can be slow on long prompts
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
 EOF
 """),
-    h3('4. compose.yml: LiteLLM + Postgres'),
+    h3('4. The Quadlet units'),
+    p('Four small files: a private network so LiteLLM can reach the database by the name <code>litellm-db</code>, a named volume for the database files, and one <code>.container</code> file per container. <code>Requires=</code> and <code>After=</code> make systemd start the database first, and <code>Notify=healthy</code> makes it wait until Postgres actually answers.'),
     code(r"""
-sudo tee /opt/litellm/compose.yml >/dev/null <<'EOF'
-name: litellm
-services:
-  litellm:
-    image: ghcr.io/berriai/litellm:v1.103.3
-    restart: unless-stopped
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@db:5432/litellm
-    ports: ["0.0.0.0:4000:4000"]
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro,Z
-    depends_on:
-      db:
-        condition: service_healthy
+sudo tee /etc/containers/systemd/litellm.network >/dev/null <<'EOF'
+[Network]
+NetworkName=litellm
+EOF
 
-  db:
-    image: docker.io/library/postgres:16.15
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: litellm
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: litellm
-    volumes: [pgdata:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
-      interval: 10s
-      retries: 5
+sudo tee /etc/containers/systemd/litellm-db.volume >/dev/null <<'EOF'
+[Volume]
+VolumeName=litellm-db
+EOF
 
-volumes:
-  pgdata:
+sudo tee /etc/containers/systemd/litellm-db.container >/dev/null <<'EOF'
+[Unit]
+Description=Postgres for LiteLLM
+
+[Container]
+ContainerName=litellm-db
+Image=docker.io/library/postgres:16.15
+Network=litellm.network
+Volume=litellm-db.volume:/var/lib/postgresql/data
+EnvironmentFile=/opt/litellm/db.env
+HealthCmd=pg_isready -U litellm -d litellm
+HealthInterval=10s
+Notify=healthy
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee /etc/containers/systemd/litellm.container >/dev/null <<'EOF'
+[Unit]
+Description=LiteLLM AI gateway
+Requires=litellm-db.service
+After=litellm-db.service
+
+[Container]
+ContainerName=litellm
+Image=ghcr.io/berriai/litellm:v1.104.0
+Network=litellm.network
+PublishPort=4000:4000
+EnvironmentFile=/opt/litellm/litellm.env
+Volume=/opt/litellm/config.yaml:/app/config.yaml:ro,Z
+Exec=--config /app/config.yaml --port 4000
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
 EOF
 """),
     h3('5. Start it'),
     code(r"""
-cd /opt/litellm
-$COMPOSE up -d
-$COMPOSE logs -f litellm 2>&1 | grep -m1 -E 'Uvicorn running|Error|Traceback'    # first start: 1-2 min of DB migrations
-$COMPOSE ps
+sudo systemctl daemon-reload               # turn the Quadlet files into services
+sudo systemctl start litellm               # starts litellm-db first; the first start pulls the images
+systemctl status litellm --no-pager
+sudo firewall-cmd --permanent --add-port=4000/tcp && sudo firewall-cmd --reload   # if firewalld is running
 """),
-    h3('Verify (from the workstation)'),
+    h3('Verify'),
     code(r"""
-GW=http://192.168.1.101:4000
-curl -s $GW/health/liveliness; echo                    # "I'm alive!"
-curl -s $GW/health/readiness | jq '{status, db}'        # db: "connected"
-curl -s $GW/openapi.json | jq -r .info.version          # 1.103.3
-read -rsp 'Master key (from /opt/litellm/.env): ' MK; echo; export MK GW
-curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d '{"model":"echo-test","messages":[{"role":"user","content":"hi"}]}' | jq -r '.choices[0].message.content'
+curl -s http://192.168.1.101:4000/health/liveliness; echo     # "I'm alive!"
+curl -s http://192.168.1.101:4000/health/readiness             # "db": "connected"
 """),
-    p('Then open <code>http://192.168.1.101:4000/ui</code> and log in as <code>admin</code> with the UI password you chose.'),
-    h3('Notes &amp; gotchas'),
-    warn('Pin the version. <code>v1.103.3</code> was the newest patch of the release these labs were tested on (v1.104.0 also existed). Don&#x27;t use <code>main-latest</code> or <code>main-stable</code>, and never <code>pip install litellm</code> without a version: compromised releases were published to PyPI in March 2026. For full reproducibility, pin the digest: <code>sudo docker image inspect --format &#x27;{{index .RepoDigests 0}}&#x27; ghcr.io/berriai/litellm:v1.103.3</code>.'),
+    p('Then log in to the admin UI at <code>http://192.168.1.101:4000/ui</code> as <code>admin</code> with the password you chose. To prove it survives a reboot, run <code>sudo systemctl reboot</code>, wait, and repeat the two <code>curl</code> commands.'),
+    h3('Notes'),
     ul([
-        'With this install, LiteLLM&#x27;s database runs right here on .101, so <strong>skip Postgres in Lab 2</strong> and set up only Redis there.',
-        '<code>LITELLM_SALT_KEY</code> encrypts provider keys stored in the database. Set it before adding any model or credential in the UI and never change it afterwards, or the stored keys become unreadable.',
-        'The master key must start with <code>sk-</code>. Keep it for admin work only; Labs 6, 11 and 12 show how to hand out limited virtual keys instead.',
-        'Postgres isn&#x27;t published to the network; only LiteLLM reaches it, over the compose network by the name <code>db</code>.',
-        'If the workstation can&#x27;t reach port 4000 but <code>curl localhost:4000/health/liveliness</code> works on .101, open the firewall: <code>sudo firewall-cmd --permanent --add-port=4000/tcp &amp;&amp; sudo firewall-cmd --reload</code>.',
-        '<strong>Lab 3 with this install:</strong> secrets go in <code>/opt/litellm/.env</code> (not <code>litellm.env</code>). Instead of writing <code>run-litellm.sh</code>, add <code>- ./guard.py:/app/guard.py:ro,Z</code> under <code>volumes:</code> and run <code>$COMPOSE up -d</code>, which recreates the container whenever <code>.env</code> or <code>compose.yml</code> changes. After editing only <code>config.yaml</code>, run <code>$COMPOSE restart litellm</code>.',
-        'Upgrade: change the image tag, then <code>$COMPOSE pull &amp;&amp; $COMPOSE up -d</code>. Back up first with <code>$COMPOSE exec db pg_dump -U litellm litellm &gt; litellm-$(date +%F).sql</code>. Uninstall: <code>$COMPOSE down</code> (add <code>-v</code> only to delete the database).',
-        'No Docker or Podman? <code>pip install &#x27;litellm[proxy]==1.103.3&#x27;</code> in a venv, then <code>litellm --config config.yaml --port 4000</code>, works too. You&#x27;d run Postgres separately and write a systemd unit to keep it running.',
+        'The first start runs database migrations and can take a minute or two. <code>sudo journalctl -u litellm -f</code> shows progress; wait for <code>Uvicorn running on http://0.0.0.0:4000</code>.',
+        'Pin the image to a version (<code>v1.104.0</code>), not <code>main-stable</code> or <code>latest</code>, so a restart never silently changes the build you run. Lab 11 shows how to upgrade on purpose.',
+        '<code>LITELLM_SALT_KEY</code> encrypts any provider keys you later store through the UI. Never change it after that, or LiteLLM can&#x27;t decrypt them.',
+        '<code>:Z</code> on the config mount relabels the file for SELinux. Without it the container gets &quot;permission denied&quot; reading <code>config.yaml</code>.',
+        'Postgres isn&#x27;t published on the network at all. Only LiteLLM reaches it, over the private <code>litellm</code> network.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 1
-L1 = lab(1, 'Discover the Existing Gateway (read-only)', 'workstation and 192.168.1.101',
-    goal('find out how LiteLLM is deployed on .101, which version it runs, where its config lives, and which pieces these labs need are missing, without changing anything.'),
-    h3('1. Is it up, and which version?'),
+L1 = lab(1, 'Check the Gateway and Add the Lab Models', '192.168.1.101, tested from 192.168.1.100',
+    goal('confirm the gateway is healthy and has a database, make sure it comes back after a reboot, and give it two model names, <code>lab-chat</code> and <code>lab-agent</code>, that the rest of the labs use.'),
+    h3('1. Set up your shell on the agent host'),
+    p('You type every command from here on on <strong>192.168.1.100</strong> unless a step says otherwise. Two shell variables hold the gateway address and the <strong>master key</strong>, LiteLLM&#x27;s admin password. Find the key on .101 with <code>sudo grep LITELLM_MASTER_KEY /opt/litellm/litellm.env</code>. <code>read -rsp</code> reads it without echoing it or saving it in your shell history.'),
     code(r"""
-GW=http://192.168.1.101:4000
-curl -s $GW/health/liveliness; echo                  # "I'm alive!"
-curl -s $GW/health/readiness | jq                     # "db": "connected" means Postgres is wired up
-curl -s $GW/openapi.json | jq -r .info.version        # the LiteLLM version, no key needed
+ssh 192.168.1.100
+sudo dnf -y install jq                     # pretty-prints and filters JSON answers
+export GW=http://192.168.1.101:4000
+read -rsp 'LiteLLM master key: ' MK; echo; export MK
 """),
-    h3('2. How is it deployed?'),
+    note('Put the <code>export GW=...</code> line in <code>~/.bashrc</code> so new shells have it. Don&#x27;t do that with the master key; re-enter it when you need it.', 'Tip:'),
+    h3('2. Is it healthy?'),
     code(r"""
-ssh "$USER"@192.168.1.101   # your login on .101
-sudo docker ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}' 2>/dev/null
-sudo podman ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}' 2>/dev/null
-systemctl list-units --all --no-pager | grep -i litellm   # systemd unit or Podman quadlet?
-pgrep -af 'litellm|uvicorn'                               # pip/venv install shows up here
+curl -s $GW/health/liveliness; echo                        # "I'm alive!" (no key needed)
+curl -s $GW/health/readiness | jq '{status, db}'            # db must be "connected"
+curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'   # models it serves now
 """),
-    p('If it&#x27;s a container, set two variables from that output and inspect it:'),
+    p('If <code>db</code> isn&#x27;t <code>connected</code>, chat still works, but virtual keys (Lab 3) and everything after them won&#x27;t. Add a <code>DATABASE_URL</code> as in Lab 0.'),
+    h3('3. Will it come back after a reboot?'),
+    p('On <strong>.101</strong>, ask Podman whether the container belongs to a systemd service:'),
     code(r"""
-CTR="sudo podman"        # or CTR="sudo docker"
-C=litellm                # container name from the ps output
-$CTR inspect $C --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}'
-$CTR inspect $C --format 'image={{.Config.Image}}  cmd={{json .Config.Cmd}}  restart={{.HostConfig.RestartPolicy.Name}}'
-$CTR inspect $C --format 'networks: {{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
-$CTR image inspect "$($CTR inspect $C --format '{{.Image}}')" --format '{{index .RepoDigests 0}}'
+ssh 192.168.1.101
+sudo podman inspect litellm --format 'unit={{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}} restart={{.HostConfig.RestartPolicy.Name}}'
+systemctl is-enabled podman-restart.service
 """),
-    p('The mount whose destination is <code>/app/config.yaml</code> (or whatever <code>--config</code> points at) is the file you&#x27;ll edit in Lab 3. Note the networks too: if LiteLLM reaches its database by container name, the recreated container must join the same network.'),
-    h3('3. Environment and config, masked'),
-    code(r"""
-$CTR inspect $C --format '{{range .Config.Env}}{{println .}}{{end}}' \
-  | grep -E 'KEY|SECRET|PASSWORD|TOKEN|_URL|_BASE|HOST' \
-  | sed -E 's/=(.*)(.{4})$/=****\2/'
-
-CFG=/opt/litellm/config.yaml       # the Source path of the config mount
-sudo sed -E '/os\.environ\//!s/((key|password|secret|token)[a-z_]*:[[:space:]]*)[^[:space:]#]+/\1****/I' "$CFG"
-sudo grep -nE 'master_key|database_url|cache|redis|guardrails|mcp_servers|callbacks|fallbacks' "$CFG"
-"""),
-    h3('4. Call it'),
-    code(r"""
-# back on the workstation
-read -rsp 'Master key: ' MK; echo; export MK GW
-curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'
-M=$(curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[0].id')   # or pick one from the list
-curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d "{\"model\":\"$M\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hi in five words.\"}]}" \
-  | jq -r '.choices[0].message.content'
-"""),
-    h3('5. Gap report'),
-    p('Fill this in from what you found. Anything marked missing is what Labs 2 and 3 add.'),
-    table(['Lab', 'Needs', 'How to check'], [
-        ['4 Unified API', 'two providers in <code>model_list</code>', '<code>/v1/models</code>'],
-        ['5 Fallbacks / LB', '<code>router_settings.fallbacks</code>', 'grep the config'],
-        ['6 Keys, teams, budgets', 'master key <strong>and</strong> a database', 'readiness shows <code>&quot;db&quot;: &quot;connected&quot;</code>'],
-        ['7 Caching', 'Redis + <code>cache: true</code>', '<code>/cache/ping</code> (fails without a cache)'],
-        ['8 Guardrail', '<code>guardrails:</code> + guard.py', '<code>/guardrails/list</code>'],
-        ['9 Observability', 'database (spend logs); Langfuse optional', '<code>/spend/logs</code>'],
-        ['10 MCP', '<code>mcp_servers:</code>', '<code>/v1/mcp/server</code>'],
-        ['11 Claude Code', '<code>/v1/messages</code> route (any 1.6x+ build)', '<code>openapi.json</code>'],
-        ['12 A2A', 'v1.80+ (<code>/a2a/{agent_id}</code>)', '<code>jq -r \'.paths | keys[]\' | grep a2a</code> on openapi.json'],
-        ['13 Health / UI', 'master key; UI needs the database', '<code>/health</code>, <code>/ui</code>'],
+    table(['What you see', 'Means', 'Do this'], [
+        ['<code>unit=litellm.service</code>', 'It&#x27;s already a Quadlet or systemd service', 'Nothing. Go to step 4.'],
+        ['<code>unit=</code> (empty), <code>restart=always</code>, and <code>podman-restart</code> is <code>enabled</code>', 'Started by hand; <code>podman-restart.service</code> starts it at boot', 'It works. Converting it to a Quadlet (below) is still better: you get <code>systemctl</code> and <code>journalctl</code>.'],
+        ['<code>unit=</code> (empty) and anything else', 'It won&#x27;t come back after a reboot', 'Convert it to a Quadlet (below), or at least run <code>sudo systemctl enable --now podman-restart.service</code>.'],
     ]),
-    h3('Notes &amp; gotchas'),
-    warn('Check the version against the LiteLLM security advisories. After the March 2026 PyPI incident, treat any LiteLLM installed with an unpinned <code>pip install litellm</code> in that window as suspect, and rotate any keys that host held. A floating image tag such as <code>main-stable</code> or <code>main-latest</code> isn&#x27;t compromised by itself, but you can&#x27;t tell which build you&#x27;ll get on the next pull. Record the digest from step 2; Lab 3 pins it.'),
+    p('<strong>Convert a hand-started container to a Quadlet.</strong> First read how it&#x27;s run now: its image, mounts, env file and networks.'),
+    code(r"""
+sudo podman inspect litellm --format 'image={{.Config.Image}}
+cmd={{json .Config.Cmd}}
+networks={{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}
+{{range .Mounts}}mount={{.Source}} -> {{.Destination}}
+{{end}}'
+"""),
+    p('Write the same settings into a <code>.container</code> file. This example matches a common layout (config and env file in <code>/opt/litellm</code>, a Postgres container reached over a network named <code>docker_default</code>). Use the image and networks your output showed: one <code>Network=</code> line per network, so LiteLLM can still reach its database by name.'),
+    code(r"""
+sudo tee /etc/containers/systemd/litellm.container >/dev/null <<'EOF'
+[Unit]
+Description=LiteLLM AI gateway
+
+[Container]
+ContainerName=litellm
+Image=ghcr.io/berriai/litellm:v1.104.0
+Network=docker_default
+Network=podman
+PublishPort=4000:4000
+EnvironmentFile=/opt/litellm/litellm.env
+Volume=/opt/litellm/config.yaml:/app/config.yaml:ro,Z
+Exec=--config /app/config.yaml --port 4000
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo podman rm -f litellm                  # remove the hand-started container (config and data are untouched)
+sudo systemctl daemon-reload
+sudo systemctl start litellm
+systemctl status litellm --no-pager
+"""),
+    warn('If your database is another container on the same host, its own unit has to start before LiteLLM. Add <code>After=&lt;db-unit&gt;.service</code> under <code>[Unit]</code>, using the <code>PODMAN_SYSTEMD_UNIT</code> label of the database container. Otherwise LiteLLM may start first after a reboot, fail to connect, and keep restarting until the database is up.'),
+    h3('4. Add the lab model names'),
+    p('Clients never name the real model. They ask for an <strong>alias</strong>, and the gateway decides which model answers. If you later move <code>lab-agent</code> to a bigger model or a cloud provider, you change one line here and every agent follows. Back up the config, then add these two entries to the end of the existing <code>model_list</code> with <code>sudo vi /opt/litellm/config.yaml</code>:'),
+    code(r"""
+sudo cp -a /opt/litellm/config.yaml /opt/litellm/config.yaml.bak-$(date +%F)
+"""),
+    code(r"""
+  - model_name: lab-chat                   # what chat apps ask for
+    litellm_params:
+      model: openai/qwen/qwen3.8-27b
+      api_base: os.environ/LMSTUDIO_API_BASE
+      api_key: not-needed
+  - model_name: lab-agent                  # what agents ask for (must support tool calling)
+    litellm_params:
+      model: openai/qwen/qwen3.8-27b
+      api_base: os.environ/LMSTUDIO_API_BASE
+      api_key: not-needed
+"""),
+    p('Both point at the same model for now, so LM Studio never has to swap models in and out of GPU memory. Restart the gateway to load the new config:'),
+    code(r"""
+sudo systemctl restart litellm             # or "sudo podman restart litellm" if you didn't convert it
+sudo journalctl -u litellm -f              # Ctrl-C once you see "Uvicorn running"
+"""),
+    h3('Verify (back on .100)'),
+    code(r"""
+curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id' | grep lab-
+# lab-chat
+# lab-agent
+"""),
+    h3('Notes'),
     ul([
-        '<code>/health/liveliness</code> and <code>/health/liveness</code> are both valid. Neither needs a key.',
-        'A master key in the config (<code>general_settings.master_key</code>) or env (<code>LITELLM_MASTER_KEY</code>) must start with <code>sk-</code>.',
-        'Without a database, LiteLLM still proxies calls with the master key, but <code>/key/generate</code>, teams, budgets, spend logs and most of the admin UI fail with &quot;No connected db&quot;.',
-        'The masking <code>sed</code> leaves <code>os.environ/NAME</code> references visible on purpose. They hold no secret, and you need them to know which env var feeds which model.',
-        'Don&#x27;t open <code>/health</code> (without <code>/liveliness</code>) yet. It sends a real request to every model, which costs tokens and makes LM Studio or Ollama load each local model in turn.',
+        '<code>LMSTUDIO_API_BASE</code> has to be in the env file (<code>LMSTUDIO_API_BASE=http://192.168.1.194:1234/v1</code>). If it&#x27;s missing, LiteLLM starts but every request to these models fails.',
+        'Using a cloud model instead? Use <code>model: anthropic/claude-haiku-4-5-20251001</code> with <code>api_key: os.environ/ANTHROPIC_API_KEY</code>, or <code>model: openai/gpt-4.1-mini</code> with <code>OPENAI_API_KEY</code>, and add the key to the env file. A change to the env file needs <code>systemctl restart</code>; Podman reads it only when it creates the container, and a Quadlet restart re-creates it.',
+        'Reasoning (&quot;thinking&quot;) models spend tokens thinking before they answer. If a reply comes back empty with <code>finish_reason: &quot;length&quot;</code>, the context length in LM Studio is too small; raise it.',
+        'YAML is indentation-sensitive, and each top-level key (<code>model_list:</code>, <code>litellm_settings:</code>) may appear only once. If LiteLLM won&#x27;t start after an edit, <code>sudo journalctl -u litellm -n 50</code> shows the parse error; restore the backup to get going again.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 2
-L2 = lab(2, 'Supporting Services on .100: Postgres & Redis', '192.168.1.100, tested from 192.168.1.101',
-    goal('run Postgres 16 and Redis 7 on .100 with pinned tags, persistent volumes and generated passwords, published on 0.0.0.0 and reachable from .101.'),
-    h3('1. Check Docker and the ports'),
+L2 = lab(2, 'Chat Through the Gateway: curl and Python', '192.168.1.100 → 192.168.1.101',
+    goal('understand a chat request and its response, see why a chat client has to send the whole conversation every time, and build a small streaming chat program in Python.'),
+    h3('1. One request, piece by piece'),
     code(r"""
-ssh "$USER"@192.168.1.100   # your login on .100
-docker version --format 'engine {{.Server.Version}}'; docker compose version
-sudo ss -ltnp | grep -E ':(5432|6379|3000|9999)\b'      # should print nothing
+curl -s $GW/v1/chat/completions \
+  -H "Authorization: Bearer $MK" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "model": "lab-chat",
+        "messages": [
+          {"role": "system", "content": "You are a helpful assistant. Answer in one sentence."},
+          {"role": "user",   "content": "What does an AI gateway do?"}
+        ]
+      }' | jq
 """),
-    h3('2. Write the .env and compose file'),
-    code(r"""
-mkdir -p ~/litellm-lab && cd ~/litellm-lab
-umask 077
-cat > .env <<EOF
-POSTGRES_PASSWORD=$(openssl rand -hex 24)
-REDIS_PASSWORD=$(openssl rand -hex 24)
-EOF
-
-cat > docker-compose.yml <<'EOF'
-name: litellm-lab
-services:
-  postgres:
-    image: docker.io/library/postgres:16.15
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: litellm
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: litellm
-    ports: ["0.0.0.0:5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
-      interval: 10s
-      retries: 5
-
-  redis:
-    image: docker.io/library/redis:7.4.11
-    restart: unless-stopped
-    user: redis
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes"]
-    ports: ["0.0.0.0:6379:6379"]
-    volumes: [redisdata:/data]
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
-      interval: 10s
-      retries: 5
-
-volumes:
-  pgdata:
-  redisdata:
-EOF
-"""),
-    h3('3. Start and check'),
-    code(r"""
-docker compose up -d
-docker compose ps                                      # both "healthy" after ~10 s
-sudo ss -ltn | grep -E '0.0.0.0:(5432|6379)'
-"""),
-    h3('Verify from .101'),
-    p('Test from the gateway host the same way LiteLLM will connect: from a container on .101, by IP, with the password.'),
-    code(r"""
-ssh "$USER"@192.168.1.101   # your login on .101
-for p in 5432 6379; do timeout 3 bash -c "</dev/tcp/192.168.1.100/$p" && echo "$p open" || echo "$p CLOSED"; done
-
-read -rsp 'Redis password (from .100 ~/litellm-lab/.env): ' RP; echo
-sudo podman run --rm -e RP="$RP" docker.io/library/redis:7.4.11 \
-  sh -c 'redis-cli -h 192.168.1.100 -a "$RP" --no-auth-warning ping'          # PONG
-sudo podman run --rm docker.io/library/postgres:16.15 pg_isready -h 192.168.1.100 -U litellm
-unset RP
-"""),
-    h3('Notes &amp; gotchas'),
     ul([
-        '<strong>Skip Postgres if Lab 1 showed <code>&quot;db&quot;: &quot;connected&quot;</code>.</strong> Pointing LiteLLM at a new, empty database starts you over with no keys, teams or spend history. Delete the <code>postgres</code> service from the file in that case.',
-        'Ports published by Docker usually bypass firewalld, because Docker inserts its own forwarding rules. If the <code>/dev/tcp</code> test says CLOSED anyway, open them: <code>sudo firewall-cmd --permanent --add-port={5432,6379,3000,9999}/tcp &amp;&amp; sudo firewall-cmd --reload</code>.',
-        '<code>$$REDIS_PASSWORD</code> is deliberate: Compose turns <code>$$</code> into a literal <code>$</code>, so the shell inside the container expands it and the password never appears in <code>docker inspect</code>&#x27;s command line.',
-        'The tags were current when this was written. Moving to a newer patch (16.x, 7.4.x) is safe; moving Postgres to a new major version is not, because the data directory format changes.',
-        'Use <code>openssl rand -hex</code> rather than <code>-base64</code>. Base64 output can contain <code>/</code> and <code>+</code>, which break the <code>DATABASE_URL</code> in Lab 3 unless URL-encoded.',
-        'Redis is published with a password but no TLS, which is fine on an isolated lab LAN. For anything else, bind it to the one interface .101 uses and add a firewall rule allowing only 192.168.1.101.',
+        '<code>/v1/chat/completions</code> is the OpenAI chat API. LiteLLM speaks it no matter which provider is behind the alias, so any OpenAI-compatible app or library can use the gateway.',
+        '<code>Authorization: Bearer</code> carries the key. The master key works for now; Lab 3 gives each app its own key.',
+        '<code>messages</code> is the conversation: a <code>system</code> message sets the behaviour, and <code>user</code> messages are what you type.',
+    ]),
+    p('In the response, the answer is in <code>choices[0].message.content</code>, <code>usage</code> counts the tokens in and out, and <code>model</code> is the alias you asked for. To print just the answer, replace <code>jq</code> with <code>jq -r &#x27;.choices[0].message.content&#x27;</code>.'),
+    h3('2. The API has no memory'),
+    p('Ask a follow-up question on its own and the model has no idea what you mean:'),
+    code(r"""
+curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"model": "lab-chat", "messages": [{"role": "user", "content": "What did I just ask you?"}]}' \
+  | jq -r '.choices[0].message.content'
+"""),
+    p('Every chat app, including ChatGPT-style web UIs, keeps the conversation itself and sends the whole history with every request, adding the model&#x27;s earlier answers as <code>assistant</code> messages:'),
+    code(r"""
+curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"model": "lab-chat", "messages": [
+        {"role": "user",      "content": "My favourite distro is Rocky Linux."},
+        {"role": "assistant", "content": "Nice choice!"},
+        {"role": "user",      "content": "What is my favourite distro?"}
+      ]}' | jq -r '.choices[0].message.content'
+"""),
+    p('That&#x27;s also why long conversations get slower and more expensive: every turn re-sends everything before it.'),
+    h3('3. Streaming'),
+    p('With <code>&quot;stream&quot;: true</code>, the gateway sends the answer in small pieces as the model produces them, the way chat UIs show text appearing word by word. <code>curl -N</code> turns off buffering so you see them arrive:'),
+    code(r"""
+curl -sN $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"model": "lab-chat", "stream": true, "messages": [{"role": "user", "content": "Count from 1 to 5."}]}'
+# data: {"choices":[{"delta":{"content":"1"}...}]}
+# data: {"choices":[{"delta":{"content":","}...}]}
+# ...
+# data: [DONE]
+"""),
+    h3('4. A chat program in Python'),
+    p('Install Python 3.12 and the libraries every lab uses into a virtual environment in <code>~/gw-labs</code>. The <code>openai</code> library works with any OpenAI-compatible server; pointing <code>base_url</code> at the gateway is all it takes.'),
+    code(r"""
+sudo dnf -y install python3.12 python3.12-pip
+mkdir -p ~/gw-labs && cd ~/gw-labs
+python3.12 -m venv .venv
+. .venv/bin/activate                       # run this again in every new shell
+pip install "openai==3.24.0" "httpx==0.28.1" "mcp==2.3.0"
+"""),
+    p('<code>chat.py</code> keeps the history in a list (step 2) and streams each answer (step 3):'),
+    write_file('~/gw-labs/chat.py', 'chat.py'),
+    code(r"""
+KEY=$MK python chat.py
+# you> My name is Pat.
+# ai > Hi Pat! How can I help you today?
+# you> What is my name?
+# ai > Your name is Pat.
+"""),
+    h3('Notes'),
+    ul([
+        'Change the model per run with <code>MODEL=lab-agent KEY=$MK python chat.py</code>. The program doesn&#x27;t know or care which real model answers.',
+        'The admin UI at <code>http://192.168.1.101:4000/ui</code> has a <strong>Playground</strong> page that does the same thing in the browser.',
+        'If a request hangs for a minute and then answers, LM Studio was loading the model. The first request after a model unloads is always slow.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 3
-L3 = lab(3, 'Wire Up LiteLLM: Models, Database, Cache, Guardrail, MCP', '192.168.1.101',
-    goal('back up the running config, add two model aliases, the database, a fallback, the Redis cache, an SSN guardrail and the DeepWiki MCP server, then recreate LiteLLM on a pinned image and confirm it&#x27;s healthy.'),
-    note('Installed with Lab 0? Follow the &quot;Lab 3 with this install&quot; note at the end of Lab 0 for steps 1, 3 and 6. These steps assume a container with the config file bind-mounted at <code>/app/config.yaml</code> and secrets in an env file, a common setup. For a systemd/venv install, the YAML is the same: put <code>guard.py</code> next to the config file, add the variables to the unit&#x27;s <code>EnvironmentFile</code>, and run <code>systemctl restart</code> instead of step 6.', 'Layout:'),
-    h3('1. Back up everything you&#x27;re about to touch'),
+L3 = lab(3, 'Virtual Keys: One Key per App', '192.168.1.100 → 192.168.1.101',
+    goal('stop handing out the master key: create a virtual key for the chat UI that can only use the lab models, and see the gateway enforce it.'),
+    h3('Why'),
+    p('The master key can do everything, including creating and deleting keys. Every app and agent in these labs gets its own <strong>virtual key</strong> instead. A virtual key can be limited to certain models, a request rate, a budget, and (Labs 7&ndash;9) certain agents and tools. Every request is logged under the key&#x27;s name, and you can revoke one key without touching the others.'),
+    h3('1. Create a key for the chat UI'),
     code(r"""
-CTR="sudo podman"; C=litellm; D=/opt/litellm        # from Lab 1
-TS=$(date +%Y%m%d-%H%M%S)
-sudo cp -a $D/config.yaml   $D/config.yaml.bak-$TS
-sudo cp -a $D/litellm.env   $D/litellm.env.bak-$TS 2>/dev/null
-$CTR inspect $C | sudo tee $D/inspect.bak-$TS.json >/dev/null    # how it was run, for rollback
-echo $TS | sudo tee $D/LAST_BACKUP
+curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{
+        "key_alias": "chat-ui",
+        "models": ["lab-chat", "lab-agent"],
+        "rpm_limit": 60
+      }' | jq '{key_alias, key, models, rpm_limit}'
 """),
-    h3('2. Make sure the env file holds every variable the container has'),
-    p('A container&#x27;s environment is fixed when it&#x27;s created. If some variables were passed with <code>-e</code> instead of <code>--env-file</code>, recreating it in step 6 would quietly drop them. This prints any variable that&#x27;s in the container but in neither the image nor the env file:'),
-    code(r"""
-names() { cut -d= -f1 | sed '/^$/d' | sort -u; }
-$CTR inspect $C --format '{{range .Config.Env}}{{println .}}{{end}}' | names > /tmp/ctr.env
-$CTR image inspect "$($CTR inspect $C --format '{{.Image}}')" \
-  --format '{{range .Config.Env}}{{println .}}{{end}}' | names > /tmp/img.env
-sudo grep -vE '^\s*(#|$)' $D/litellm.env | names > /tmp/file.env
-comm -23 /tmp/ctr.env /tmp/img.env | comm -23 - /tmp/file.env      # must print nothing
-"""),
-    h3('3. Add the new secrets (typed, never echoed)'),
-    code(r"""
-read -rsp 'OpenAI key: ' OAK; echo
-read -rsp 'Anthropic key: ' ANK; echo
-read -rsp 'Redis password (from .100): ' RP; echo
-printf '%s\n' "OPENAI_API_KEY=$OAK" "ANTHROPIC_API_KEY=$ANK" "REDIS_PASSWORD=$RP" \
-  | sudo tee -a $D/litellm.env >/dev/null
-unset OAK ANK RP
-
-# Only if Lab 1 found no master key / no database:
-#   echo "LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)" | sudo tee -a $D/litellm.env >/dev/null
-#   read -rsp 'Postgres password: ' PP; echo
-#   echo "DATABASE_URL=postgresql://litellm:$PP@192.168.1.100:5432/litellm" | sudo tee -a $D/litellm.env >/dev/null; unset PP
-
-sudo chmod 600 $D/litellm.env
-sudo grep -oE '^[A-Z_]+=' $D/litellm.env                  # names only, no values
-"""),
-    h3('4. Write the guardrail'),
-    p('LiteLLM loads <code>guard.SSNGuard</code> from <code>guard.py</code> in the same directory as the config file. Lab 8 explains how it works.'),
-    code(r"""
-sudo tee $D/guard.py >/dev/null <<'EOF'
-import re
-
-from fastapi import HTTPException
-from litellm.integrations.custom_guardrail import CustomGuardrail
-
-SSN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
-
-
-def _texts(data):
-    # every user-supplied string in a chat, messages or responses request
-    for msg in data.get("messages") or []:
-        content = msg.get("content")
-        if isinstance(content, str):
-            yield content
-        elif isinstance(content, list):
-            for part in content:
-                if isinstance(part, dict) and isinstance(part.get("text"), str):
-                    yield part["text"]
-    if isinstance(data.get("input"), str):
-        yield data["input"]
-
-
-class SSNGuard(CustomGuardrail):
-    async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
-        if any(SSN.search(t) for t in _texts(data)):
-            raise HTTPException(
-                status_code=400,
-                detail={"error": "Blocked by ssn-guard: the prompt contains a US Social Security number."},
-            )
-        return data
-EOF
-sudo chmod 644 $D/guard.py
-"""),
-    h3('5. Edit config.yaml (merge, don&#x27;t replace)'),
-    p('Run <code>sudo vi $D/config.yaml</code>. Add the two models to the end of your existing <code>model_list</code>, and merge the other blocks into any top-level keys you already have. Keep your existing models and settings.'),
-    code(r"""
-model_list:
-  # ...your existing models stay above...
-  - model_name: gpt-mini
-    litellm_params:
-      model: openai/gpt-4o-mini
-      api_key: os.environ/OPENAI_API_KEY
-  - model_name: claude-fast
-    litellm_params:
-      model: anthropic/claude-haiku-4-5-20251001
-      api_key: os.environ/ANTHROPIC_API_KEY
-
-litellm_settings:
-  num_retries: 2              # retry the same deployment before falling back
-  request_timeout: 120
-  cache: true
-  cache_params:
-    type: redis
-    host: 192.168.1.100       # the Docker host, never localhost
-    port: 6379
-    password: os.environ/REDIS_PASSWORD
-    ttl: 600                  # seconds
-
-router_settings:
-  routing_strategy: simple-shuffle
-  fallbacks:
-    - gpt-mini: ["claude-fast"]
-
-general_settings:
-  master_key: os.environ/LITELLM_MASTER_KEY
-  database_url: os.environ/DATABASE_URL
-
-guardrails:
-  - guardrail_name: ssn-guard
-    litellm_params:
-      guardrail: guard.SSNGuard     # guard.py next to config.yaml, class SSNGuard
-      mode: pre_call
-      default_on: true
-
-mcp_servers:
-  deepwiki:
-    url: https://mcp.deepwiki.com/mcp
-    transport: http
-"""),
-    p('Check the YAML parses and review the diff before going further:'),
-    code(r"""
-TS=$(cat $D/LAST_BACKUP)
-sudo diff -u $D/config.yaml.bak-$TS $D/config.yaml
-$CTR exec -i $C python -c "import yaml,sys; yaml.safe_load(sys.stdin); print('YAML OK')" < <(sudo cat $D/config.yaml)
-"""),
-    h3('6. Recreate LiteLLM on a pinned image'),
-    p('Env-file changes and new mounts only take effect in a new container, so <code>restart</code> isn&#x27;t enough. Save the run command as a script so it&#x27;s the single source of truth from now on. Paste the digest from Lab 1 into <code>IMG</code>, and list every network Lab 1 showed in <code>NETS</code>.'),
-    code(r"""
-sudo tee $D/run-litellm.sh >/dev/null <<'EOF'
-#!/usr/bin/env bash
-# Recreates the LiteLLM container. Rerun after editing litellm.env or upgrading IMG.
-set -euo pipefail
-IMG="ghcr.io/berriai/litellm@sha256:<digest-from-lab-1>"
-NETS="--network podman"     # e.g. "--network docker_default --network podman" if the DB is a container
-D=/opt/litellm
-podman rm -f litellm 2>/dev/null || true
-podman run -d --name litellm --restart=always $NETS \
-  --env-file $D/litellm.env \
-  -v $D/config.yaml:/app/config.yaml:ro,Z \
-  -v $D/guard.py:/app/guard.py:ro,Z \
-  -p 4000:4000 \
-  "$IMG" --config /app/config.yaml --port 4000
-EOF
-sudo chmod 700 $D/run-litellm.sh
-sudo $D/run-litellm.sh
-sudo podman logs -f litellm 2>&1 | grep -m1 -E 'Uvicorn running|Error|Traceback'
-"""),
-    h3('Verify'),
-    code(r"""
-# workstation (with GW and MK exported)
-curl -s $GW/health/liveliness; echo
-curl -s $GW/health/readiness | jq '{status, db, cache, litellm_version}'
-curl -s $GW/cache/ping -H "Authorization: Bearer $MK" | jq '{status, cache_type}'      # healthy / redis
-curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'              # gpt-mini, claude-fast + yours
-curl -s $GW/guardrails/list -H "Authorization: Bearer $MK" | jq -r '.guardrails[].guardrail_name'
-curl -s $GW/v1/mcp/server -H "Authorization: Bearer $MK" | jq -r '.[] | .server_name // .alias'
-"""),
-    h3('Notes &amp; gotchas'),
-    warn('A YAML file may contain each top-level key only once. If you paste a second <code>litellm_settings:</code> under the first, the parser silently keeps only the last one and your earlier settings vanish. Merge into the existing block instead.'),
     ul([
-        'Rollback is in <a href="#readme">Appendix B</a>: copy the <code>.bak-$TS</code> files back and rerun the script.',
-        '<code>cache: true</code> caches every model, including any you already had. To make caching opt-in, add <code>mode: default_off</code> under <code>cache_params</code>; requests then opt in with <code>&quot;cache&quot;: {&quot;use-cache&quot;: true}</code>.',
-        'If you already had <code>fallbacks:</code>, add <code>- gpt-mini: [&quot;claude-fast&quot;]</code> as another list item. Don&#x27;t start a second <code>fallbacks:</code> key.',
-        'If the existing config has a literal <code>master_key: sk-...</code>, you can leave it. Moving it into the env file keeps it out of <code>config.yaml</code> and its backups.',
-        'No cloud keys? Point the aliases at a local OpenAI-compatible server instead, e.g. <code>model: openai/&lt;local-model&gt;</code> plus <code>api_base: os.environ/LMSTUDIO_API_BASE</code>. Labs 4&ndash;8 work the same, though Lab 5&#x27;s fallback then goes from one local model to another.',
-        '<code>:Z</code> relabels the mounted files for SELinux (Rocky/RHEL). Without it the container gets &quot;permission denied&quot; reading <code>guard.py</code>.',
-        'Single-file bind mounts follow the inode. Some editors save by writing a new file, so the running container keeps reading the old one. Recreating with the script (or <code>podman restart</code>) picks up the new file.',
-        'Startup errors to look for: <code>Could not import SSNGuard from guard</code> (missing mount or typo), <code>ConnectionError ... 6379</code> (Redis password or firewall), <code>P1001</code> (Prisma can&#x27;t reach Postgres).',
+        '<code>key_alias</code> is the name you&#x27;ll see in logs and in the UI. It must be unique: re-running a step that creates a key fails with &quot;Key with alias ... already exists&quot;, so delete the old key (Lab 11) or pick another alias.',
+        '<code>models</code> is the allow-list. Leave it out and the key can use every model.',
+        '<code>rpm_limit</code> is requests per minute. Request number 61 inside a minute gets HTTP 429.',
+    ]),
+    p('Copy the <code>key</code> value now. LiteLLM stores only a hash of it, so it can never show you the key again. Keep it in a variable for this lab:'),
+    code(r"""
+read -rsp 'chat-ui key: ' UIKEY; echo
+"""),
+    h3('2. See the limits work'),
+    code(r"""
+# allowed model: answers
+curl -s $GW/v1/chat/completions -H "Authorization: Bearer $UIKEY" -H 'Content-Type: application/json' \
+  -d '{"model": "lab-chat", "messages": [{"role": "user", "content": "Say hello."}]}' \
+  | jq -r '.choices[0].message.content'
+
+# a model that isn't on the key's list: refused before it reaches any model
+curl -s $GW/v1/chat/completions -H "Authorization: Bearer $UIKEY" -H 'Content-Type: application/json' \
+  -d '{"model": "gemma-4-31b-qat", "messages": [{"role": "user", "content": "Say hello."}]}' \
+  | jq -r '.error.message'
+# ... key not allowed to access model ...
+
+# the key can't do admin work either
+curl -s $GW/key/generate -H "Authorization: Bearer $UIKEY" -H 'Content-Type: application/json' -d '{}' | jq -r '.error.message'
+"""),
+    h3('3. Look a key up, change it, block it'),
+    code(r"""
+curl -s "$GW/key/info?key=$UIKEY" -H "Authorization: Bearer $MK" | jq '.info | {key_alias, models, rpm_limit, spend}'
+
+# change a limit in place (the key itself stays the same)
+curl -s $GW/key/update -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d "{\"key\": \"$UIKEY\", \"rpm_limit\": 30}" | jq '{key_alias, rpm_limit}'
+
+# every key, by alias
+curl -s "$GW/key/list?return_full_object=true" -H "Authorization: Bearer $MK" | jq -r '.keys[] | "\(.key_alias)\t\(.models)"'
+"""),
+    p('Blocking and deleting a key is in Lab 11.'),
+    h3('Notes'),
+    ul([
+        'Budgets: add <code>&quot;max_budget&quot;: 5, &quot;budget_duration&quot;: &quot;30d&quot;</code> to cap a key at $5 a month. LiteLLM prices requests from its price list, so this works for cloud models. Local models cost $0, so a budget never trips for them; use <code>rpm_limit</code> instead.',
+        'Everything here is also in the admin UI under <strong>Virtual Keys</strong>, including the one-time display of a new key.',
+        'Store app keys the way the next labs do: in a root-only env file (<code>chmod 600</code>) that Podman passes to the container, never in a Quadlet file or a script.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 4
-L4 = lab(4, 'Unified API: One Client, Two Providers', 'workstation → 192.168.1.101',
-    goal('call OpenAI and Anthropic models through one OpenAI-format endpoint, changing only the model name.'),
-    h3('Steps: curl'),
+L4 = lab(4, 'A Chat Web UI: Open WebUI on Podman', '192.168.1.100 (Open WebUI) → 192.168.1.101',
+    goal('run Open WebUI as a Quadlet on .100, connected to the gateway with the <code>chat-ui</code> key from Lab 3, so you get a ChatGPT-style web page that starts at boot.'),
+    h3('1. The key goes in an env file'),
     code(r"""
-for m in gpt-mini claude-fast; do
-  curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-    -d "{\"model\":\"$m\",\"messages\":[{\"role\":\"user\",\"content\":\"Who trained you? One sentence.\"}]}" \
-    | jq -r --arg m "$m" '"\($m) -> \(.model): \(.choices[0].message.content)"'
-done
+sudo mkdir -p /opt/open-webui
+sudo install -m 600 /dev/null /opt/open-webui/open-webui.env
+printf '%s\n' \
+  "OPENAI_API_BASE_URL=http://192.168.1.101:4000/v1" \
+  "OPENAI_API_KEY=$UIKEY" \
+  "WEBUI_SECRET_KEY=$(openssl rand -hex 32)" \
+  | sudo tee /opt/open-webui/open-webui.env >/dev/null
 """),
-    h3('Steps: Python with the OpenAI SDK'),
+    p('<code>OPENAI_API_BASE_URL</code> points Open WebUI at the gateway as if it were OpenAI. <code>WEBUI_SECRET_KEY</code> signs login sessions; keeping it fixed means you stay logged in across restarts. (In a new shell, <code>read -rsp</code> the key into <code>UIKEY</code> again first.)'),
+    h3('2. The Quadlet units'),
+    p('A named volume keeps Open WebUI&#x27;s users, chats and settings when the container is replaced. The container listens on 8080 inside; <code>PublishPort=3000:8080</code> makes that port 3000 on the host.'),
     code(r"""
-python3 -m venv ~/litellm-labs/.venv && . ~/litellm-labs/.venv/bin/activate
-pip install 'openai>=1.40,<3'
-python3 - <<'EOF'
-import os
-from openai import OpenAI
+sudo tee /etc/containers/systemd/open-webui.volume >/dev/null <<'EOF'
+[Volume]
+VolumeName=open-webui
+EOF
 
-client = OpenAI(base_url=os.environ["GW"], api_key=os.environ["MK"])
-for model in ("gpt-mini", "claude-fast"):
-    r = client.chat.completions.create(
-        model=model, messages=[{"role": "user", "content": "Name one planet."}], max_tokens=20)
-    print(f"{model:12} {r.model:32} {r.choices[0].message.content}")
+sudo tee /etc/containers/systemd/open-webui.container >/dev/null <<'EOF'
+[Unit]
+Description=Open WebUI chat front end
+
+[Container]
+ContainerName=open-webui
+Image=ghcr.io/open-webui/open-webui:v0.11.4
+PublishPort=3000:8080
+Volume=open-webui.volume:/app/backend/data
+EnvironmentFile=/opt/open-webui/open-webui.env
+Environment=ENABLE_OLLAMA_API=false
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
 EOF
 """),
-    h3('Check script'),
+    p('<code>ENABLE_OLLAMA_API=false</code> stops it looking for a local Ollama it doesn&#x27;t need. <code>TimeoutStartSec=900</code> gives the first start time to pull the image, which is several GB.'),
+    h3('3. Start it'),
     code(r"""
-cat > labs/04-unified.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-for m in gpt-mini claude-fast; do
-  code=$(chat "$MK" "$m" "Reply with the single word: pong")
-  [ "$code" = 200 ] || fail "$m returned HTTP $code: $(jq -r '.error.message // .' "$OUT" | head -c 160)"
-  echo "  $m -> $(jq -r .model "$OUT"): $(jq -r '.choices[0].message.content' "$OUT" | head -c 40)"
-done
-pass "unified API: gpt-mini and claude-fast both answered"
-EOF
-chmod +x labs/04-unified.sh && labs/04-unified.sh
+sudo systemctl daemon-reload
+sudo systemctl start open-webui            # first start pulls the image: a few minutes
+systemctl status open-webui --no-pager
+sudo firewall-cmd --permanent --add-port=3000/tcp && sudo firewall-cmd --reload   # if firewalld is running
+curl -s http://localhost:3000/health; echo                     # {"status":true}
 """),
-    h3('Notes &amp; gotchas'),
+    h3('Verify'),
+    ol([
+        'Open <code>http://192.168.1.100:3000</code> and sign up. <strong>The first account becomes the admin.</strong>',
+        'The model menu at the top lists <code>lab-chat</code> and <code>lab-agent</code>, the two models the <code>chat-ui</code> key allows, and nothing else the gateway serves.',
+        'Send a message. Then, in the gateway UI (<code>http://192.168.1.101:4000/ui</code>, <strong>Logs</strong>), you&#x27;ll see the request under the key alias <code>chat-ui</code>.',
+    ]),
+    h3('Notes'),
     ul([
-        'The response&#x27;s <code>model</code> field shows the real provider model (<code>gpt-4o-mini-2024-07-18</code>, <code>claude-haiku-4-5-20251001</code>), while the client only ever asked for an alias. That indirection is what lets you swap providers without touching clients.',
-        'LiteLLM translates the request for Anthropic: the system prompt moves to Anthropic&#x27;s <code>system</code> field and <code>max_tokens</code> gets a default, because Anthropic requires one.',
-        '<code>drop_params: true</code> in <code>litellm_settings</code> silently drops OpenAI-only parameters that a provider doesn&#x27;t support, instead of returning a 400.',
-        'Response headers tell you what happened: <code>curl -sD - -o /dev/null ...</code> shows <code>x-litellm-model-id</code>, <code>x-litellm-response-cost</code> and <code>x-litellm-response-duration-ms</code>.',
+        'After you&#x27;ve made your admin account, stop strangers signing up: add <code>Environment=ENABLE_SIGNUP=false</code> to the <code>.container</code> file, then <code>sudo systemctl daemon-reload &amp;&amp; sudo systemctl restart open-webui</code>.',
+        'Open WebUI also asks the model for chat titles and follow-up suggestions, so one message can show up as several requests in the gateway logs.',
+        'Settings from the env file only seed the first start. After that, Open WebUI keeps its own copy (Admin Panel, Settings, Connections). Change the gateway URL or key there, or delete the volume to start over.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 5
-L5 = lab(5, 'Fallbacks, Retries & Load Balancing', 'workstation → 192.168.1.101',
-    goal('prove that a failing <code>gpt-mini</code> call falls back to <code>claude-fast</code>, then (optionally) spread one alias across two deployments.'),
-    h3('Steps: forced fallback'),
-    p('<code>mock_testing_fallbacks</code> makes the first deployment fail on purpose, without needing to break anything.'),
+L5 = lab(5, 'Agent 1: Your First Tool-Using Agent', '192.168.1.100 → 192.168.1.101',
+    goal('build <code>ops-agent</code>, a small Python agent that answers questions about the lab by calling tools (check a URL, check a port, get the time), and see exactly what makes something an &quot;agent&quot;.'),
+    h3('What makes it an agent'),
+    p('A chat model only produces text. An agent is a loop around the model that lets it <em>do</em> things:'),
+    ol([
+        'You send the question, plus a description of each tool: its name, what it does, and its parameters as JSON Schema.',
+        'Instead of answering, the model can reply with a <strong>tool call</strong>: &quot;run <code>check_port</code> with host=192.168.1.101, port=22&quot;.',
+        'Your code runs that function and sends the result back as a <code>tool</code> message.',
+        'Repeat until the model replies with plain text. That&#x27;s the answer.',
+    ]),
+    p('The model never runs anything itself; your code decides which functions exist and runs them. Every step of the loop is an ordinary chat request through the gateway.'),
+    h3('1. A key for the agent'),
     code(r"""
-curl -s -D /tmp/fb.hdr -o /tmp/fb.json $GW/v1/chat/completions \
-  -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d '{"model":"gpt-mini","mock_testing_fallbacks":true,
-       "messages":[{"role":"user","content":"Which model are you?"}]}'
-jq -r .model /tmp/fb.json                                    # claude-haiku-4-5-20251001
-grep -iE '^x-litellm-(attempted-fallbacks|model-group|model-id)' /tmp/fb.hdr
+curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"key_alias": "ops-agent", "models": ["lab-agent"], "rpm_limit": 30}' | jq -r .key
+read -rsp 'ops-agent key: ' OPS_KEY; echo
 """),
-    h3('Stretch: load balancing'),
-    p('Two entries with the same <code>model_name</code> form one model group, and the router spreads requests across them. Add a second <code>gpt-mini</code> deployment to <code>model_list</code>, then rerun <code>run-litellm.sh</code>:'),
+    h3('2. The agent'),
+    write_file('~/gw-labs/agent.py', 'agent.py'),
+    p('Read it top to bottom: the tools are plain Python functions, <code>TOOL_SPECS</code> describes them to the model, and <code>run()</code> is the loop. <code>max_steps</code> stops a confused model from looping forever. The two settings near the middle (<code>AGENT_PROMPT</code>, <code>AGENT_TOOLS</code>) let Lab 6 reuse this file for a second agent.'),
+    h3('3. Run it'),
     code(r"""
-  - model_name: gpt-mini
-    litellm_params:
-      model: openai/gpt-4.1-mini
-      api_key: os.environ/OPENAI_API_KEY
+cd ~/gw-labs && . .venv/bin/activate
+AGENT_KEY=$OPS_KEY python agent.py "Is http://192.168.1.101:4000/health/liveliness answering, is port 22 open on 192.168.1.100, and what time is it?"
+#   [tool] check_url({'url': 'http://192.168.1.101:4000/health/liveliness'}) -> HTTP 200 in 16 ms
+#   [tool] check_port({'host': '192.168.1.100', 'port': 22}) -> 192.168.1.100:22 is open
+#   [tool] get_time({}) -> 2026-10-06T00:27:31+00:00
+# - 192.168.1.101:4000/health/liveliness: HTTP 200 (16 ms)
+# - 192.168.1.100 port 22: open
+# - Time: 2026-10-06 00:27 UTC
 """),
+    p('The <code>[tool]</code> lines are the loop at work: the model chose which tools to call and with what arguments, and the program ran them. Try a question that needs no tools (&quot;What is a TCP port?&quot;) and one about a port that&#x27;s closed.'),
+    h3('Verify: what the gateway saw'),
     code(r"""
-for i in $(seq 1 8); do
-  curl -s -D - -o /dev/null $GW/v1/chat/completions -H "Authorization: Bearer $MK" \
-    -H 'Content-Type: application/json' \
-    -d "{\"model\":\"gpt-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"lb test $i $RANDOM\"}]}" \
-    | grep -i '^x-litellm-model-id'
-done | sort | uniq -c                                           # two different ids
+curl -s "$GW/spend/logs?start_date=$(date -u +%F)&end_date=$(date -u -d tomorrow +%F)&summarize=false" \
+  -H "Authorization: Bearer $MK" \
+  | jq -r '.[] | select(.metadata.user_api_key_alias == "ops-agent") | "\(.startTime)  \(.model_group)  tokens=\(.total_tokens)"'
 """),
-    h3('Check script'),
-    code(r"""
-cat > labs/05-fallback.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-code=$(chat "$MK" gpt-mini "Say hi" '{"mock_testing_fallbacks": true}')
-model=$(jq -r '.model // empty' "$OUT")
-echo "  HTTP $code, answered by $model, attempted fallbacks: $(hdr x-litellm-attempted-fallbacks)"
-[ "$code" = 200 ] && [[ $model == *claude* ]] && pass "fallback: gpt-mini -> $model" \
-  || fail "fallback: expected a Claude answer, got HTTP $code model=$model"
-EOF
-chmod +x labs/05-fallback.sh && labs/05-fallback.sh
-"""),
-    h3('Notes &amp; gotchas'),
+    p('One question made several requests, one per pass around the loop, all under the alias <code>ops-agent</code>. Spend logs are written in batches, so the newest requests can take up to a minute to appear.'),
+    h3('Notes'),
     ul([
-        'Order of operations: <code>num_retries</code> retries the same model group first, then <code>fallbacks</code> moves to the next group. Retries on a rate-limited provider just burn time, so keep them low.',
-        'Fallbacks also fire on real errors: a wrong <code>OPENAI_API_KEY</code>, a 429, or a timeout. Try one by setting a deliberately bad key, recreating, and watching Claude answer.',
-        'Other fallback types: <code>context_window_fallbacks</code> (prompt too long for the model) and <code>content_policy_fallbacks</code> (provider refused the content).',
-        'Without <code>RANDOM</code> in the load-balancing prompts, the Redis cache from Lab 3 would answer repeats and you&#x27;d only see one deployment id.',
-        'Other routing strategies include <code>least-busy</code>, <code>latency-based-routing</code> and <code>usage-based-routing-v2</code>. Some need Redis to share state across proxy instances.',
+        'The tool descriptions matter as much as the code. The model picks tools by reading <code>description</code>, so vague descriptions get the wrong tool, or none.',
+        'Only give an agent tools you&#x27;d be happy for it to call with any arguments. <code>check_port</code> is harmless; a <code>run_shell</code> tool would let the model (and anyone who can put text in front of it) run anything.',
+        'The model has to support tool calling. If it answers in prose without ever calling a tool, try a different model behind <code>lab-agent</code>.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 6
-L6 = lab(6, 'Virtual Keys, Teams & Budgets', 'workstation → 192.168.1.101',
-    goal('create a team with a tiny budget and a key limited to <code>gpt-mini</code> at 5 requests per minute, then trigger each control: a disallowed model, a 429, and a budget error.'),
-    h3('1. Create the team and key'),
+L6 = lab(6, 'Agent 2: Run Agents as Always-On Services', '192.168.1.100',
+    goal('package the agent in a container image, run two agents from it as Quadlet services (<code>ops-agent</code> with tools and <code>writer-agent</code> without), each with its own key, and talk to them over A2A.'),
+    h3('A2A in one paragraph'),
+    p('A script is only useful to the person running it. To let other programs and other agents use an agent, it needs a network interface. <strong>A2A</strong> (Agent2Agent) is an open protocol for that. An A2A agent publishes an <strong>agent card</strong>, a JSON description of who it is and what it can do, at <code>/.well-known/agent-card.json</code>, and accepts messages as JSON-RPC <code>SendMessage</code> calls over HTTP. LiteLLM understands A2A, which is what Lab 7 uses.'),
+    h3('1. The A2A wrapper'),
+    p('This file turns the Lab 5 agent into an A2A server. It imports <code>agent.py</code> unchanged and calls <code>agent.run()</code> for every message that arrives. Settings come from environment variables, so one image can be several agents.'),
     code(r"""
-TEAM=$(curl -s $GW/team/new -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d '{"team_alias":"lab-team","max_budget":0.0002,"models":["gpt-mini"]}' | jq -r .team_id)
-KEY=$(curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d "{\"team_id\":\"$TEAM\",\"key_alias\":\"lab-key\",\"models\":[\"gpt-mini\"],\"rpm_limit\":5}" | jq -r .key)
-echo "team $TEAM  key ****${KEY: -4}"
+sudo mkdir -p /opt/agents
+sudo cp ~/gw-labs/agent.py /opt/agents/
 """),
-    h3('2. Disallowed model'),
+    write_file('/opt/agents/a2a_server.py', 'a2a_server.py', sudo=True),
+    h3('2. Build the image'),
+    p('A <code>Containerfile</code> is Podman&#x27;s name for a Dockerfile; the syntax is the same. Pin the library versions so a rebuild next month gets the same code.'),
     code(r"""
-curl -s -w '\nHTTP %{http_code}\n' $GW/v1/chat/completions -H "Authorization: Bearer $KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"claude-fast","messages":[{"role":"user","content":"hi"}]}' | jq -Rr '. as $l | try (fromjson | .error.message) catch $l'
-# ... not allowed to access model ...   HTTP 401
-"""),
-    h3('3. Rate limit (rpm_limit 5)'),
-    code(r"""
-for i in 1 2 3 4 5 6 7; do
-  curl -s -o /dev/null -w '%{http_code} ' $GW/v1/chat/completions -H "Authorization: Bearer $KEY" \
-    -H 'Content-Type: application/json' -d "{\"model\":\"gpt-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"count $i\"}]}"
-done; echo                                                      # 200 200 200 200 200 429 429
-"""),
-    h3('4. Budget'),
-    p('Wait a minute for the rate window to reset, then spend the $0.0002 with a few longer answers, staying under 5 rpm:'),
-    code(r"""
-sleep 60
-for i in $(seq 1 15); do
-  code=$(curl -s -o /tmp/b.json -w '%{http_code}' $GW/v1/chat/completions -H "Authorization: Bearer $KEY" \
-    -H 'Content-Type: application/json' \
-    -d '{"model":"gpt-mini","messages":[{"role":"user","content":"Write about 150 words on network routers."}]}')
-  echo "request $i: $code"; [ "$code" = 200 ] || break; sleep 13
-done
-jq -r .error.message /tmp/b.json              # Budget has been exceeded! Team=... Current cost: ..., Max budget: 0.0002
-curl -s "$GW/team/info?team_id=$TEAM" -H "Authorization: Bearer $MK" | jq '.team_info | {team_alias, spend, max_budget}'
-"""),
-    h3('Check script'),
-    code(r"""
-cat > labs/06-keys.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-TEAM=$(api POST /team/new '{"team_alias":"lab-check-team","max_budget":0.0002,"models":["gpt-mini"]}' | jq -r .team_id)
-KEY=$(api POST /key/generate "$(jq -n --arg t "$TEAM" '{team_id:$t,key_alias:"lab-check-key",models:["gpt-mini"],rpm_limit:5}')" | jq -r .key)
-cleanup() { api POST /key/delete "$(jq -n --arg k "$KEY" '{keys:[$k]}')" >/dev/null
-            api POST /team/delete "$(jq -n --arg t "$TEAM" '{team_ids:[$t]}')" >/dev/null; rm -f "$OUT" "$HDR"; }
-trap cleanup EXIT
-[[ $KEY == sk-* ]] || fail "could not create team/key (is a database connected?)"
-echo "  team $TEAM, key $(mask "$KEY")"
-
-c=$(chat "$KEY" claude-fast hi)
-[[ $c == 40[13] ]] || fail "disallowed model: expected 401/403, got $c"
-echo "  disallowed model -> $c"
-
-codes=""; for i in 1 2 3 4 5 6 7; do codes+="$(chat "$KEY" gpt-mini "count $i") "; done
-echo "  7 quick requests -> $codes"
-[[ $codes == *429* ]] || fail "rpm_limit 5 produced no 429"
-
-echo "  waiting 61 s for the rate window..."; sleep 61
-for i in $(seq 1 15); do
-  c=$(chat "$KEY" gpt-mini "Write about 150 words on network routers."); [ "$c" = 200 ] || break; sleep 13
-done
-msg=$(jq -r '.error.message // empty' "$OUT")
-echo "  budget -> $c ${msg:0:70}"
-[[ $msg == *"Budget has been exceeded"* ]] || fail "expected a budget error, got $c"
-pass "keys/teams: disallowed model, 429 and budget error all enforced"
+sudo tee /opt/agents/Containerfile >/dev/null <<'EOF'
+FROM docker.io/library/python:3.12.15-slim
+RUN pip install --no-cache-dir "openai==3.24.0" "httpx==0.28.1" "a2a-sdk[http-server]==1.2.2" "uvicorn==0.54.0"
+WORKDIR /app
+COPY agent.py a2a_server.py ./
+USER 1001
+CMD ["python", "a2a_server.py"]
 EOF
-chmod +x labs/06-keys.sh && labs/06-keys.sh                    # takes about 2 minutes
+sudo podman build -t localhost/lab-agent:1 /opt/agents
 """),
-    h3('Cleanup'),
+    p('<code>USER 1001</code> runs the agent as an unprivileged user inside the container. The <code>localhost/</code> prefix marks an image you built yourself, so Podman never tries to pull it from a registry.'),
+    h3('3. A second key, then one env file per agent'),
     code(r"""
-curl -s $GW/key/delete  -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d "{\"keys\":[\"$KEY\"]}"
-curl -s $GW/team/delete -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d "{\"team_ids\":[\"$TEAM\"]}"
+curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"key_alias": "writer-agent", "models": ["lab-agent"], "rpm_limit": 30}' | jq -r .key
+read -rsp 'writer-agent key: ' WRITER_KEY; echo
+
+sudo install -m 600 /dev/null /opt/agents/ops-agent.env
+sudo install -m 600 /dev/null /opt/agents/writer-agent.env
+echo "AGENT_KEY=$OPS_KEY"    | sudo tee /opt/agents/ops-agent.env >/dev/null
+echo "AGENT_KEY=$WRITER_KEY" | sudo tee /opt/agents/writer-agent.env >/dev/null
 """),
-    h3('Notes &amp; gotchas'),
+    h3('4. Two Quadlet units, one image'),
+    p('The two files differ only in name, port and environment. <code>writer-agent</code> gets no tools and a different system prompt; it turns notes into a readable status update. <code>PUBLIC_URL</code> is the address other hosts use to reach the agent; it goes into the agent card.'),
+    code(r"""
+sudo tee /etc/containers/systemd/ops-agent.container >/dev/null <<'EOF'
+[Unit]
+Description=ops-agent (A2A)
+
+[Container]
+ContainerName=ops-agent
+Image=localhost/lab-agent:1
+PublishPort=8601:8601
+EnvironmentFile=/opt/agents/ops-agent.env
+Environment=GW=http://192.168.1.101:4000
+Environment=AGENT_NAME=ops-agent
+Environment=PORT=8601
+Environment=PUBLIC_URL=http://192.168.1.100:8601
+Environment=AGENT_DESCRIPTION="Checks home-lab hosts, ports, URLs and the time using live tools."
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee /etc/containers/systemd/writer-agent.container >/dev/null <<'EOF'
+[Unit]
+Description=writer-agent (A2A)
+
+[Container]
+ContainerName=writer-agent
+Image=localhost/lab-agent:1
+PublishPort=8602:8602
+EnvironmentFile=/opt/agents/writer-agent.env
+Environment=GW=http://192.168.1.101:4000
+Environment=AGENT_NAME=writer-agent
+Environment=PORT=8602
+Environment=PUBLIC_URL=http://192.168.1.100:8602
+Environment=AGENT_TOOLS=off
+Environment=AGENT_DESCRIPTION="Turns notes and findings into a short, clear status update for people."
+Environment=AGENT_PROMPT="You are writer-agent. Rewrite the notes you are given as a short, friendly status update (3-5 sentences). Do not invent facts."
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl start ops-agent writer-agent
+systemctl is-active ops-agent writer-agent                   # active, active
+sudo firewall-cmd --permanent --add-port={8601,8602}/tcp && sudo firewall-cmd --reload   # if firewalld is running
+"""),
+    h3('Verify: talk to an agent directly'),
+    code(r"""
+# the agent card: who it is and where to reach it
+curl -s http://192.168.1.100:8601/.well-known/agent-card.json | jq '{name, description, url: .supportedInterfaces[0].url}'
+
+# an A2A message, saved to a file so the JSON is easy to read and reuse
+cat > ~/gw-labs/ask.json <<'EOF'
+{"jsonrpc": "2.0", "id": "1", "method": "SendMessage",
+ "params": {"message": {"role": "ROLE_USER", "messageId": "msg-1",
+                        "parts": [{"text": "Is port 22 open on 192.168.1.101?"}]}}}
+EOF
+curl -s http://192.168.1.100:8601/ -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' \
+  -d @$HOME/gw-labs/ask.json | jq -r '.result.task.status.message.parts[0].text'
+# Yes, port 22 is open on 192.168.1.101.
+
+sudo journalctl -u ops-agent -n 5 --no-pager                   # the [tool] lines show what it did
+"""),
+    p('The reply is an A2A <strong>task</strong>: it has a state (<code>TASK_STATE_COMPLETED</code>) and the answer as a message. Long-running agents use the same structure to report progress.'),
+    h3('Notes'),
     ul([
-        'Limits stack: a request must pass the key&#x27;s, the team&#x27;s and the user&#x27;s models, budgets and rate limits. The tightest one wins.',
-        'Spend is recorded after each successful call and checked before the next, so you can go slightly over a budget. The request that crosses it succeeds; the one after it fails.',
-        'Budgets are in US dollars, computed from LiteLLM&#x27;s price map. For local models with no price, set <code>input_cost_per_token</code>/<code>output_cost_per_token</code> in <code>model_info</code>, or every call costs $0 and no budget ever trips.',
-        'Add <code>&quot;budget_duration&quot;: &quot;30d&quot;</code> to reset a budget on a schedule.',
-        'The key is shown only once, at creation. LiteLLM stores a hash, so a lost key can&#x27;t be recovered, only regenerated.',
-        'With a single proxy instance, rate limits are counted in memory. With several instances behind a load balancer, add Redis to <code>router_settings</code> so they share counters.',
-        'Everything here can also be done in the admin UI at <code>http://192.168.1.101:4000/ui</code> under <strong>Teams</strong> and <strong>Virtual Keys</strong>.',
+        'Changed <code>agent.py</code> or <code>a2a_server.py</code>? Copy it to <code>/opt/agents</code>, rebuild the image, then <code>sudo systemctl restart ops-agent writer-agent</code>. A restart creates a fresh container from the current image.',
+        'Changed only a <code>.container</code> file? <code>sudo systemctl daemon-reload</code>, then restart that service.',
+        'Right now anyone on the LAN can call these agents directly on ports 8601 and 8602, with no key. Lab 7 puts them behind the gateway, which checks a key on every call. If you want only the gateway to reach them, allow only 192.168.1.101 to those ports in your firewall.',
+        'If <code>systemctl start</code> fails, <code>sudo journalctl -u ops-agent -n 30</code> shows the Python traceback, usually a missing variable or a typo in the env file.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 7
-L7 = lab(7, 'Response Caching with Redis', 'workstation → 192.168.1.101, cache on 192.168.1.100',
-    goal('show that a repeated identical request is answered from Redis on .100: faster, at no cost, and marked with an <code>x-litellm-cache-key</code> header.'),
-    h3('Steps'),
+L7 = lab(7, 'Agent 3: Publish Agents Through the Gateway (A2A)', '192.168.1.100 → 192.168.1.101 → agents on .100',
+    goal('register both agents with LiteLLM, call <code>ops-agent</code> at <code>/a2a/ops-agent</code> on the gateway with a virtual key, and see that a key without permission can&#x27;t reach it.'),
+    h3('Why go through the gateway'),
+    p('Calling agents directly (Lab 6) works, but then every caller needs to know every agent&#x27;s address, and nothing checks who&#x27;s calling. Registered with the gateway, all agents live at one address, <code>http://192.168.1.101:4000/a2a/&lt;name&gt;</code>. Each call needs a virtual key that&#x27;s been granted that agent, and every call is logged. You can move an agent to another host by changing its registration, and no caller has to change anything.'),
+    h3('1. Register the agents'),
+    p('Registration is the agent card plus a name for the gateway. <code>url</code> is where LiteLLM forwards calls.'),
     code(r"""
-Q="{\"model\":\"gpt-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"Name three primes. $(date +%s)\"}]}"
-for i in 1 2; do
-  echo "--- call $i"
-  curl -s -D - -o /dev/null $GW/v1/chat/completions -H "Authorization: Bearer $MK" \
-    -H 'Content-Type: application/json' -d "$Q" \
-    | grep -iE '^x-litellm-(cache-key|response-cost|response-duration-ms)'
+cat > ~/gw-labs/ops-agent.json <<'EOF'
+{
+  "agent_name": "ops-agent",
+  "agent_card_params": {
+    "protocolVersion": "1.0",
+    "name": "ops-agent",
+    "description": "Checks home-lab hosts, ports, URLs and the time using live tools.",
+    "url": "http://192.168.1.100:8601/",
+    "version": "1.0.0",
+    "defaultInputModes": ["text/plain"],
+    "defaultOutputModes": ["text/plain"],
+    "capabilities": {"streaming": false},
+    "skills": [{"id": "ops", "name": "Lab checks", "tags": ["ops"],
+                "description": "Checks URLs, TCP ports and the time."}]
+  }
+}
+EOF
+cat > ~/gw-labs/writer-agent.json <<'EOF'
+{
+  "agent_name": "writer-agent",
+  "agent_card_params": {
+    "protocolVersion": "1.0",
+    "name": "writer-agent",
+    "description": "Turns notes and findings into a short, clear status update for people.",
+    "url": "http://192.168.1.100:8602/",
+    "version": "1.0.0",
+    "defaultInputModes": ["text/plain"],
+    "defaultOutputModes": ["text/plain"],
+    "capabilities": {"streaming": false},
+    "skills": [{"id": "write", "name": "Status updates", "tags": ["writing"],
+                "description": "Rewrites notes as a short status update."}]
+  }
+}
+EOF
+
+for a in ops-agent writer-agent; do
+  curl -s $GW/v1/agents -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+    -d @$HOME/gw-labs/$a.json | jq '{agent_name, agent_id}'
 done
 """),
-    p('Call 2 carries <code>x-litellm-cache-key</code>, a much lower duration, and a cost of 0. Look at the entry in Redis:'),
+    p('Each agent gets an <code>agent_id</code>. You&#x27;ll use the IDs to grant access. List them again any time with:'),
     code(r"""
-# on 192.168.1.100
-cd ~/litellm-lab
-docker compose exec redis sh -c 'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --count 1000 | head'
-docker compose exec redis sh -c 'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning info keyspace'
+curl -s $GW/v1/agents -H "Authorization: Bearer $MK" | jq -r '.[] | "\(.agent_id)  \(.agent_name)"'
 """),
-    h3('Per-request controls'),
+    h3('2. Call an agent through the gateway'),
+    p('With the master key first, to prove the route works. It&#x27;s the same <code>ask.json</code> from Lab 6, sent to the gateway instead of to the agent:'),
     code(r"""
-# skip the cache for one call
--d '{"model":"gpt-mini","cache":{"no-cache":true},"messages":[...]}'
-# accept only entries younger than 60 seconds
--d '{"model":"gpt-mini","cache":{"s-maxage":60},"messages":[...]}'
+curl -s $GW/a2a/ops-agent -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' \
+  -d @$HOME/gw-labs/ask.json | jq -r '.result.task.status.message.parts[0].text'
 """),
-    h3('Check script'),
+    h3('3. A caller key that may use ops-agent only'),
+    p('Virtual keys can&#x27;t see <em>any</em> agent until you grant one. The grant goes in <code>object_permission.agents</code> and takes agent <strong>IDs</strong>, not names:'),
     code(r"""
-cat > labs/07-cache.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-P="Name three prime numbers. nonce $(date +%s%N)"     # fresh prompt: call 1 must miss
-c1=$(chat "$MK" gpt-mini "$P"); d1=$(hdr x-litellm-response-duration-ms)
-c2=$(chat "$MK" gpt-mini "$P"); d2=$(hdr x-litellm-response-duration-ms); k=$(hdr x-litellm-cache-key)
-echo "  call 1: HTTP $c1, ${d1:-?} ms;  call 2: HTTP $c2, ${d2:-?} ms, cache key ${k:0:16}..."
-[ "$c1" = 200 ] && [ "$c2" = 200 ] && [ -n "$k" ] && pass "cache: second identical request was a cache hit" \
-  || fail "cache: no x-litellm-cache-key on the repeat (check /cache/ping)"
-EOF
-chmod +x labs/07-cache.sh && labs/07-cache.sh
+OPS_ID=$(curl -s $GW/v1/agents -H "Authorization: Bearer $MK" | jq -r '.[] | select(.agent_name=="ops-agent") | .agent_id')
+curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d "{\"key_alias\": \"ops-caller\", \"models\": [\"lab-agent\"], \"object_permission\": {\"agents\": [\"$OPS_ID\"]}}" \
+  | jq -r .key
+read -rsp 'ops-caller key: ' CALLER_KEY; echo
 """),
-    h3('Notes &amp; gotchas'),
+    h3('Verify'),
+    code(r"""
+# the key sees only the agent it was granted
+curl -s $GW/v1/agents -H "Authorization: Bearer $CALLER_KEY" | jq -r '.[].agent_name'
+# ops-agent
+
+# and can call it
+curl -s $GW/a2a/ops-agent -H "Authorization: Bearer $CALLER_KEY" -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' \
+  -d @$HOME/gw-labs/ask.json | jq -r '.result.task.status.message.parts[0].text'
+
+# the chat-ui key from Lab 3 was never granted any agent
+curl -s $GW/v1/agents -H "Authorization: Bearer $UIKEY" | jq length
+# 0
+"""),
+    h3('Notes'),
     ul([
-        'The cache key is a hash of the model, messages and parameters, so changing <code>temperature</code> or a single character of the prompt is a miss.',
-        'Cache hits show <code>cache_hit: true</code> in the spend logs (Lab 9) and cost $0, which is why caching doubles as a cost control.',
-        'Don&#x27;t cache what should vary. Creative or tool-calling flows usually want <code>no-cache</code>, or opt-in caching with <code>mode: default_off</code>.',
-        'If <code>/cache/ping</code> fails, the usual causes are a wrong <code>REDIS_PASSWORD</code> in the env file, <code>host: localhost</code> instead of 192.168.1.100, or the container not recreated after the env change.',
-        'Semantic caching (similar prompts, not just identical ones) is available as <code>type: redis-semantic</code>. It needs Redis Stack and an embedding model.',
+        'There are two keys in every gateway call to an agent. The <strong>caller&#x27;s</strong> key decides whether it may reach the agent. The <strong>agent&#x27;s own</strong> key (in its env file) is what the agent uses for its model calls. The logs show both, so you can tell who asked and what the agent spent answering.',
+        'LiteLLM also accepts older A2A v0.3 clients (<code>&quot;method&quot;: &quot;message/send&quot;</code>, parts with <code>&quot;kind&quot;: &quot;text&quot;</code>) and translates them for these 1.0 agents.',
+        'The admin UI&#x27;s <strong>Agents</strong> page shows the same registrations, and can add or delete them.',
+        'To change where an agent lives, delete its registration (<code>curl -X DELETE $GW/v1/agents/&lt;agent_id&gt;</code>) and register it again with the new <code>url</code>. Its ID changes, so update the keys that were granted the old one.',
+        'Treat what an agent returns, including its card, as untrusted text. Another agent&#x27;s reply can contain instructions aimed at the model reading it.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 8
-L8 = lab(8, 'Custom Guardrail: Block SSNs', 'workstation → 192.168.1.101',
-    goal('a prompt containing a US Social Security number is rejected before it reaches any provider, and a clean prompt passes.'),
-    h3('How it works'),
-    p('Lab 3 installed <code>guard.py</code> and registered it as <code>ssn-guard</code> with <code>mode: pre_call</code> and <code>default_on: true</code>. LiteLLM calls <code>async_pre_call_hook</code> after authentication and before routing, for every request on every model. Raising an <code>HTTPException</code> there ends the request: the model never sees the prompt, and nothing is billed.'),
-    h3('Steps'),
+L8 = lab(8, 'Agent 4: Tools from an MCP Server, Through the Gateway', '192.168.1.100 (MCP server, agent) and 192.168.1.101',
+    goal('move the lab tools out of the agent into an MCP server running as a Quadlet, register it with LiteLLM, and build an agent that finds its tools through the gateway.'),
+    h3('MCP in one paragraph'),
+    p('In Lab 5 the tools were written into the agent. <strong>MCP</strong> (Model Context Protocol) moves tools into a separate server that any agent or app can connect to and ask &quot;what tools do you have?&quot;. Register MCP servers with LiteLLM, and agents connect to one endpoint, <code>http://192.168.1.101:4000/mcp/</code>, with their virtual key. They see only the tools that key has been granted, and every tool call is logged.'),
+    h3('1. The MCP server'),
+    p('The <code>mcp</code> library turns plain Python functions into MCP tools; the docstring becomes the tool description the model reads.'),
     code(r"""
-curl -s $GW/guardrails/list -H "Authorization: Bearer $MK" | jq '.guardrails[] | {guardrail_name, litellm_params}'
-
-for msg in "My SSN is 123-45-6789, is that a valid format?" "What is the capital of Ohio?"; do
-  curl -s -w '\nHTTP %{http_code}\n' $GW/v1/chat/completions -H "Authorization: Bearer $MK" \
-    -H 'Content-Type: application/json' \
-    -d "{\"model\":\"claude-fast\",\"messages\":[{\"role\":\"user\",\"content\":\"$msg\"}]}" \
-    | jq -Rr '. as $l | try (fromjson | .error.message // .choices[0].message.content) catch $l'
-done
+sudo mkdir -p /opt/lab-tools
 """),
-    h3('Check script'),
+    write_file('/opt/lab-tools/lab_tools.py', 'lab_tools.py', sudo=True),
     code(r"""
-cat > labs/08-guardrail.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-c=$(chat "$MK" gpt-mini "My SSN is 123-45-6789. Remember it.")
-[ "$c" != 200 ] && grep -qi 'ssn' "$OUT" || fail "SSN prompt was not blocked (HTTP $c)"
-echo "  SSN prompt   -> HTTP $c: $(jq -r '.error.message // .' "$OUT" | head -c 80)"
-c=$(chat "$MK" gpt-mini "What is the capital of Ohio?")
-[ "$c" = 200 ] || fail "clean prompt failed with HTTP $c"
-echo "  clean prompt -> HTTP $c: $(jq -r '.choices[0].message.content' "$OUT" | head -c 40)"
-pass "guardrail: SSN blocked, clean prompt passed"
+sudo tee /opt/lab-tools/Containerfile >/dev/null <<'EOF'
+FROM docker.io/library/python:3.12.15-slim
+RUN pip install --no-cache-dir "mcp==2.3.0" "httpx==0.28.1"
+COPY lab_tools.py /app/lab_tools.py
+USER 1001
+EXPOSE 8701
+CMD ["python", "/app/lab_tools.py"]
 EOF
-chmod +x labs/08-guardrail.sh && labs/08-guardrail.sh
+sudo podman build -t localhost/lab-tools:1 /opt/lab-tools
+
+sudo tee /etc/containers/systemd/lab-tools.container >/dev/null <<'EOF'
+[Unit]
+Description=lab-tools MCP server
+
+[Container]
+ContainerName=lab-tools
+Image=localhost/lab-tools:1
+PublishPort=8701:8701
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl start lab-tools
+systemctl is-active lab-tools
+sudo firewall-cmd --permanent --add-port=8701/tcp && sudo firewall-cmd --reload   # if firewalld is running
 """),
-    h3('Notes &amp; gotchas'),
+    h3('2. Register it with LiteLLM (on .101)'),
+    p('MCP servers are part of the gateway config. Add this block at the end of <code>/opt/litellm/config.yaml</code> as a new top-level key, then restart:'),
+    code(r"""
+mcp_servers:
+  lab_tools:                               # the server's name in LiteLLM; tool names get this prefix
+    url: http://192.168.1.100:8701/mcp
+    transport: http
+    description: Home-lab checks (URL, port, DNS)
+"""),
+    code(r"""
+sudo systemctl restart litellm
+"""),
+    p('Back on .100, check that LiteLLM sees the tools:'),
+    code(r"""
+curl -s $GW/mcp-rest/tools/list -H "Authorization: Bearer $MK" | jq -r '.tools[].name'
+# check_url
+# check_port
+# dns_lookup
+"""),
+    h3('3. A key that may use lab_tools'),
+    p('As with agents, a virtual key sees no MCP servers until you grant them, in <code>object_permission.mcp_servers</code>. Server names work here.'),
+    code(r"""
+curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"key_alias": "mcp-agent", "models": ["lab-agent"], "object_permission": {"mcp_servers": ["lab_tools"]}}' \
+  | jq -r .key
+read -rsp 'mcp-agent key: ' MCP_KEY; echo
+"""),
+    h3('4. An agent with no tools of its own'),
+    p('<code>mcp_agent.py</code> connects to the gateway&#x27;s MCP endpoint, asks which tools its key may use, hands them to the model, and sends each tool call back through the gateway. Compare it to <code>agent.py</code>: the loop is the same, and the tool code is gone.'),
+    write_file('~/gw-labs/mcp_agent.py', 'mcp_agent.py'),
+    h3('Verify'),
+    code(r"""
+cd ~/gw-labs && . .venv/bin/activate
+AGENT_KEY=$MCP_KEY python mcp_agent.py "Resolve github.com, check whether port 4000 is open on 192.168.1.101, and fetch http://192.168.1.101:4000/health/liveliness."
+# tools from the gateway: ['lab_tools-check_url', 'lab_tools-check_port', 'lab_tools-dns_lookup']
+#   [mcp] lab_tools-dns_lookup({'name': 'github.com'}) -> 140.82.112.3
+#   [mcp] lab_tools-check_port({'host': '192.168.1.101', 'port': 4000}) -> 192.168.1.101:4000 is open
+#   [mcp] lab_tools-check_url({'url': 'http://192.168.1.101:4000/health/liveliness'}) -> HTTP 200 in 18 ms
+# All three checks done: ...
+"""),
+    p('A key that was never granted <code>lab_tools</code> can&#x27;t even connect. Try the <code>ops-agent</code> key:'),
+    code(r"""
+curl -s $GW/mcp-rest/tools/list -H "Authorization: Bearer $OPS_KEY" | jq -r .message
+# ... The key is not allowed to access any MCP servers.
+"""),
+    p('<code>mcp_agent.py</code> run with that key stops at the connect step with <code>MCPError: Server returned an error response</code> for the same reason.'),
+    h3('Notes'),
     ul([
-        'The regex only matches the dashed form. <code>123456789</code> or <code>123 45 6789</code> get through. Extend it as an exercise, and watch for false positives on phone and order numbers.',
-        'Other modes: <code>post_call</code> inspects the model&#x27;s answer, and <code>during_call</code> runs alongside the model call. To mask instead of block, change the message text in <code>data</code> and return it.',
-        'With <code>default_on: false</code>, the guardrail runs only for requests that ask for it with <code>&quot;guardrails&quot;: [&quot;ssn-guard&quot;]</code>, or for keys and teams that have it attached.',
-        'This is a lab control, not DLP. Anything that encodes, splits or paraphrases the number gets past a regex. For production, use a real PII engine (LiteLLM integrates Presidio and several vendors) and keep regexes as a cheap first layer.',
-        'Requests blocked by the guardrail show up in the spend logs as failures and under <strong>Guardrails</strong> in the UI. That&#x27;s useful evidence that the control works.',
+        'Through the gateway, tool names get the server name as a prefix (<code>lab_tools-check_port</code>), so two servers can both have a tool called <code>search</code>.',
+        'Anything that speaks MCP can use the same endpoint and key, including the coding agents in Lab 10.',
+        'To limit a key to some of a server&#x27;s tools, add <code>&quot;mcp_tool_permissions&quot;: {&quot;lab_tools&quot;: [&quot;check_port&quot;]}</code> to its <code>object_permission</code>.',
+        'Remote MCP servers run code and return text the model will act on. Register only servers you trust.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 9
-L9 = lab(9, 'Observability: Spend Logs & Langfuse', 'workstation, 192.168.1.101, Langfuse on 192.168.1.100',
-    goal('see every request from the previous labs in LiteLLM&#x27;s spend logs, then (optionally) send full traces to a self-hosted Langfuse.'),
-    h3('Part A: spend logs (built in)'),
+L9 = lab(9, 'Agent 5: A Coordinator That Delegates to Other Agents', '192.168.1.100 → 192.168.1.101 → agents on .100',
+    goal('build a coordinator agent that can&#x27;t check anything itself. It asks the gateway which agents it may use, splits the job up, and delegates each part over A2A: checks to <code>ops-agent</code>, the write-up to <code>writer-agent</code>.'),
+    h3('How it works'),
+    p('The coordinator is the same loop as Lab 5 with a single tool, <code>ask_agent(agent, message)</code>. The list of agents isn&#x27;t hard-coded. It comes from <code>/v1/agents</code>, so the coordinator sees exactly the agents its key was granted, with their descriptions, and the model picks one by reading those descriptions. Every hop goes through the gateway: the coordinator&#x27;s own model calls, its calls to other agents, and those agents&#x27; model calls.'),
+    h3('1. A key for the coordinator, granted both agents'),
     code(r"""
-TODAY=$(date -u +%F); TOMORROW=$(date -u -d tomorrow +%F)
-curl -s "$GW/spend/logs?start_date=$TODAY&end_date=$TOMORROW&summarize=false" -H "Authorization: Bearer $MK" \
-  | jq -r 'if type=="array" then . else .data end | sort_by(.startTime) | .[-10:][]
-           | [.startTime[11:19], .model_group // .model, .status // "-", (.spend|tostring), (.cache_hit|tostring)] | @tsv'
+IDS=$(curl -s $GW/v1/agents -H "Authorization: Bearer $MK" \
+  | jq -c '[.[] | select(.agent_name == "ops-agent" or .agent_name == "writer-agent") | .agent_id]')
+echo "$IDS"                                 # two agent IDs
+curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d "{\"key_alias\": \"coordinator\", \"models\": [\"lab-agent\"], \"object_permission\": {\"agents\": $IDS}}" \
+  | jq -r .key
+read -rsp 'coordinator key: ' COORD_KEY; echo
 """),
-    p('Each row has the time, the model alias, the status, cost in dollars, and whether it was a cache hit. The UI shows the same data under <strong>Logs</strong> and <strong>Usage</strong>.'),
-    h3('Part B: Langfuse on .100 (optional)'),
-    p('Langfuse v4 runs as six containers (web, worker, Postgres, ClickHouse, Redis, MinIO) and needs about 4 GB of free RAM. Its compose file publishes its own Postgres and Redis on 127.0.0.1:5432 and :6379, which collide with Lab 2&#x27;s, so an override file removes those ports and pins the images.'),
+    h3('2. The coordinator'),
+    write_file('~/gw-labs/coordinator.py', 'coordinator.py'),
+    p('Two details worth noticing. The <code>enum</code> in the tool&#x27;s parameters limits the model to agent names that actually exist. The system prompt says it can&#x27;t check anything itself, which stops it guessing instead of delegating.'),
+    h3('Verify'),
     code(r"""
-# on 192.168.1.100
-cd ~/litellm-lab
-git clone --depth 1 --branch v4.50.0 https://github.com/langfuse/langfuse.git
-cd langfuse
-umask 077
-PG=$(openssl rand -hex 16); MINIO=$(openssl rand -hex 16)
-cat > .env <<EOF
-POSTGRES_VERSION=17.11
-POSTGRES_PASSWORD=$PG
-DATABASE_URL=postgresql://postgres:$PG@postgres:5432/postgres
-SALT=$(openssl rand -hex 16)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-NEXTAUTH_SECRET=$(openssl rand -hex 32)
-NEXTAUTH_URL=http://192.168.1.100:3000
-CLICKHOUSE_PASSWORD=$(openssl rand -hex 16)
-REDIS_AUTH=$(openssl rand -hex 16)
-MINIO_ROOT_PASSWORD=$MINIO
-LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=$MINIO
-LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=$MINIO
-LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY=$MINIO
-LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://192.168.1.100:9090
-TELEMETRY_ENABLED=false
-LANGFUSE_INIT_ORG_ID=lab
-LANGFUSE_INIT_ORG_NAME=Lab
-LANGFUSE_INIT_PROJECT_ID=litellm-lab
-LANGFUSE_INIT_PROJECT_NAME=litellm-lab
-LANGFUSE_INIT_PROJECT_PUBLIC_KEY=pk-lf-$(openssl rand -hex 12)
-LANGFUSE_INIT_PROJECT_SECRET_KEY=sk-lf-$(openssl rand -hex 24)
-LANGFUSE_INIT_USER_EMAIL=admin@lab.local
-LANGFUSE_INIT_USER_NAME=admin
-LANGFUSE_INIT_USER_PASSWORD=$(openssl rand -hex 12)
-EOF
-unset PG MINIO
-
-cat > docker-compose.override.yml <<'EOF'
-services:
-  langfuse-web:
-    image: docker.langfuse.com/langfuse/langfuse:4.50.0
-  langfuse-worker:
-    image: docker.langfuse.com/langfuse/langfuse-worker:4.50.0
-  redis:
-    image: docker.io/library/redis:7.4.11
-    ports: !reset []
-  postgres:
-    ports: !reset []
-EOF
-
-docker compose config | grep -E 'image:|published:'     # no 5432/6379; web 3000, minio 9090
-docker compose up -d
-docker compose ps                                       # wait until langfuse-web is up (~1-2 min)
-grep -E 'INIT_(PROJECT_PUBLIC_KEY|USER_EMAIL)' .env     # public key and login are safe to show
+cd ~/gw-labs && . .venv/bin/activate
+AGENT_KEY=$COORD_KEY python coordinator.py
+# agents on the gateway: ['ops-agent', 'writer-agent']
+#   -> ops-agent: Check http://192.168.1.101:4000/health/liveliness and whether SSH (port 22) is open on 192.168.1.100 ...
+#   <- ops-agent: Gateway health endpoint: UP, HTTP 200 in 18 ms. Port 22 on 192.168.1.100: open ...
+#   -> writer-agent: Please turn these findings into a short, clear status update ...
+#   <- writer-agent: Quick check-in: the gateway is up and responding normally ...
+# **Status update: all services operational** ...
 """),
-    p('Log in at <code>http://192.168.1.100:3000</code> with the init email and the password from <code>.env</code>. Then add the Langfuse keys to LiteLLM on .101:'),
+    p('Give it your own goals: &quot;Find out whether Open WebUI on 192.168.1.100:3000 is up and write a one-line note for the team.&quot; While it runs, <code>sudo journalctl -u ops-agent -f</code> in another terminal shows the tool calls happening inside the delegated agent.'),
+    h3('See the whole chain'),
     code(r"""
-# on 192.168.1.101
-read -rsp 'Langfuse public key: ' LPK; echo
-read -rsp 'Langfuse secret key: ' LSK; echo
-printf '%s\n' "LANGFUSE_PUBLIC_KEY=$LPK" "LANGFUSE_SECRET_KEY=$LSK" "LANGFUSE_HOST=http://192.168.1.100:3000" \
-  | sudo tee -a /opt/litellm/litellm.env >/dev/null; unset LPK LSK
-sudo vi /opt/litellm/config.yaml       # under litellm_settings add:   callbacks: ["langfuse_otel"]
-sudo /opt/litellm/run-litellm.sh
+curl -s "$GW/spend/logs?start_date=$(date -u +%F)&end_date=$(date -u -d tomorrow +%F)&summarize=false" \
+  -H "Authorization: Bearer $MK" \
+  | jq -r 'group_by(.metadata.user_api_key_alias)[] | "\(.[0].metadata.user_api_key_alias // "master")\t\(length) requests"'
+# coordinator    4 requests
+# ops-agent      ...
+# writer-agent   ...
 """),
-    h3('Check script'),
-    code(r"""
-cat > labs/09-observability.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-T=$(date -u +%F); T2=$(date -u -d tomorrow +%F)
-n=$(api GET "/spend/logs?start_date=$T&end_date=$T2&summarize=false" | jq 'if type=="array" then . else .data end | length')
-echo "  spend log entries today: $n"
-[ "${n:-0}" -gt 0 ] || fail "no spend logs today (database connected? did Labs 4-8 run?)"
-if [ -n "${LF_PK:-}" ] && [ -n "${LF_SK:-}" ]; then
-  t=$(curl -s -u "$LF_PK:$LF_SK" "http://192.168.1.100:3000/api/public/traces?limit=5" | jq '.data | length')
-  echo "  Langfuse traces visible: $t"
-  [ "${t:-0}" -gt 0 ] || fail "Langfuse has no traces yet"
-fi
-pass "observability: $n spend log entries${LF_PK:+, Langfuse traces present}"
-EOF
-chmod +x labs/09-observability.sh && labs/09-observability.sh
-# with Langfuse: read -rsp 'LF secret: ' LF_SK; export LF_SK LF_PK=pk-lf-...; labs/09-observability.sh
-"""),
-    h3('Notes &amp; gotchas'),
+    p('One question to the coordinator turned into requests under three different keys. That&#x27;s the point of putting the gateway in the middle: you can see how much work each agent did, and limit or switch off any one of them.'),
+    h3('Notes'),
     ul([
-        'Spend log rows are written in batches, so the newest requests can take 10&ndash;60 seconds to appear.',
-        '<code>langfuse_otel</code> sends OpenTelemetry spans to Langfuse&#x27;s <code>/api/public/otel</code> endpoint, which current Langfuse versions prefer. The older <code>langfuse</code> callback (Langfuse SDK v2 ingestion) still exists if you&#x27;re on an older Langfuse.',
-        'Traces include full prompts and completions. To keep content out of Langfuse but still log metadata, set <code>turn_off_message_logging: true</code> in <code>litellm_settings</code>.',
-        '<code>!reset</code> in an override file needs Docker Compose 2.24 or newer. If <code>docker compose config</code> still shows 5432 or 6379 published, your Compose is older; edit those lines out of Langfuse&#x27;s file instead.',
-        'MinIO from <code>cgr.dev/chainguard/minio</code> is only published as <code>latest</code> on the free tier. Pin it by digest (<code>docker compose images</code> shows it) if you need full reproducibility.',
-        'Prometheus metrics (<code>/metrics</code>) are an enterprise feature in LiteLLM. The spend logs and Langfuse/OTel callbacks used here are all open source.',
+        'To add a specialist, run another agent from the same image (a new <code>.container</code> file with a new name, port and prompt), register it, and grant its ID to the coordinator&#x27;s key. The coordinator&#x27;s code doesn&#x27;t change.',
+        'Delegation multiplies requests. A <code>max_steps</code> cap and an <code>rpm_limit</code> on every agent&#x27;s key keep a confused coordinator from flooding the model server.',
+        'This coordinator waits for each answer before it continues. Long-running agents should return a task right away and report progress; A2A supports that through task states and streaming.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 10
-L10 = lab(10, 'MCP Gateway: DeepWiki Through LiteLLM', 'workstation → 192.168.1.101 → mcp.deepwiki.com',
-    goal('list the DeepWiki MCP tools through LiteLLM, then have a model call them through <code>/v1/responses</code>, where LiteLLM runs the tool calls itself.'),
-    h3('1. See the server and its tools'),
+L10 = lab(10, 'Coding Agents Through the Gateway: opencode and Claude Code', 'any host with the agent installed → 192.168.1.101',
+    goal('point a coding agent at the gateway instead of straight at a model server, with its own key, so its usage is logged and limited like every other agent, and give it the <code>lab_tools</code> MCP tools.'),
+    h3('1. A key for coding agents'),
     code(r"""
-curl -s $GW/v1/mcp/server -H "Authorization: Bearer $MK" | jq '.[] | {server_name, url, transport, status}'
-curl -s $GW/mcp-rest/tools/list -H "Authorization: Bearer $MK" | jq -r '.tools[].name'
-# deepwiki-read_wiki_structure, deepwiki-read_wiki_contents, deepwiki-ask_question
+curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"key_alias": "coding-agent", "models": ["lab-agent"], "rpm_limit": 120, "object_permission": {"mcp_servers": ["lab_tools"]}}' \
+  | jq -r .key
 """),
-    h3('2. Let the model use them'),
+    p('Coding agents send many requests per task, so give them a higher <code>rpm_limit</code> than the other agents.'),
+    h3('2. opencode'),
+    p('opencode can talk to any OpenAI-compatible server. Add the gateway as a provider in <code>~/.config/opencode/opencode.json</code> (or the <code>config.json</code> you already have; merge these keys into it). <code>{env:LITELLM_KEY}</code> reads the key from an environment variable, so the key isn&#x27;t stored in the file.'),
     code(r"""
-jq -n --arg k "Bearer $MK" '{
-  model: "gpt-mini",
-  input: "Use DeepWiki to answer in two sentences: what does the BerriAI/litellm repository do?",
-  tools: [{type:"mcp", server_label:"litellm", server_url:"litellm_proxy", require_approval:"never",
-           headers:{"x-litellm-api-key":$k, "x-mcp-servers":"deepwiki"}}],
-  tool_choice: "required"}' > /tmp/mcp.json
-curl -s $GW/v1/responses -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d @/tmp/mcp.json \
-  | tee /tmp/mcp.out | jq -r '.output[] | .type + "  " + (.name // "") ' ; \
-  jq -r '[.output[] | select(.type=="message") | .content[]?.text] | join("\n")' /tmp/mcp.out
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "litellm/lab-agent",
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM gateway",
+      "options": {
+        "baseURL": "http://192.168.1.101:4000/v1",
+        "apiKey": "{env:LITELLM_KEY}"
+      },
+      "models": {
+        "lab-agent": { "name": "lab-agent (via gateway)", "tools": true, "limit": { "context": 98304, "output": 8192 } }
+      }
+    }
+  },
+  "mcp": {
+    "lab-tools": {
+      "type": "remote",
+      "url": "http://192.168.1.101:4000/mcp/",
+      "headers": { "Authorization": "Bearer {env:LITELLM_KEY}" },
+      "enabled": true
+    }
+  }
+}
 """),
-    p('<code>server_url: &quot;litellm_proxy&quot;</code> tells LiteLLM to use its own registered MCP servers; <code>x-mcp-servers</code> narrows that to DeepWiki. The output lists the <code>mcp_call</code> steps followed by the final message.'),
-    h3('Check script'),
     code(r"""
-cat > labs/10-mcp.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-n=$(api GET /mcp-rest/tools/list | jq '[.tools[]? | select(.name|test("deepwiki|wiki|ask_question"))] | length')
-echo "  DeepWiki tools listed: $n"
-[ "${n:-0}" -gt 0 ] || fail "no DeepWiki tools (is mcp_servers.deepwiki in config, and is outbound HTTPS allowed?)"
-body=$(jq -n --arg k "Bearer $MK" '{model:"gpt-mini",
-  input:"Use DeepWiki: in one sentence, what does the BerriAI/litellm repository do?",
-  tools:[{type:"mcp",server_label:"litellm",server_url:"litellm_proxy",require_approval:"never",
-          headers:{"x-litellm-api-key":$k,"x-mcp-servers":"deepwiki"}}], tool_choice:"required"}')
-api POST /v1/responses "$body" > "$OUT"
-jq -e '[.. | strings | select(test("ask_question|read_wiki"))] | length > 0' "$OUT" >/dev/null \
-  || fail "the response shows no DeepWiki tool call: $(jq -c '.error // .output[0]' "$OUT" | head -c 160)"
-pass "MCP: model called DeepWiki through litellm_proxy"
-EOF
-chmod +x labs/10-mcp.sh && labs/10-mcp.sh
+read -rsp 'coding-agent key: ' LITELLM_KEY; echo; export LITELLM_KEY
+opencode run "Reply with the single word pong."
+opencode run "Use the lab-tools check_port tool to check whether port 22 is open on 192.168.1.101."
 """),
-    h3('Use the MCP gateway from other clients'),
+    p('Set <code>limit.context</code> to the context length the model is actually loaded with, so opencode compacts the conversation before it overflows.'),
+    h3('3. Claude Code'),
+    p('Claude Code speaks Anthropic&#x27;s Messages API. LiteLLM serves that too, at <code>/v1/messages</code>, and translates it for whatever model is behind the alias, including the local one:'),
     code(r"""
-# Claude Code (with a virtual key from Lab 6 or 11)
-claude mcp add --transport http litellm http://192.168.1.101:4000/mcp/ \
-  --header "x-litellm-api-key: Bearer <virtual-key>"
+curl -s $GW/v1/messages -H "Authorization: Bearer $MK" -H 'content-type: application/json' \
+  -H 'anthropic-version: 2023-06-01' \
+  -d '{"model": "lab-agent", "max_tokens": 400, "messages": [{"role": "user", "content": "Say pong."}]}' \
+  | jq -r '.content[] | select(.type == "text") | .text'
+# pong
 """),
-    h3('Notes &amp; gotchas'),
+    p('Then set these in the shell where you start Claude Code:'),
+    code(r"""
+export ANTHROPIC_BASE_URL=http://192.168.1.101:4000
+export ANTHROPIC_AUTH_TOKEN=<coding-agent key>     # sent as "Authorization: Bearer"
+export ANTHROPIC_MODEL=lab-agent
+export ANTHROPIC_DEFAULT_HAIKU_MODEL=lab-agent     # used for small background tasks
+claude mcp add --transport http lab-tools http://192.168.1.101:4000/mcp/ \
+  --header "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"
+claude
+"""),
+    h3('Verify'),
+    p('Run a small task in either agent, then look in the gateway UI under <strong>Logs</strong>, filtered by key alias <code>coding-agent</code>. Every request the coding agent made is there, including the MCP tool calls.'),
+    h3('Notes'),
     ul([
-        'If <code>/mcp-rest/tools/list</code> says &quot;The key is not allowed to access any MCP servers&quot;, LiteLLM found no server it could use: check the <code>mcp_servers:</code> block loaded (startup log) and that .101 can reach <code>https://mcp.deepwiki.com</code>.',
-        'LiteLLM prefixes tool names with the server name (<code>deepwiki-ask_question</code>) so tools from different servers can&#x27;t collide.',
-        'MCP access follows keys and teams: give a key <code>object_permission.mcp_servers</code> to restrict which servers it can use. A key with no restriction sees every public server.',
-        'DeepWiki is public and needs no auth. For servers that do, LiteLLM can store per-server credentials or pass the caller&#x27;s headers through, so clients never hold the upstream token.',
-        'If listing works but the responses call hangs, the model is probably looping on tool calls. Lower <code>max_output_tokens</code> or ask a narrower question.',
-        'Remote MCP servers run code and return text that the model will act on. Only add servers you trust; tool output is a prompt-injection path.',
+        'Use <code>ANTHROPIC_AUTH_TOKEN</code>, not <code>ANTHROPIC_API_KEY</code>. Claude Code treats the latter as a real Anthropic key.',
+        'A local 27B model is fine for trying this out and for small edits. For serious work on a big codebase, put a larger or cloud model behind a separate alias and add it to this key&#x27;s <code>models</code>.',
+        'Both agents can run shell commands on the machine they run on. Keep their permission prompts on (<code>&quot;permission&quot;: {&quot;bash&quot;: &quot;ask&quot;}</code> in opencode); the gateway controls model access, not what the agent does locally.',
     ]),
 )
 
 # ---------------------------------------------------------------- lab 11
-L11 = lab(11, 'Claude Code Through /v1/messages', 'workstation → 192.168.1.101',
-    goal('give Claude Code its own virtual key with a budget, confirm the Anthropic-format <code>/v1/messages</code> endpoint works, and print the exports to use (without running Claude Code here).'),
-    h3('1. A key just for Claude Code'),
-    code(r"""
-CC_KEY=$(curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d '{"key_alias":"claude-code","models":["claude-fast","gpt-mini"],"max_budget":5,"budget_duration":"30d"}' \
-  | jq -r .key)
-echo "claude-code key ****${CC_KEY: -4}"
-"""),
-    h3('2. Test the Anthropic Messages API'),
-    code(r"""
-for m in claude-fast gpt-mini; do
-  curl -s $GW/v1/messages -H "Authorization: Bearer $CC_KEY" -H 'content-type: application/json' \
-    -H 'anthropic-version: 2023-06-01' \
-    -d "{\"model\":\"$m\",\"max_tokens\":60,\"messages\":[{\"role\":\"user\",\"content\":\"Say pong.\"}]}" \
-    | jq -r --arg m "$m" '"\($m): \(.content[0].text) (stop: \(.stop_reason))"'
-done
-"""),
-    p('Both answer in Anthropic format. For <code>gpt-mini</code>, LiteLLM translates the Messages request to OpenAI and the answer back.'),
-    h3('3. The exports'),
-    code(r"""
-cat > labs/11-claude-code.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-K=${CC_KEY:-$MK}
-c=$(curl -s -o "$OUT" -w '%{http_code}' "$GW/v1/messages" -H "Authorization: Bearer $K" \
-  -H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' \
-  -d '{"model":"claude-fast","max_tokens":20,"messages":[{"role":"user","content":"Say pong."}]}')
-[ "$c" = 200 ] || fail "/v1/messages returned HTTP $c"
-cat <<OUT2
-  Run these in the shell where you start Claude Code (key shown masked; paste your real one):
-    export ANTHROPIC_BASE_URL=$GW
-    export ANTHROPIC_AUTH_TOKEN=$(mask "$K")
-    export ANTHROPIC_MODEL=claude-fast
-    export ANTHROPIC_DEFAULT_HAIKU_MODEL=claude-fast
-OUT2
-pass "Claude Code: /v1/messages answered with $(jq -r .model "$OUT")"
-EOF
-chmod +x labs/11-claude-code.sh && CC_KEY=$CC_KEY labs/11-claude-code.sh
-"""),
-    h3('Notes &amp; gotchas'),
-    ul([
-        '<code>ANTHROPIC_AUTH_TOKEN</code> is sent as <code>Authorization: Bearer</code>, which LiteLLM accepts. Use it rather than <code>ANTHROPIC_API_KEY</code>, which Claude Code may treat as a direct Anthropic key.',
-        'Claude Code asks for real Anthropic model names unless told otherwise. <code>ANTHROPIC_MODEL</code> and the <code>ANTHROPIC_DEFAULT_*_MODEL</code> variables map its requests to your aliases. A name the key isn&#x27;t allowed to use returns 401.',
-        'Haiku 4.5 is fine for trying this out. For real coding work, add a Sonnet or Opus alias to <code>model_list</code> and to the key&#x27;s <code>models</code>.',
-        'Every Claude Code session now shows up in the spend logs under the <code>claude-code</code> key alias, and the $5 / 30-day budget is a hard cap on what it can spend.',
-        'The SSN guardrail applies here too: Claude Code sends file contents as prompts, so a test fixture containing <code>123-45-6789</code> will be blocked. That&#x27;s the guardrail doing its job, but it can surprise you.',
+L11 = lab(11, 'Operate It: Reboots, Logs, Usage, Kill Switches, Upgrades', '192.168.1.100 and 192.168.1.101',
+    goal('prove everything comes back after a reboot, know where to look when something breaks, see what each app and agent used, and shut one off without touching the rest.'),
+    h3('1. Everything you built, as services'),
+    table(['Host', 'Service', 'Port', 'Files'], [
+        ['.101', '<code>litellm</code> (+ <code>litellm-db</code> from Lab 0)', '4000', '<code>/opt/litellm/</code>, <code>/etc/containers/systemd/litellm*</code>'],
+        ['.100', '<code>open-webui</code>', '3000', '<code>/opt/open-webui/</code>, volume <code>open-webui</code>'],
+        ['.100', '<code>ops-agent</code>, <code>writer-agent</code>', '8601, 8602', '<code>/opt/agents/</code>, image <code>localhost/lab-agent:1</code>'],
+        ['.100', '<code>lab-tools</code>', '8701', '<code>/opt/lab-tools/</code>, image <code>localhost/lab-tools:1</code>'],
+        ['.100', 'scripts (not services)', '&ndash;', '<code>~/gw-labs/</code>'],
     ]),
+    code(r"""
+# on .100
+systemctl list-units --no-pager 'open-webui*' 'ops-agent*' 'writer-agent*' 'lab-tools*'
+sudo podman ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
+"""),
+    h3('2. The reboot test'),
+    p('This is the real proof. Reboot the agent host, and then the gateway:'),
+    code(r"""
+sudo systemctl reboot                      # on .100; reconnect after a minute
+systemctl is-active open-webui ops-agent writer-agent lab-tools    # all "active"
+curl -s http://localhost:8601/.well-known/agent-card.json | jq -r .name
+
+# on .101
+sudo systemctl reboot
+curl -s http://192.168.1.101:4000/health/readiness | jq '{status, db}'
+"""),
+    p('If a service isn&#x27;t active, check that its file is in <code>/etc/containers/systemd/</code>, that it has an <code>[Install]</code> section with <code>WantedBy=multi-user.target</code>, and run <code>sudo /usr/libexec/podman/quadlet -dryrun</code> to see Quadlet&#x27;s complaints about any file it couldn&#x27;t convert.'),
+    h3('3. Logs'),
+    code(r"""
+sudo journalctl -u ops-agent -f                 # one service, live
+sudo journalctl -u litellm --since '10 min ago' # on .101: gateway errors, model failures
+sudo journalctl -b -u 'ops-agent' -u 'lab-tools' --no-pager   # everything since the last boot
+"""),
+    p('A Quadlet container&#x27;s output goes to the journal, so you use <code>journalctl</code>, not <code>podman logs</code> (which still works too).'),
+    h3('4. Who used what'),
+    code(r"""
+curl -s "$GW/spend/logs?start_date=$(date -u -d '7 days ago' +%F)&end_date=$(date -u -d tomorrow +%F)&summarize=false" \
+  -H "Authorization: Bearer $MK" \
+  | jq -r 'group_by(.metadata.user_api_key_alias)[]
+           | "\(.[0].metadata.user_api_key_alias // "master")\t\(length) requests\t\(map(.total_tokens) | add) tokens"'
+"""),
+    p('The gateway UI shows the same under <strong>Usage</strong> (charts per key and model) and <strong>Logs</strong> (each request, with its prompt and response).'),
+    h3('5. Kill switch'),
+    code(r"""
+# block one key: every request with it fails right away, and nothing else is affected
+curl -s $GW/key/block   -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d "{\"key\": \"$OPS_KEY\"}" | jq '{key_alias, blocked}'
+curl -s $GW/key/unblock -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d "{\"key\": \"$OPS_KEY\"}" | jq '{key_alias, blocked}'
+
+# delete a key for good
+curl -s $GW/key/delete  -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d "{\"keys\": [\"$CALLER_KEY\"]}"
+
+# stop an agent from being reachable through the gateway
+curl -s -X DELETE $GW/v1/agents/<agent_id> -H "Authorization: Bearer $MK"
+"""),
+    p('Blocking <code>ops-agent</code>&#x27;s key stops that agent from reaching any model, even when someone calls it directly on port 8601. That&#x27;s the advantage of agents having their own keys instead of sharing one.'),
+    h3('6. Upgrades'),
+    p('<strong>An agent:</strong> edit the code in <code>/opt/agents</code>, rebuild with a new tag, point the Quadlet at it, restart. Keeping the old tag makes rolling back a one-line change.'),
+    code(r"""
+sudo podman build -t localhost/lab-agent:2 /opt/agents
+sudo sed -i 's#localhost/lab-agent:1#localhost/lab-agent:2#' /etc/containers/systemd/{ops,writer}-agent.container
+sudo systemctl daemon-reload && sudo systemctl restart ops-agent writer-agent
+"""),
+    p('<strong>LiteLLM (on .101):</strong> back up the database, change the image tag, restart. Read the release notes for the versions you skip first.'),
+    code(r"""
+sudo podman exec litellm-db pg_dump -U litellm litellm | sudo tee /opt/litellm/backup-$(date +%F).sql >/dev/null
+sudo sed -i 's#litellm:v1.104.0#litellm:v1.105.0#' /etc/containers/systemd/litellm.container
+sudo systemctl daemon-reload && sudo systemctl restart litellm      # pulls the new image, then runs migrations
+curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
+"""),
+    h3('Clean up the labs'),
+    code(r"""
+# on .100: stop and remove the services, their files and images
+sudo systemctl stop open-webui ops-agent writer-agent lab-tools
+sudo rm /etc/containers/systemd/{open-webui.container,open-webui.volume,ops-agent.container,writer-agent.container,lab-tools.container}
+sudo systemctl daemon-reload
+sudo podman volume rm open-webui
+sudo podman rmi localhost/lab-agent:1 localhost/lab-tools:1
+sudo rm -rf /opt/agents /opt/lab-tools /opt/open-webui ~/gw-labs
+# on .101: remove mcp_servers and the lab- models from config.yaml, restart litellm,
+# then delete the lab keys and agents in the admin UI (Virtual Keys, Agents)
+"""),
 )
 
-# ---------------------------------------------------------------- lab 12
-L12 = lab(12, 'A2A Agent Gateway: hello-agent', '192.168.1.100 (agent) and 192.168.1.101 (gateway)',
-    goal('run the A2A Hello World sample in a container on .100, advertising <code>http://192.168.1.100:9999</code>, register it in LiteLLM as <code>hello-agent</code>, and call it through <code>/a2a/hello-agent</code> with a virtual key.'),
-    h3('1. Build the agent (on .100)'),
-    p('The sample binds to 127.0.0.1 and advertises <code>http://127.0.0.1:9999</code> in its agent card, which is useless from another host. The Dockerfile pins the repo to a commit, then rewrites both.'),
-    code(r"""
-mkdir -p ~/litellm-lab/a2a-hello && cd ~/litellm-lab/a2a-hello
-cat > Dockerfile <<'EOF'
-FROM docker.io/library/python:3.12.15-slim-bookworm
-ARG A2A_SAMPLES_COMMIT=6603ba3f2c31a7ef33e70b9d8b5b5f8be42ac9a3
-ARG ADVERTISE_URL=http://192.168.1.100:9999
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-WORKDIR /src
-RUN git init -q a2a-samples && cd a2a-samples \
- && git remote add origin https://github.com/a2aproject/a2a-samples.git \
- && git fetch -q --depth 1 origin "$A2A_SAMPLES_COMMIT" && git checkout -q FETCH_HEAD
-WORKDIR /src/a2a-samples/samples/python/agents/helloworld
-RUN pip install --no-cache-dir -r requirements.txt \
- && sed -i "s#url='http://127.0.0.1:9999'#url='${ADVERTISE_URL}'#g; s#host='127.0.0.1'#host='0.0.0.0'#" __main__.py \
- && grep -nE "url=|host=" __main__.py
-RUN useradd -r -u 10001 agent
-USER agent
-EXPOSE 9999
-CMD ["python", "__main__.py"]
-EOF
-
-cat > compose.yml <<'EOF'
-name: a2a-hello
-services:
-  hello-agent:
-    build: .
-    image: local/a2a-hello:6603ba3
-    restart: unless-stopped
-    ports: ["0.0.0.0:9999:9999"]
-EOF
-docker compose up -d --build
-"""),
-    h3('2. Check the agent card from .101'),
-    code(r"""
-# on 192.168.1.101 (or anywhere on the LAN)
-curl -s http://192.168.1.100:9999/.well-known/agent-card.json | jq '{name, version, supportedInterfaces}'
-# supportedInterfaces[0].url must be http://192.168.1.100:9999
-"""),
-    h3('3. Register it with LiteLLM'),
-    code(r"""
-curl -s $GW/v1/agents -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d '{
-  "agent_name": "hello-agent",
-  "agent_card_params": {
-    "protocolVersion": "1.0",
-    "name": "Hello World Agent",
-    "description": "Just a hello world agent",
-    "url": "http://192.168.1.100:9999/",
-    "version": "0.0.1",
-    "defaultInputModes": ["text/plain"],
-    "defaultOutputModes": ["text/plain"],
-    "capabilities": {"streaming": true},
-    "skills": [{"id": "echo_bot", "name": "Echo Bot",
-                "description": "Responds with a Hello World message", "tags": ["a2a", "echo-example"]}]
-  }
-}' | jq '{agent_id, agent_name}'
-curl -s $GW/v1/agents -H "Authorization: Bearer $MK" | jq -r '.[] | "\(.agent_name)  \(.agent_id)"'
-"""),
-    p('Or in the UI: <strong>Agents → Add Agent</strong>, choose A2A, name it <code>hello-agent</code> and give it the URL <code>http://192.168.1.100:9999/</code>.'),
-    h3('4. Call it through the gateway with a virtual key'),
-    code(r"""
-A2A_KEY=$(curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d '{"key_alias":"a2a-key"}' | jq -r .key)
-curl -s $GW/a2a/hello-agent -H "Authorization: Bearer $A2A_KEY" -H 'Content-Type: application/json' -d '{
-  "jsonrpc": "2.0", "id": "1", "method": "message/send",
-  "params": {"message": {"role": "user", "messageId": "'"$(cat /proc/sys/kernel/random/uuid)"'",
-                         "parts": [{"kind": "text", "text": "Say hello."}]}}}' \
-  | jq '.result // .error'
-"""),
-    h3('Check script'),
-    code(r"""
-cat > labs/12-a2a.sh <<'EOF'
-#!/usr/bin/env bash
-source "$(dirname "$0")/common.sh"
-AGENT=${AGENT:-hello-agent}
-curl -sf -m 5 http://192.168.1.100:9999/.well-known/agent-card.json >/dev/null \
-  || fail "agent card not reachable at 192.168.1.100:9999"
-K=$(api POST /key/generate '{"key_alias":"lab-a2a-check"}' | jq -r .key)
-trap 'api POST /key/delete "$(jq -n --arg k "$K" "{keys:[\$k]}")" >/dev/null; rm -f "$OUT" "$HDR"' EXIT
-req=$(jq -n --arg id "$(cat /proc/sys/kernel/random/uuid)" \
-  '{jsonrpc:"2.0",id:"1",method:"message/send",params:{message:{role:"user",messageId:$id,parts:[{kind:"text",text:"Say hello."}]}}}')
-c=$(curl -s -o "$OUT" -w '%{http_code}' "$GW/a2a/$AGENT" -H "Authorization: Bearer $K" -H 'Content-Type: application/json' -d "$req")
-grep -qi 'hello, world' "$OUT" || fail "no hello from $AGENT (HTTP $c): $(head -c 200 "$OUT")"
-echo "  $AGENT answered via $GW/a2a/$AGENT with key $(mask "$K")"
-echo "  waiting 30 s for spend logs..."; sleep 30
-T=$(date -u +%F); T2=$(date -u -d tomorrow +%F)
-n=$(api GET "/spend/logs?start_date=$T&end_date=$T2&summarize=false" \
-  | jq '[ (if type=="array" then . else .data end)[] | select((.metadata.user_api_key_alias // "") == "lab-a2a-check") ] | length')
-echo "  spend log entries for the check key: $n"
-[ "${n:-0}" -gt 0 ] || fail "A2A call worked but isn't in the spend logs yet (re-run in a minute)"
-pass "A2A: hello-agent answered through the gateway and was logged"
-EOF
-chmod +x labs/12-a2a.sh && labs/12-a2a.sh
-"""),
-    h3('Notes &amp; gotchas'),
-    ul([
-        'If <code>/a2a/hello-agent</code> returns &quot;agent not found&quot;, use the <code>agent_id</code> from the registration output instead: <code>AGENT=&lt;agent_id&gt; labs/12-a2a.sh</code>.',
-        'The pinned sample commit speaks A2A protocol 1.0 (a2a-sdk 1.1.0). LiteLLM 1.103 accepts v0.3-style calls (<code>message/send</code>) from clients and converts them for 1.0 agents. With an older LiteLLM that only speaks v0.3, build the sample at commit <code>1cce9a59dc31</code> (a2a-sdk 0.3) and set <code>protocolVersion</code> to <code>0.3.0</code>.',
-        'LiteLLM forwards to the <code>url</code> in the agent card you registered, not the one the agent advertises. If they differ, fix the registration.',
-        'The agent itself has no authentication. Port 9999 is open to the whole LAN, and the gateway is the only place a key is checked. Restrict 9999 to 192.168.1.101 with firewalld if other hosts shouldn&#x27;t reach the agent directly.',
-        'Treat everything an agent returns, including its card, as untrusted input. A malicious card&#x27;s description or skill text can carry a prompt injection into any LLM that reads it.',
-    ]),
-)
-
-# ---------------------------------------------------------------- lab 13
-L13 = lab(13, 'Health Checks & the Admin UI', 'workstation → 192.168.1.101',
-    goal('list every deployment and whether it&#x27;s healthy, and find each lab&#x27;s results in the admin UI.'),
-    h3('Health endpoints'),
-    code(r"""
-curl -s $GW/health/liveliness; echo                         # process up (no key)
-curl -s $GW/health/readiness | jq                            # db + cache status (no key)
-curl -s "$GW/health?model=gpt-mini"    -H "Authorization: Bearer $MK" | jq '{healthy_count, unhealthy_count}'
-curl -s "$GW/health?model=claude-fast" -H "Authorization: Bearer $MK" | jq '{healthy_count, unhealthy_count}'
-
-# every deployment (real calls to every model, see the warning below)
-curl -s $GW/health -H "Authorization: Bearer $MK" \
-  | jq -r '(.healthy_endpoints[]?   | "healthy    \(.model)"),
-           (.unhealthy_endpoints[]? | "UNHEALTHY  \(.model)  \((.error // "") | tostring | .[0:80])")'
-"""),
-    h3('Admin UI tour'),
-    p('Open <code>http://192.168.1.101:4000/ui</code> and log in with <code>UI_USERNAME</code>/<code>UI_PASSWORD</code> if they&#x27;re set, otherwise <code>admin</code> and the master key.'),
-    table(['UI page', 'What to look at', 'Lab'], [
-        ['Models + Endpoints', 'gpt-mini, claude-fast, health status', '3, 4, 13'],
-        ['Virtual Keys / Teams', 'lab-key, claude-code, a2a-key; budgets and spend', '6, 11, 12'],
-        ['Logs', 'each request, cache hits, guardrail blocks', '7, 8, 9'],
-        ['Usage', 'spend by key, team and model', '6, 9'],
-        ['Guardrails', 'ssn-guard and what it blocked', '8'],
-        ['MCP Servers', 'deepwiki and its three tools', '10'],
-        ['Agents', 'hello-agent', '12'],
-    ]),
-    h3('Check script'),
-    code(r"""
-cat > labs/13-health.sh <<'EOF'
-#!/usr/bin/env bash
-# Checks gpt-mini and claude-fast only. ALL=1 checks every deployment (calls every model).
-source "$(dirname "$0")/common.sh"
-[ "$(curl -s "$GW/health/liveliness")" != "" ] || fail "liveliness endpoint not answering"
-if [ -n "${ALL:-}" ]; then targets=(""); else targets=("?model=gpt-mini" "?model=claude-fast"); fi
-bad=0
-for t in "${targets[@]}"; do
-  api GET "/health$t" > "$OUT"
-  jq -r '(.healthy_endpoints[]? | "  healthy    \(.model)"),
-         (.unhealthy_endpoints[]? | "  UNHEALTHY  \(.model)  \((.error // "")|tostring|.[0:60])")' "$OUT"
-  bad=$(( bad + $(jq '.unhealthy_endpoints | length' "$OUT") ))
-done
-[ "$bad" -eq 0 ] && pass "health: all checked deployments healthy" || fail "health: $bad unhealthy deployment(s)"
-EOF
-chmod +x labs/13-health.sh && labs/13-health.sh
-"""),
-    h3('Notes &amp; gotchas'),
-    warn('A bare <code>/health</code> sends a real completion to every deployment in <code>model_list</code>. That costs tokens on cloud models, and with LM Studio or Ollama it loads each local model in turn, which can evict whatever was loaded and stall other users. Use <code>?model=&lt;alias&gt;</code> for routine checks.'),
-    ul([
-        'Embedding, image and audio models need <code>model_info.mode</code> set (e.g. <code>mode: embedding</code>), or the health check sends them a chat request and reports them unhealthy.',
-        'To run health checks in the background instead of on demand, set <code>background_health_checks: true</code> and <code>health_check_interval: 300</code> in <code>general_settings</code>. <code>/health</code> then returns the latest cached result.',
-        '<code>/health/readiness</code> is the right target for a container or load-balancer health probe. It doesn&#x27;t call any model.',
-    ]),
-)
-
-# ---------------------------------------------------------------- appendices
-appA = f'''<section class="appendix" id="runner">
-  <h2>Appendix A: Run every check</h2>
-  <p>With the check scripts from Labs 4&ndash;13 saved in <code>~/litellm-labs/labs/</code>, this runner executes them in order and prints a pass/fail table. Lab 6 takes about two minutes and Lab 12 about thirty seconds because of rate-limit and spend-log waits.</p>
-  {code(r"""
-cat > labs/run-all.sh <<'EOF'
-#!/usr/bin/env bash
-cd "$(dirname "$0")"
-: "${MK:?export MK first}"
-printf '%-4s %-22s %-5s %s\n' Lab Check Result Detail
-pass=0; total=0
-for s in [0-9][0-9]-*.sh; do
-  out=$(bash "$s" 2>&1); rc=$?
-  total=$((total + 1)); [ $rc -eq 0 ] && pass=$((pass + 1))
-  name=${s%.sh}
-  printf '%-4s %-22s %-5s %s\n' "${name%%-*}" "${name#*-}" "$([ $rc -eq 0 ] && echo PASS || echo FAIL)" \
-    "$(tail -1 <<<"$out" | sed -E 's/^(PASS|FAIL) +//' | cut -c1-70)"
-done
-echo "$pass of $total passed"
-EOF
-chmod +x labs/run-all.sh && labs/run-all.sh
-""")}
-  {table(['Lab', 'What the check proves'], [
-      ['04 unified', 'gpt-mini and claude-fast both answer through one OpenAI-format endpoint'],
-      ['05 fallback', '<code>mock_testing_fallbacks</code> on gpt-mini returns a Claude answer'],
-      ['06 keys', 'disallowed model &rarr; 401, rpm_limit 5 &rarr; 429, team budget &rarr; &quot;Budget has been exceeded&quot;'],
-      ['07 cache', 'second identical request carries <code>x-litellm-cache-key</code>'],
-      ['08 guardrail', '123-45-6789 is blocked, a clean prompt passes'],
-      ['09 observability', 'today&#x27;s requests are in <code>/spend/logs</code> (plus Langfuse traces if <code>LF_PK</code>/<code>LF_SK</code> are set)'],
-      ['10 mcp', 'DeepWiki tools are listed and the model calls one via <code>litellm_proxy</code>'],
-      ['11 claude-code', '<code>/v1/messages</code> works; prints the exports'],
-      ['12 a2a', 'hello-agent answers through <code>/a2a/hello-agent</code> with a virtual key and is logged'],
-      ['13 health', 'the lab models are healthy (<code>ALL=1</code> for every deployment)'],
-  ])}
-</section>
-'''
-
-appB = f'''<section class="appendix" id="readme">
-  <h2>Appendix B: README: start, stop, roll back</h2>
-  <h3>What runs where</h3>
-  {table(['Host', 'Directory', 'Containers', 'Ports'], [
-      ['192.168.1.101', '<code>/opt/litellm/</code> (config.yaml, guard.py, litellm.env, run-litellm.sh, backups)', 'litellm (+ its own DB, if it had one)', '4000'],
-      ['192.168.1.100', '<code>~/litellm-lab/</code>', 'postgres, redis', '5432, 6379'],
-      ['192.168.1.100', '<code>~/litellm-lab/langfuse/</code>', 'langfuse-web, -worker, postgres, clickhouse, redis, minio', '3000, 9090 (others on 127.0.0.1)'],
-      ['192.168.1.100', '<code>~/litellm-lab/a2a-hello/</code>', 'hello-agent', '9999'],
-      ['workstation', '<code>~/litellm-labs/labs/</code>', 'none (check scripts)', '&ndash;'],
-  ])}
-  <h3>Start and stop</h3>
-  {code(r"""
-# 192.168.1.100: start in this order, stop in reverse
-cd ~/litellm-lab && docker compose up -d
-cd ~/litellm-lab/langfuse && docker compose up -d          # optional
-cd ~/litellm-lab/a2a-hello && docker compose up -d
-#   ...stop with "docker compose down" in each directory. Add -v only to DELETE the data volumes.
-
-# 192.168.1.101
-# installed with Lab 0: cd /opt/litellm && sudo docker compose stop | start | up -d
-sudo podman stop litellm        # stop
-sudo podman start litellm       # start (same container, same settings)
-sudo /opt/litellm/run-litellm.sh   # recreate (after editing litellm.env or the image)
-sudo podman logs --tail 50 -f litellm
-""")}
-  <h3>Roll back the LiteLLM config</h3>
-  {code(r"""
-D=/opt/litellm; TS=$(cat $D/LAST_BACKUP); ls $D/*.bak-$TS*
-sudo cp -a $D/config.yaml.bak-$TS $D/config.yaml
-sudo cp -a $D/litellm.env.bak-$TS $D/litellm.env
-sudo $D/run-litellm.sh                      # guard.py is still mounted but unused, which is harmless
-curl -s http://192.168.1.101:4000/health/readiness
-""")}
-  <p>To go all the way back to the original container (image tag, mounts, networks), rebuild the <code>podman run</code> command from <code>$D/inspect.bak-$TS.json</code>: <code>.Config.Image</code>, <code>.Config.Cmd</code>, <code>.HostConfig.Binds</code>, <code>.HostConfig.PortBindings</code> and <code>.NetworkSettings.Networks</code> hold everything you need.</p>
-  <h3>Lab cleanup</h3>
-  {code(r"""
-# delete lab keys and teams (UI: Virtual Keys / Teams), and the agent
-curl -s $GW/v1/agents -H "Authorization: Bearer $MK" | jq -r '.[] | select(.agent_name=="hello-agent") | .agent_id' \
-  | xargs -r -I{} curl -s -X DELETE $GW/v1/agents/{} -H "Authorization: Bearer $MK"
-# 192.168.1.100: remove everything, data included
-cd ~/litellm-lab/a2a-hello && docker compose down --rmi local
-cd ~/litellm-lab/langfuse && docker compose down -v
-cd ~/litellm-lab && docker compose down -v
-""")}
-</section>
-'''
-
-PROMPT = r"""I want to run a set of hands-on LiteLLM AI gateway labs in my home lab. Help me get it working end to end.
-
-## My environment
-- Docker host: 192.168.1.100 (this is where new containers like Redis, Postgres, Langfuse and the A2A agent should run)
-- LiteLLM proxy: ALREADY RUNNING on 192.168.1.101, presumably on port 4000 (verify)
-- I'm running you from my workstation. Figure out how you can reach each host (SSH, DOCKER_HOST=ssh://..., or the Docker API) and ask me for usernames or credentials instead of guessing.
-
-## Ground rules
-- Don't modify or restart the existing LiteLLM on 192.168.1.101 until you've shown me its current config and I've approved the change. Back up its config file first.
-- Never print API keys or the master key in full. Mask all but the last 4 characters.
-- Pin image tags rather than using `latest` (LiteLLM had a PyPI supply-chain incident in March 2026). Tell me which LiteLLM version is running and flag it if it looks old or suspect.
-- Containers on 192.168.1.100 must bind to 0.0.0.0 and be reachable from 192.168.1.101. Don't use localhost or host.docker.internal for cross-host URLs. Use 192.168.1.100 explicitly, and check that firewall ports are open.
-- Work in phases. Stop after each phase, show me the results, and wait for my go-ahead.
-
-## Phase 1: Discover (read-only)
-1. Confirm you can reach both hosts. Check that Docker and Compose work on .100.
-2. On .101, find out how LiteLLM is deployed (Docker, systemd, pip/venv, Kubernetes), where its config.yaml lives, its version, and its environment variables (masked).
-3. Check whether it has a master key, a Postgres DATABASE_URL (needed for virtual keys, teams, budgets and spend logs), and Redis (needed for caching).
-4. Test it: `curl http://192.168.1.101:4000/health/liveliness` and a chat completion against whatever models are configured.
-5. Report what's present and what's missing for these labs: unified API, fallbacks/load balancing, virtual keys/teams/budgets, Redis caching, custom guardrail, Langfuse/OTel observability, MCP gateway, Claude Code via /v1/messages, A2A agent gateway, admin UI/health.
-
-## Phase 2: Supporting services on 192.168.1.100
-Write a docker-compose.yml with pinned tags for whatever's missing: Postgres 16 and Redis 7, plus optionally Langfuse. Use persistent volumes, strong generated passwords stored in a .env file, and published ports. Bring it up and verify .101 can reach each port.
-
-## Phase 3: Update the LiteLLM config (after my approval)
-Propose a diff to the existing config.yaml that adds:
-- Two model aliases, `gpt-mini` (openai/gpt-4o-mini) and `claude-fast` (anthropic/claude-haiku-4-5-20251001), using os.environ/ references for keys. Keep any models I already have.
-- general_settings: master_key and a database_url pointing at Postgres on .100.
-- router_settings / litellm_settings: retries, a fallback gpt-mini → claude-fast, and a Redis cache pointing at .100.
-- A custom guardrail (guard.py) that blocks US SSNs in prompts, mode pre_call, plus the file mount or path it needs.
-- An MCP server entry for https://mcp.deepwiki.com/mcp (transport http).
-- Langfuse callbacks, if I set up Langfuse.
-Show me the diff, apply it after I approve, restart LiteLLM, and tail the logs until it's healthy.
-
-## Phase 4: A2A agent
-On 192.168.1.100, run the A2A Hello World sample from https://github.com/a2aproject/a2a-samples (samples/python/agents/helloworld) in a container. Write a Dockerfile if needed, and make sure it listens on 0.0.0.0 and advertises http://192.168.1.100:<port> in its agent card. Check that `curl http://192.168.1.100:<port>/.well-known/agent-card.json` (or whatever path the sample uses) works from .101. Then register it with LiteLLM as `hello-agent` via the UI instructions or API, whichever this LiteLLM version supports. Check the LiteLLM docs for the exact A2A registration fields for this version.
-
-## Phase 5: Verify each lab
-Write a `labs/` folder with one small script per lab (bash with curl/jq, or Python with the openai SDK) that targets http://192.168.1.101:4000. Run each one and give me a pass/fail table:
-1. Unified API: both models answer through one client.
-2. Fallback: `mock_testing_fallbacks: true` returns a Claude response.
-3. Keys/teams: create a team with a tiny budget and a key with rpm_limit 5, then show a disallowed-model rejection, a 429, and a budget error.
-4. Caching: second identical request hits the cache (x-litellm-cache-key header).
-5. Guardrail: a prompt with 123-45-6789 is blocked and a clean prompt passes.
-6. Observability: /spend/logs shows the requests (and Langfuse traces, if configured).
-7. MCP: /v1/responses with the litellm_proxy MCP tool uses deepwiki.
-8. Claude Code: print the exact ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN exports to use (don't run them).
-9. A2A: call hello-agent through http://192.168.1.101:4000/a2a/hello-agent with a virtual key and confirm it appears in spend logs.
-10. Health: /health lists every deployment and its status.
-
-If something fails, diagnose the cause (networking, config, version or license tier) before trying fixes, and tell me if a feature needs a newer LiteLLM version or an enterprise license.
-
-At the end, give me a short README covering what's running where, ports, how to start and stop everything, and how to roll back the LiteLLM config."""
-
-appC = f'''<section class="appendix" id="agent-prompt">
-  <h2>Appendix C: Let Claude Code do it</h2>
-  <p>Rather drive the whole thing with an agent? Paste this prompt into Claude Code on your workstation. It works through the same phases as Labs 1&ndash;13, inspects before it changes anything, stops for your approval after each phase, and asks for credentials instead of guessing them. Have SSH access to both hosts and your OpenAI and Anthropic keys ready.</p>
-  <div class="term"><button class="copy" type="button" aria-label="Copy prompt">Copy</button><pre><code>{e(PROMPT)}</code></pre></div>
-</section>
-'''
-
-labs_html = ''.join([L0, L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13])
+labs_html = ''.join([L0, L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11])
 N = len(LABS)
 nav = ''.join(
     f'<li><a href="#lab-{n}" data-lab="{n}"><span class="num">{n}</span><span class="nm">{e(t)}</span>'
@@ -1440,7 +1165,7 @@ page = f'''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LiteLLM Gateway Labs</title>
-<meta name="description" content="Hands-on LiteLLM AI gateway labs for a two-host home lab: unified API, fallbacks, virtual keys, caching, guardrails, observability, MCP, Claude Code and A2A.">
+<meta name="description" content="Hands-on labs for running chat apps and AI agents through a LiteLLM gateway with rootful Podman: virtual keys, Open WebUI, tool-using agents, A2A, MCP, multi-agent coordination and coding agents.">
 <link rel="icon" href="{favicon}">
 {STYLE}
 </head>
@@ -1448,26 +1173,21 @@ page = f'''<!doctype html>
 <button class="menu" type="button" aria-expanded="false" aria-controls="sidebar">Labs</button>
 <div class="layout">
 <aside id="sidebar">
-  <div class="brand"><strong>LiteLLM Gateway Labs</strong><span>docker .100 &nbsp;/&nbsp; gateway .101:4000</span></div>
-  <input class="search" type="search" placeholder="Search labs (e.g. fallbacks, mcp)" aria-label="Search labs">
+  <div class="brand"><strong>LiteLLM Gateway Labs</strong><span>agents .100 &nbsp;/&nbsp; gateway .101:4000</span></div>
+  <input class="search" type="search" placeholder="Search labs (e.g. quadlet, mcp)" aria-label="Search labs">
   <div class="progress"><span id="prog">0 of {N} labs done</span><div class="bar"><i id="progbar"></i></div></div>
   <nav aria-label="Labs"><ul>{nav}</ul><p class="empty" id="empty">No lab mentions that.</p></nav>
   <div class="side-links">
     <a href="/"><strong>Cropsey IT</strong> home</a>
     <a href="rhcsa.html"><strong>RHCSA Labs</strong></a>
-    <a href="#overview">Overview &amp; setup</a>
-    <a href="#runner">Run every check</a>
-    <a href="#readme">Start, stop, roll back</a>
-    <a href="#agent-prompt">Claude Code prompt</a>
+    <a href="#overview">Overview &amp; Podman basics</a>
+    <a href="#lab-11">Operate &amp; clean up</a>
     <button class="theme" type="button" id="theme">Switch to dark</button>
   </div>
 </aside>
 <main>
 {overview}
 {labs_html}
-{appA}
-{appB}
-{appC}
 </main>
 </div>
 {script}
