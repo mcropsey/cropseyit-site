@@ -111,7 +111,7 @@ overview = f'''<section class="intro" id="overview">
 
   <h2>The hosts</h2>
   {table(['Host', 'Role', 'What runs there'], [
-      ['<strong>gateway</strong> 192.168.1.101', 'The LiteLLM gateway, port 4000', 'LiteLLM and its Postgres database. <strong>Assumed to be running already</strong>; Lab 0 shows a basic install if it isn&#x27;t.'],
+      ['<strong>gateway</strong> 192.168.1.101', 'The LiteLLM gateway, port 4000', 'LiteLLM and its Postgres database. <strong>Assumed to be running already.</strong> Lab 0 is the reference for installing or fixing it.'],
       ['<strong>agent host</strong> 192.168.1.100', 'Everything you build, and where you type the commands', 'Open WebUI (3000), ops-agent (8601), writer-agent (8602), the lab-tools MCP server (8701), and your Python scripts'],
       ['<strong>model server</strong> 192.168.1.194', 'Where the model actually runs', 'LM Studio on port 1234 serving <code>qwen/qwen3.8-27b</code>. Any OpenAI-compatible server, or a cloud provider, works the same way.'],
   ])}
@@ -128,15 +128,15 @@ overview = f'''<section class="intro" id="overview">
   <h2>Before you start</h2>
   <ul>
     <li>SSH with sudo on 192.168.1.100 and 192.168.1.101, both Rocky Linux 9 or 10 with Podman 5.</li>
-    <li>LiteLLM running on .101 with a <strong>master key</strong> and a <strong>database</strong> (virtual keys, used from Lab 3 on, need the database). Lab 1 checks both.</li>
+    <li>LiteLLM running on .101 with a <strong>master key</strong>, a <strong>database</strong> (virtual keys, used from Lab 3 on, need it) and the model names <code>lab-chat</code> and <code>lab-agent</code>. Lab 1 checks all three without changing anything; Lab 0 covers whatever is missing.</li>
     <li>A model that can call tools. These labs use <code>qwen/qwen3.8-27b</code> in LM Studio. In LM Studio, set its default <strong>context length to at least 32k</strong> (gear icon on the model, then Context Length). LM Studio loads models on demand with that setting, and a small default leaves a &quot;thinking&quot; model no room to answer.</li>
     <li>The labs were tested with LiteLLM <strong>v1.104.0</strong>, Podman 5.8, Python 3.12, <code>openai</code> 3.24, <code>mcp</code> 2.3 and <code>a2a-sdk</code> 1.2.</li>
   </ul>
 
   <h2>Lab order</h2>
   {table(['Lab', 'What you build', 'Needs'], [
-      ['0', 'A basic LiteLLM install with Podman (reference; skip if you have one)', 'none'],
-      ['1', 'Check the gateway, make it survive reboots, add the lab model names', '0 or an existing gateway'],
+      ['0', 'Reference, not a lab: installing LiteLLM, converting it to a Quadlet, giving it its own Postgres, adding the lab model names, upgrades', 'only what Lab 1 finds missing'],
+      ['1', 'Connect to the gateway and check it&#x27;s ready (read-only)', 'a running gateway'],
       ['2&ndash;4', 'Chat: curl and Python, virtual keys, a chat web UI', '1'],
       ['5&ndash;9', 'Agents: first agent, agents as services, A2A through the gateway, MCP tools, a coordinator', '1, 3'],
       ['10', 'A coding agent (opencode or Claude Code) through the gateway', '1, 3 (8 for MCP)'],
@@ -146,18 +146,31 @@ overview = f'''<section class="intro" id="overview">
 '''
 
 # ---------------------------------------------------------------- lab 0
-L0 = lab(0, 'A Basic LiteLLM Install with Podman', '192.168.1.101 (skip if LiteLLM is already running)',
-    goal('see what a minimal LiteLLM install looks like: a config file, an env file of secrets, and two Quadlet units (LiteLLM and its Postgres database) that start at boot.'),
-    note('If <code>curl -s http://192.168.1.101:4000/health/liveliness</code> already answers, read this lab for reference and go to Lab 1.', 'Already have LiteLLM?'),
-    h3('1. Podman and a directory for the gateway'),
+L0 = lab(0, 'Reference: Setting Up LiteLLM (only if you need to)', '192.168.1.101',
+    goal('everything about installing and running the gateway itself, in one place. The labs assume LiteLLM is already running; come here only for the parts your gateway is missing.'),
+    p('The rest of the labs never install or reconfigure LiteLLM. They talk to it through its API, as any app would. Use this table to find which parts of this lab, if any, you need:'),
+    table(['Your situation', 'Do'], [
+        ['No LiteLLM yet', '<a href="#l0-podman">Part 1</a>, <a href="#l0-install">Part 2</a>, <a href="#l0-labprep">Part 5</a>'],
+        ['LiteLLM was started by hand with <code>podman run</code>, so it isn&#x27;t a systemd service (Lab 1 checks this)', '<a href="#l0-quadlet">Part 3</a>'],
+        ['LiteLLM has no database, or uses a database inside another app&#x27;s Postgres', '<a href="#l0-db">Part 4</a>'],
+        ['The gateway doesn&#x27;t serve <code>lab-chat</code> and <code>lab-agent</code> yet', '<a href="#l0-labprep">Part 5</a>'],
+        ['Upgrades, backups and other ways to run it', '<a href="#l0-options">Part 6</a>'],
+    ]),
+
+    '<h3 id="l0-podman">Part 1: Podman</h3>',
+    p('Rocky Linux and RHEL ship Podman in the base repositories. Quadlet, the feature that turns container files into systemd services (see the overview), is built into Podman 4.4 and newer.'),
     code(r"""
-sudo dnf -y install podman
-podman --version                           # 5.x
-sudo mkdir -p /opt/litellm
+sudo dnf -y install podman jq
+podman --version                           # 5.x on Rocky 9.6+ and 10
+ls /usr/libexec/podman/quadlet             # present = Quadlet is available
 """),
-    h3('2. Secrets'),
-    p('Two env files hold everything secret. Podman reads them when it starts each container, so the secrets never appear in the config file or in <code>ps</code> output. <code>openssl rand -hex 24</code> generates a random password; the master key must start with <code>sk-</code>.'),
+    p('Everything here runs as root (<code>sudo podman</code>). Root containers and their Quadlet files live in <code>/etc/containers/systemd/</code>; rootless ones would live in <code>~/.config/containers/systemd/</code> and need <code>loginctl enable-linger</code> to start at boot, which is why these labs stick to rootful.'),
+
+    '<h3 id="l0-install">Part 2: A fresh install</h3>',
+    p('The result is two Quadlet services: <code>litellm-db</code> (Postgres, which stores virtual keys, agents and spend logs) and <code>litellm</code> (the gateway), joined by a private network so the database is never exposed on the LAN.'),
+    p('<strong>Secrets.</strong> Two env files, readable by root only. Podman reads them when it creates each container, so no secret appears in a config file or in <code>ps</code> output. The master key must start with <code>sk-</code>.'),
     code(r"""
+sudo mkdir -p /opt/litellm
 sudo install -m 600 /dev/null /opt/litellm/litellm.env      # create both files, readable by root only
 sudo install -m 600 /dev/null /opt/litellm/db.env
 DBPASS=$(openssl rand -hex 24)
@@ -175,8 +188,7 @@ printf '%s\n' \
   | sudo tee /opt/litellm/litellm.env >/dev/null
 unset DBPASS UIPASS
 """),
-    h3('3. The config file'),
-    p('<code>model_list</code> maps the names clients ask for (<code>lab-chat</code>, <code>lab-agent</code>) to a real model. <code>os.environ/NAME</code> tells LiteLLM to read a value from the environment. Lab 1 explains these names.'),
+    p('<strong>Config.</strong> <code>model_list</code> maps the names clients ask for to real models; <a href="#l0-labprep">Part 5</a> explains the two lab names. <code>os.environ/NAME</code> tells LiteLLM to read a value from the environment.'),
     code(r"""
 sudo tee /opt/litellm/config.yaml >/dev/null <<'EOF'
 model_list:
@@ -200,8 +212,7 @@ general_settings:
   database_url: os.environ/DATABASE_URL
 EOF
 """),
-    h3('4. The Quadlet units'),
-    p('Four small files: a private network so LiteLLM can reach the database by the name <code>litellm-db</code>, a named volume for the database files, and one <code>.container</code> file per container. <code>Requires=</code> and <code>After=</code> make systemd start the database first, and <code>Notify=healthy</code> makes it wait until Postgres actually answers.'),
+    p('<strong>Quadlet files.</strong> A network, a volume for the database files, and one <code>.container</code> file per container. <code>Requires=</code> and <code>After=</code> start the database first, and <code>Notify=healthy</code> makes systemd wait until Postgres actually answers before it starts LiteLLM.'),
     code(r"""
 sudo tee /etc/containers/systemd/litellm.network >/dev/null <<'EOF'
 [Network]
@@ -251,75 +262,36 @@ Exec=--config /app/config.yaml --port 4000
 
 [Service]
 Restart=always
+RestartSec=10
 TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
 EOF
 """),
-    h3('5. Start it'),
+    p('<strong>Start and check it.</strong>'),
     code(r"""
 sudo systemctl daemon-reload               # turn the Quadlet files into services
 sudo systemctl start litellm               # starts litellm-db first; the first start pulls the images
-systemctl status litellm --no-pager
+sudo journalctl -u litellm -f              # Ctrl-C once you see "Uvicorn running on http://0.0.0.0:4000"
 sudo firewall-cmd --permanent --add-port=4000/tcp && sudo firewall-cmd --reload   # if firewalld is running
-"""),
-    h3('Verify'),
-    code(r"""
+
 curl -s http://192.168.1.101:4000/health/liveliness; echo     # "I'm alive!"
 curl -s http://192.168.1.101:4000/health/readiness             # "db": "connected"
 """),
-    p('Then log in to the admin UI at <code>http://192.168.1.101:4000/ui</code> as <code>admin</code> with the password you chose. To prove it survives a reboot, run <code>sudo systemctl reboot</code>, wait, and repeat the two <code>curl</code> commands.'),
-    h3('Notes'),
-    ul([
-        'The first start runs database migrations and can take a minute or two. <code>sudo journalctl -u litellm -f</code> shows progress; wait for <code>Uvicorn running on http://0.0.0.0:4000</code>.',
-        'Pin the image to a version (<code>v1.104.0</code>), not <code>main-stable</code> or <code>latest</code>, so a restart never silently changes the build you run. Lab 11 shows how to upgrade on purpose.',
-        '<code>LITELLM_SALT_KEY</code> encrypts any provider keys you later store through the UI. Never change it after that, or LiteLLM can&#x27;t decrypt them.',
-        '<code>:Z</code> on the config mount relabels the file for SELinux. Without it the container gets &quot;permission denied&quot; reading <code>config.yaml</code>.',
-        'Postgres isn&#x27;t published on the network at all. Only LiteLLM reaches it, over the private <code>litellm</code> network.',
-    ]),
-)
+    p('The admin UI is at <code>http://192.168.1.101:4000/ui</code> (user <code>admin</code>, the password you chose). The first start runs about 185 database migrations and takes a minute or two.'),
 
-# ---------------------------------------------------------------- lab 1
-L1 = lab(1, 'Check the Gateway and Add the Lab Models', '192.168.1.101, tested from 192.168.1.100',
-    goal('confirm the gateway is healthy and has a database, make sure it comes back after a reboot, and give it two model names, <code>lab-chat</code> and <code>lab-agent</code>, that the rest of the labs use.'),
-    h3('1. Set up your shell on the agent host'),
-    p('You type every command from here on on <strong>192.168.1.100</strong> unless a step says otherwise. Two shell variables hold the gateway address and the <strong>master key</strong>, LiteLLM&#x27;s admin password. Find the key on .101 with <code>sudo grep LITELLM_MASTER_KEY /opt/litellm/litellm.env</code>. <code>read -rsp</code> reads it without echoing it or saving it in your shell history.'),
-    code(r"""
-ssh 192.168.1.100
-sudo dnf -y install jq                     # pretty-prints and filters JSON answers
-export GW=http://192.168.1.101:4000
-read -rsp 'LiteLLM master key: ' MK; echo; export MK
-"""),
-    note('Put the <code>export GW=...</code> line in <code>~/.bashrc</code> so new shells have it. Don&#x27;t do that with the master key; re-enter it when you need it.', 'Tip:'),
-    h3('2. Is it healthy?'),
-    code(r"""
-curl -s $GW/health/liveliness; echo                        # "I'm alive!" (no key needed)
-curl -s $GW/health/readiness | jq '{status, db}'            # db must be "connected"
-curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'   # models it serves now
-"""),
-    p('If <code>db</code> isn&#x27;t <code>connected</code>, chat still works, but virtual keys (Lab 3) and everything after them won&#x27;t. Add a <code>DATABASE_URL</code> as in Lab 0.'),
-    h3('3. Will it come back after a reboot?'),
-    p('On <strong>.101</strong>, ask Podman whether the container belongs to a systemd service:'),
-    code(r"""
-ssh 192.168.1.101
-sudo podman inspect litellm --format 'unit={{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}} restart={{.HostConfig.RestartPolicy.Name}}'
-systemctl is-enabled podman-restart.service
-"""),
-    table(['What you see', 'Means', 'Do this'], [
-        ['<code>unit=litellm.service</code>', 'It&#x27;s already a Quadlet or systemd service', 'Nothing. Go to step 4.'],
-        ['<code>unit=</code> (empty), <code>restart=always</code>, and <code>podman-restart</code> is <code>enabled</code>', 'Started by hand; <code>podman-restart.service</code> starts it at boot', 'It works. Converting it to a Quadlet (below) is still better: you get <code>systemctl</code> and <code>journalctl</code>.'],
-        ['<code>unit=</code> (empty) and anything else', 'It won&#x27;t come back after a reboot', 'Convert it to a Quadlet (below), or at least run <code>sudo systemctl enable --now podman-restart.service</code>.'],
-    ]),
-    p('<strong>Convert a hand-started container to a Quadlet.</strong> First read how it&#x27;s run now: its image, mounts, env file and networks.'),
+    '<h3 id="l0-quadlet">Part 3: Convert a hand-started container into a Quadlet</h3>',
+    p('If LiteLLM was started with <code>podman run</code>, it isn&#x27;t a systemd service. With <code>--restart=always</code> and <code>podman-restart.service</code> enabled it does come back after a reboot, but you can&#x27;t manage it with <code>systemctl</code>, its logs aren&#x27;t in the journal, and if the container is removed the only record of how it was created is your memory. Converting fixes all three. First, record exactly how it runs now, and keep a copy for rollback:'),
     code(r"""
 sudo podman inspect litellm --format 'image={{.Config.Image}}
-cmd={{json .Config.Cmd}}
 networks={{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}
-{{range .Mounts}}mount={{.Source}} -> {{.Destination}}
-{{end}}'
+ports={{json .HostConfig.PortBindings}}
+created with: {{join .Config.CreateCommand " "}}'
+sudo podman inspect litellm | sudo tee /opt/litellm/inspect.bak-$(date +%F).json >/dev/null
+sudo chmod 600 /opt/litellm/inspect.bak-*.json         # it contains the env, including the master key
 """),
-    p('Write the same settings into a <code>.container</code> file. This example matches a common layout (config and env file in <code>/opt/litellm</code>, a Postgres container reached over a network named <code>docker_default</code>). Use the image and networks your output showed: one <code>Network=</code> line per network, so LiteLLM can still reach its database by name.'),
+    p('Translate what you found into a <code>.container</code> file: <code>-p</code> becomes <code>PublishPort=</code>, <code>-v</code> becomes <code>Volume=</code>, <code>--env-file</code> becomes <code>EnvironmentFile=</code>, each network becomes a <code>Network=</code> line, and the arguments after the image name become <code>Exec=</code>. For example, a container created with <code>podman run -d --name litellm --restart=always -p 4000:4000 -v /opt/litellm/config.yaml:/app/config.yaml:ro,Z --env-file /opt/litellm/litellm.env ghcr.io/berriai/litellm:v1.104.0 --config /app/config.yaml --port 4000</code>, and later connected to a network named <code>docker_default</code> where its database lives, becomes:'),
     code(r"""
 sudo tee /etc/containers/systemd/litellm.container >/dev/null <<'EOF'
 [Unit]
@@ -328,8 +300,8 @@ Description=LiteLLM AI gateway
 [Container]
 ContainerName=litellm
 Image=ghcr.io/berriai/litellm:v1.104.0
-Network=docker_default
 Network=podman
+Network=docker_default
 PublishPort=4000:4000
 EnvironmentFile=/opt/litellm/litellm.env
 Volume=/opt/litellm/config.yaml:/app/config.yaml:ro,Z
@@ -337,21 +309,73 @@ Exec=--config /app/config.yaml --port 4000
 
 [Service]
 Restart=always
+RestartSec=10
 TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
 EOF
-sudo podman rm -f litellm                  # remove the hand-started container (config and data are untouched)
+sudo /usr/libexec/podman/quadlet -dryrun 2>/dev/null | grep ^ExecStart    # the podman run command it will use
+"""),
+    p('Compare that <code>ExecStart</code> line with the original command. When they match, swap the containers. Config, env file and database are untouched; only the container is recreated, so the gateway is down for 20&ndash;30 seconds:'),
+    code(r"""
+sudo podman rm -f litellm
 sudo systemctl daemon-reload
 sudo systemctl start litellm
-systemctl status litellm --no-pager
+sudo podman inspect litellm --format '{{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}}'    # litellm.service
+curl -s http://192.168.1.101:4000/health/readiness
 """),
-    warn('If your database is another container on the same host, its own unit has to start before LiteLLM. Add <code>After=&lt;db-unit&gt;.service</code> under <code>[Unit]</code>, using the <code>PODMAN_SYSTEMD_UNIT</code> label of the database container. Otherwise LiteLLM may start first after a reboot, fail to connect, and keep restarting until the database is up.'),
-    h3('4. Add the lab model names'),
-    p('Clients never name the real model. They ask for an <strong>alias</strong>, and the gateway decides which model answers. If you later move <code>lab-agent</code> to a bigger model or a cloud provider, you change one line here and every agent follows. Back up the config, then add these two entries to the end of the existing <code>model_list</code> with <code>sudo vi /opt/litellm/config.yaml</code>:'),
+    p('Rollback: delete the <code>.container</code> file, run <code>sudo systemctl daemon-reload</code>, and rerun the original <code>podman run</code> command from the inspect output (plus <code>podman network connect</code> for any extra network).'),
+    warn('Check that the database comes back after a reboot too. If LiteLLM&#x27;s database lives in another app&#x27;s container that has no systemd service and a restart policy of <code>no</code>, LiteLLM will start after a reboot and find no database. <code>RestartSec=10</code> keeps it retrying, but the real fix is Part 4.'),
+    note('If converting isn&#x27;t an option right now, at least make sure the existing container restarts at boot: it needs <code>--restart=always</code> (check with <code>sudo podman inspect litellm --format &#x27;{{.HostConfig.RestartPolicy.Name}}&#x27;</code>) and <code>sudo systemctl enable --now podman-restart.service</code>.', 'Quick fix:'),
+
+    '<h3 id="l0-db">Part 4: Give LiteLLM its own Postgres</h3>',
+    p('LiteLLM works without a database, but then there are no virtual keys, agents, MCP servers stored through the API, or spend logs, so most of these labs won&#x27;t work. A database inside another application&#x27;s Postgres works, but ties the gateway to that application: it shares its admin login and starts and stops with it. This part moves LiteLLM to a Postgres of its own, keeping every key and log.'),
+    p('<strong>1. Create the new database.</strong> Create <code>db.env</code>, <code>litellm.network</code>, <code>litellm-db.volume</code> and <code>litellm-db.container</code> exactly as in <a href="#l0-install">Part 2</a> (skip the parts that write <code>litellm.env</code>, <code>config.yaml</code> and <code>litellm.container</code>), then start only the database. The gateway keeps running on the old one meanwhile.'),
+    code(r"""
+sudo systemctl daemon-reload
+sudo systemctl start litellm-db
+sudo podman exec litellm-db psql -U litellm -d litellm -c 'select version();'
+"""),
+    p('<strong>2. Copy the data.</strong> Stop LiteLLM so nothing is written during the copy, then dump the old database and load it into the new one. The example assumes the old database is <code>litellm</code> in a container named <code>postgresdb</code> with the admin user <code>admin</code>; check yours with <code>sudo grep DATABASE_URL /opt/litellm/litellm.env</code>. <code>--no-owner --no-privileges</code> leaves out the old server&#x27;s user names, so everything ends up owned by the new <code>litellm</code> user.'),
+    code(r"""
+sudo systemctl stop litellm                # or: sudo podman stop litellm
+sudo podman exec postgresdb pg_dump -U admin -d litellm --no-owner --no-privileges \
+  | sudo tee /opt/litellm/litellm-db-$(date +%F).sql >/dev/null
+sudo chmod 600 /opt/litellm/litellm-db-*.sql
+sudo cat /opt/litellm/litellm-db-$(date +%F).sql \
+  | sudo podman exec -i litellm-db psql -q -v ON_ERROR_STOP=1 -U litellm -d litellm >/dev/null && echo restored
+"""),
+    p('Check that the important tables arrived with the same number of rows (run each line against both databases):'),
+    code(r"""
+for t in LiteLLM_VerificationToken LiteLLM_SpendLogs LiteLLM_AgentsTable _prisma_migrations; do
+  old=$(sudo podman exec postgresdb psql -U admin   -d litellm -Atc "select count(*) from \"$t\"")
+  new=$(sudo podman exec litellm-db psql -U litellm -d litellm -Atc "select count(*) from \"$t\"")
+  echo "$t  old=$old  new=$new"
+done
+"""),
+    p('<strong>3. Point LiteLLM at it.</strong> Change <code>DATABASE_URL</code> in the env file to the new database, using the password from <code>db.env</code>. Then make the Quadlet start after the database and join its network. You can drop the old database&#x27;s network if LiteLLM only used it for the database.'),
+    code(r"""
+sudo cp -a /opt/litellm/litellm.env /opt/litellm/litellm.env.bak-$(date +%F)
+P=$(sudo grep ^POSTGRES_PASSWORD /opt/litellm/db.env | cut -d= -f2)
+sudo sed -i "s#^DATABASE_URL=.*#DATABASE_URL=postgresql://litellm:$P@litellm-db:5432/litellm#" /opt/litellm/litellm.env
+unset P
+sudo vi /etc/containers/systemd/litellm.container
+#   under [Unit]:       Requires=litellm-db.service
+#                       After=litellm-db.service
+#   under [Container]:  Network=litellm.network   (replacing the old database's network)
+sudo systemctl daemon-reload
+sudo systemctl start litellm
+curl -s http://192.168.1.101:4000/health/readiness                # "db": "connected"
+"""),
+    p('Make a request or two, then check that the newest spend log row is in the <em>new</em> database: <code>sudo podman exec litellm-db psql -U litellm -d litellm -Atc &#x27;select max(&quot;startTime&quot;) from &quot;LiteLLM_SpendLogs&quot;&#x27;</code>. Once you&#x27;re satisfied, drop the old copy (<code>sudo podman exec postgresdb dropdb -U admin litellm</code>) and keep the dump file as a backup.'),
+    note('An external Postgres (a database server, a managed service) works the same way: create a database and user there, point <code>DATABASE_URL</code> at it, and leave out the <code>litellm-db</code> files and the <code>Requires=</code> line.', 'Other options:'),
+
+    '<h3 id="l0-labprep">Part 5: Prepare the gateway for these labs</h3>',
+    p('The labs ask for two model names, <code>lab-chat</code> and <code>lab-agent</code>. They&#x27;re <strong>aliases</strong>: clients never name the real model, and the gateway decides which model answers. Moving <code>lab-agent</code> to a bigger model or to a cloud provider later means changing one line here, and every agent follows. Back up the config, add the two entries to the end of the existing <code>model_list</code>, and restart:'),
     code(r"""
 sudo cp -a /opt/litellm/config.yaml /opt/litellm/config.yaml.bak-$(date +%F)
+sudo vi /opt/litellm/config.yaml
 """),
     code(r"""
   - model_name: lab-chat                   # what chat apps ask for
@@ -365,23 +389,94 @@ sudo cp -a /opt/litellm/config.yaml /opt/litellm/config.yaml.bak-$(date +%F)
       api_base: os.environ/LMSTUDIO_API_BASE
       api_key: not-needed
 """),
-    p('Both point at the same model for now, so LM Studio never has to swap models in and out of GPU memory. Restart the gateway to load the new config:'),
     code(r"""
-sudo systemctl restart litellm             # or "sudo podman restart litellm" if you didn't convert it
-sudo journalctl -u litellm -f              # Ctrl-C once you see "Uvicorn running"
+sudo systemctl restart litellm
+MK=$(sudo grep ^LITELLM_MASTER_KEY /opt/litellm/litellm.env | cut -d= -f2)
+curl -s http://192.168.1.101:4000/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id' | grep lab-
 """),
-    h3('Verify (back on .100)'),
+    ul([
+        'Both point at the same model so LM Studio never has to swap models in and out of GPU memory. On a single GPU, alternating between two large models makes every request wait for a model load.',
+        '<code>LMSTUDIO_API_BASE</code> must be in <code>litellm.env</code> (<code>LMSTUDIO_API_BASE=http://192.168.1.194:1234/v1</code>).',
+        'In LM Studio, give the model a default <strong>context length of 32k or more</strong> (gear icon on the model, then Context Length). Reasoning (&quot;thinking&quot;) models spend tokens thinking before they answer; with a small context they can use it all up and return an empty reply with <code>finish_reason: &quot;length&quot;</code>.',
+        'A cloud model instead: <code>model: anthropic/claude-haiku-4-5-20251001</code> with <code>api_key: os.environ/ANTHROPIC_API_KEY</code>, or <code>model: openai/gpt-4.1-mini</code> with <code>api_key: os.environ/OPENAI_API_KEY</code>, and the key in <code>litellm.env</code>.',
+        'YAML is indentation-sensitive, and each top-level key (<code>model_list:</code>, <code>litellm_settings:</code>) may appear only once. If LiteLLM won&#x27;t start after an edit, <code>sudo journalctl -u litellm -n 50</code> shows the error; restore the backup to get going again.',
+    ]),
+
+    '<h3 id="l0-options">Part 6: Upgrades, backups and options</h3>',
+    p('<strong>Which change needs what.</strong>'),
+    table(['You changed', 'Run'], [
+        ['<code>config.yaml</code> or <code>litellm.env</code>', '<code>sudo systemctl restart litellm</code> (a Quadlet restart creates a fresh container, so env file changes are picked up)'],
+        ['A <code>.container</code>, <code>.network</code> or <code>.volume</code> file', '<code>sudo systemctl daemon-reload</code>, then restart the service'],
+        ['Keys, agents, MCP servers (through the API or UI)', 'Nothing; they&#x27;re stored in the database and take effect at once'],
+    ]),
+    p('<strong>Back up the database</strong> before every upgrade, and on a schedule if the spend logs matter to you:'),
     code(r"""
-curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id' | grep lab-
-# lab-chat
-# lab-agent
+sudo podman exec litellm-db pg_dump -U litellm litellm | sudo tee /opt/litellm/backup-$(date +%F).sql >/dev/null
+sudo chmod 600 /opt/litellm/backup-*.sql
 """),
+    p('<strong>Upgrade LiteLLM</strong> by changing the image tag. Read the release notes for the versions you&#x27;re skipping first; LiteLLM runs its own database migrations at startup.'),
+    code(r"""
+sudo sed -i 's#litellm:v1.104.0#litellm:v1.105.0#' /etc/containers/systemd/litellm.container
+sudo systemctl daemon-reload && sudo systemctl restart litellm      # pulls the new image, then migrates
+curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
+"""),
+    ul([
+        '<strong>Pin the version.</strong> A floating tag such as <code>main-stable</code> or <code>latest</code> means you can&#x27;t tell which build you run, and a pull can silently change it. Compromised LiteLLM releases were published to PyPI in March 2026, so know exactly what you run. For full reproducibility, pin the digest: <code>Image=ghcr.io/berriai/litellm@sha256:...</code> (<code>sudo podman image inspect --format &#x27;{{index .RepoDigests 0}}&#x27; &lt;image&gt;</code> prints it).',
+        '<code>LITELLM_SALT_KEY</code> encrypts provider keys you store through the UI. Never change it after that, or LiteLLM can&#x27;t decrypt them. Older installs without one use the master key, which then mustn&#x27;t change either.',
+        '<code>:Z</code> on a mount relabels the file for SELinux. Without it the container gets &quot;permission denied&quot; reading <code>config.yaml</code>.',
+        'Without Podman: <code>pip install &#x27;litellm[proxy]==1.104.0&#x27;</code> in a Python 3.12 venv runs the same gateway with <code>litellm --config config.yaml --port 4000</code>. You then write your own systemd unit to keep it running.',
+        'Production extras these labs don&#x27;t need: Redis (shared rate limits and caching across several LiteLLM instances), and a reverse proxy with TLS in front of port 4000.',
+    ]),
+)
+
+# ---------------------------------------------------------------- lab 1
+L1 = lab(1, 'Connect to the Gateway', '192.168.1.100 → 192.168.1.101 (read-only)',
+    goal('set up your shell on the agent host, and confirm the gateway has everything the labs need: healthy, a database, the two lab model names, and a service that survives reboots. Nothing in this lab changes the gateway.'),
+    h3('1. Your shell on the agent host'),
+    p('You type every command from here on on <strong>192.168.1.100</strong> unless a step says otherwise. Two shell variables hold the gateway address and the <strong>master key</strong>, LiteLLM&#x27;s admin password. Whoever runs the gateway has it; on .101 it&#x27;s in <code>/opt/litellm/litellm.env</code>. <code>read -rsp</code> reads it without echoing it or saving it in your shell history.'),
+    code(r"""
+ssh 192.168.1.100
+sudo dnf -y install jq                     # pretty-prints and filters JSON answers
+export GW=http://192.168.1.101:4000
+read -rsp 'LiteLLM master key: ' MK; echo; export MK
+"""),
+    note('Put the <code>export GW=...</code> line in <code>~/.bashrc</code> so new shells have it. Don&#x27;t do that with the master key; re-enter it when you need it.', 'Tip:'),
+    h3('2. Is it up, and does it have a database?'),
+    code(r"""
+curl -s $GW/health/liveliness; echo                        # "I'm alive!" (no key needed)
+curl -s $GW/health/readiness | jq '{status, db}'            # db must be "connected"
+curl -s $GW/openapi.json | jq -r .info.version              # the LiteLLM version
+"""),
+    p('<code>/health/liveliness</code> only says the process is running. <code>/health/readiness</code> also checks the database, which the labs need from Lab 3 on: virtual keys, agents and spend logs all live there. If <code>db</code> isn&#x27;t <code>connected</code>, see <a href="#l0-db">Lab 0, Part 4</a>.'),
+    h3('3. Does it serve the lab models?'),
+    code(r"""
+curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'
+"""),
+    p('Look for <code>lab-chat</code> and <code>lab-agent</code> in the list. If they&#x27;re missing, <a href="#l0-labprep">Lab 0, Part 5</a> adds them. A wrong master key returns an authentication error instead of a list.'),
+    h3('4. Will it come back after a reboot?'),
+    p('On <strong>.101</strong>, ask Podman whether the container belongs to a systemd service. This only reads:'),
+    code(r"""
+ssh 192.168.1.101
+sudo podman inspect litellm --format 'unit={{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}} restart={{.HostConfig.RestartPolicy.Name}}'
+systemctl is-active litellm-db 2>/dev/null; systemctl is-enabled podman-restart.service
+"""),
+    table(['What you see', 'Means', 'Do'], [
+        ['<code>unit=litellm.service</code>', 'It&#x27;s a Quadlet (or other systemd) service', 'Nothing.'],
+        ['<code>unit=</code> (empty), <code>restart=always</code>, <code>podman-restart</code> <code>enabled</code>', 'Started by hand; comes back at boot through <code>podman-restart.service</code>', 'Works. <a href="#l0-quadlet">Lab 0, Part 3</a> converts it to a Quadlet.'],
+        ['<code>unit=</code> (empty), anything else', 'It won&#x27;t come back after a reboot', '<a href="#l0-quadlet">Lab 0, Part 3</a>.'],
+    ]),
+    p('Its database has to come back too. <code>active</code> for <code>litellm-db</code> means it has its own Postgres service, as in Lab 0. Anything else: find the database host in <code>DATABASE_URL</code> and check that it starts at boot.'),
+    h3('Verify'),
+    p('You&#x27;re ready for the labs when all of these are true:'),
+    ul([
+        '<code>/health/readiness</code> shows <code>&quot;db&quot;: &quot;connected&quot;</code>.',
+        '<code>/v1/models</code> lists <code>lab-chat</code> and <code>lab-agent</code>.',
+        'The container&#x27;s <code>unit=</code> is <code>litellm.service</code>, or you&#x27;ve accepted the <code>podman-restart</code> setup.',
+    ]),
     h3('Notes'),
     ul([
-        '<code>LMSTUDIO_API_BASE</code> has to be in the env file (<code>LMSTUDIO_API_BASE=http://192.168.1.194:1234/v1</code>). If it&#x27;s missing, LiteLLM starts but every request to these models fails.',
-        'Using a cloud model instead? Use <code>model: anthropic/claude-haiku-4-5-20251001</code> with <code>api_key: os.environ/ANTHROPIC_API_KEY</code>, or <code>model: openai/gpt-4.1-mini</code> with <code>OPENAI_API_KEY</code>, and add the key to the env file. A change to the env file needs <code>systemctl restart</code>; Podman reads it only when it creates the container, and a Quadlet restart re-creates it.',
-        'Reasoning (&quot;thinking&quot;) models spend tokens thinking before they answer. If a reply comes back empty with <code>finish_reason: &quot;length&quot;</code>, the context length in LM Studio is too small; raise it.',
-        'YAML is indentation-sensitive, and each top-level key (<code>model_list:</code>, <code>litellm_settings:</code>) may appear only once. If LiteLLM won&#x27;t start after an edit, <code>sudo journalctl -u litellm -n 50</code> shows the parse error; restore the backup to get going again.',
+        'Don&#x27;t open <code>/health</code> on its own (without <code>/liveliness</code> or <code>/readiness</code>). It sends a real request to <em>every</em> model the gateway serves, which makes LM Studio load each one in turn and can stall everyone else using it.',
+        'The admin UI at <code>http://192.168.1.101:4000/ui</code> shows the same information under <strong>Models</strong> and <strong>Settings</strong>.',
     ]),
 )
 
@@ -1062,10 +1157,10 @@ claude
 
 # ---------------------------------------------------------------- lab 11
 L11 = lab(11, 'Operate It: Reboots, Logs, Usage, Kill Switches, Upgrades', '192.168.1.100 and 192.168.1.101',
-    goal('prove everything comes back after a reboot, know where to look when something breaks, see what each app and agent used, and shut one off without touching the rest.'),
+    goal('prove everything you built comes back after a reboot, know where to look when something breaks, see what each app and agent used, and shut one off without touching the rest.'),
     h3('1. Everything you built, as services'),
     table(['Host', 'Service', 'Port', 'Files'], [
-        ['.101', '<code>litellm</code> (+ <code>litellm-db</code> from Lab 0)', '4000', '<code>/opt/litellm/</code>, <code>/etc/containers/systemd/litellm*</code>'],
+        ['.101', '<code>litellm</code>, <code>litellm-db</code> (set up before the labs)', '4000', '<code>/opt/litellm/</code>, <code>/etc/containers/systemd/litellm*</code>'],
         ['.100', '<code>open-webui</code>', '3000', '<code>/opt/open-webui/</code>, volume <code>open-webui</code>'],
         ['.100', '<code>ops-agent</code>, <code>writer-agent</code>', '8601, 8602', '<code>/opt/agents/</code>, image <code>localhost/lab-agent:1</code>'],
         ['.100', '<code>lab-tools</code>', '8701', '<code>/opt/lab-tools/</code>, image <code>localhost/lab-tools:1</code>'],
@@ -1123,13 +1218,7 @@ sudo podman build -t localhost/lab-agent:2 /opt/agents
 sudo sed -i 's#localhost/lab-agent:1#localhost/lab-agent:2#' /etc/containers/systemd/{ops,writer}-agent.container
 sudo systemctl daemon-reload && sudo systemctl restart ops-agent writer-agent
 """),
-    p('<strong>LiteLLM (on .101):</strong> back up the database, change the image tag, restart. Read the release notes for the versions you skip first.'),
-    code(r"""
-sudo podman exec litellm-db pg_dump -U litellm litellm | sudo tee /opt/litellm/backup-$(date +%F).sql >/dev/null
-sudo sed -i 's#litellm:v1.104.0#litellm:v1.105.0#' /etc/containers/systemd/litellm.container
-sudo systemctl daemon-reload && sudo systemctl restart litellm      # pulls the new image, then runs migrations
-curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
-"""),
+    p('Upgrading LiteLLM itself, and backing up its database, are in <a href="#l0-options">Lab 0, Part 6</a>.'),
     h3('Clean up the labs'),
     code(r"""
 # on .100: stop and remove the services, their files and images
@@ -1139,8 +1228,9 @@ sudo systemctl daemon-reload
 sudo podman volume rm open-webui
 sudo podman rmi localhost/lab-agent:1 localhost/lab-tools:1
 sudo rm -rf /opt/agents /opt/lab-tools /opt/open-webui ~/gw-labs
-# on .101: remove mcp_servers and the lab- models from config.yaml, restart litellm,
-# then delete the lab keys and agents in the admin UI (Virtual Keys, Agents)
+# the gateway: delete the lab keys and agents in the admin UI (Virtual Keys, Agents);
+# on .101, remove the mcp_servers block from Lab 8 (and the lab- models, if you added them
+# only for these labs) from config.yaml, then: sudo systemctl restart litellm
 """),
 )
 
@@ -1181,6 +1271,7 @@ page = f'''<!doctype html>
     <a href="/"><strong>Cropsey IT</strong> home</a>
     <a href="rhcsa.html"><strong>RHCSA Labs</strong></a>
     <a href="#overview">Overview &amp; Podman basics</a>
+    <a href="#lab-0">LiteLLM setup reference</a>
     <a href="#lab-11">Operate &amp; clean up</a>
     <button class="theme" type="button" id="theme">Switch to dark</button>
   </div>
