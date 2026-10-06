@@ -128,15 +128,15 @@ overview = f'''<section class="intro" id="overview">
   <h2>Before you start</h2>
   <ul>
     <li>SSH with sudo on 192.168.1.100 and 192.168.1.101, both Rocky Linux 9 or 10 with Podman 5.</li>
-    <li>LiteLLM running on .101 with a <strong>master key</strong>, a <strong>database</strong> (virtual keys, used from Lab 3 on, need it) and the model names <code>lab-chat</code> and <code>lab-agent</code>. Lab 1 checks all three without changing anything; Lab 0 covers whatever is missing.</li>
+    <li>LiteLLM running on .101 with a <strong>master key</strong> and a <strong>database</strong> (virtual keys, used from Lab 3 on, need it). Lab 1 checks both; Lab 0 covers whatever is missing.</li>
     <li>A model that can call tools. These labs use <code>qwen/qwen3.8-27b</code> in LM Studio. In LM Studio, set its default <strong>context length to at least 32k</strong> (gear icon on the model, then Context Length). LM Studio loads models on demand with that setting, and a small default leaves a &quot;thinking&quot; model no room to answer.</li>
     <li>The labs were tested with LiteLLM <strong>v1.104.0</strong>, Podman 5.8, Python 3.12, <code>openai</code> 3.24, <code>mcp</code> 2.3 and <code>a2a-sdk</code> 1.2.</li>
   </ul>
 
   <h2>Lab order</h2>
   {table(['Lab', 'What you build', 'Needs'], [
-      ['0', 'Reference, not a lab: installing LiteLLM, converting it to a Quadlet, giving it its own Postgres, adding the lab model names, upgrades', 'only what Lab 1 finds missing'],
-      ['1', 'Connect to the gateway and check it&#x27;s ready (read-only)', 'a running gateway'],
+      ['0', 'Reference, not a lab: installing LiteLLM, converting it to a Quadlet, giving it its own Postgres, upgrades', 'only what Lab 1 finds missing'],
+      ['1', 'Connect to the gateway, check it&#x27;s ready, and add the two model names the labs use', 'a running gateway'],
       ['2&ndash;4', 'Chat: curl and Python, virtual keys, a chat web UI', '1'],
       ['5&ndash;9', 'Agents: first agent, agents as services, A2A through the gateway, MCP tools, a coordinator', '1, 3'],
       ['10', 'A coding agent (opencode or Claude Code) through the gateway', '1, 3 (8 for MCP)'],
@@ -150,11 +150,10 @@ L0 = lab(0, 'Reference: Setting Up LiteLLM (only if you need to)', '192.168.1.10
     goal('everything about installing and running the gateway itself, in one place. The labs assume LiteLLM is already running; come here only for the parts your gateway is missing.'),
     p('The rest of the labs never install or reconfigure LiteLLM. They talk to it through its API, as any app would. Use this table to find which parts of this lab, if any, you need:'),
     table(['Your situation', 'Do'], [
-        ['No LiteLLM yet', '<a href="#l0-podman">Part 1</a>, <a href="#l0-install">Part 2</a>, <a href="#l0-labprep">Part 5</a>'],
+        ['No LiteLLM yet', '<a href="#l0-podman">Part 1</a>, <a href="#l0-install">Part 2</a>'],
         ['LiteLLM was started by hand with <code>podman run</code>, so it isn&#x27;t a systemd service (Lab 1 checks this)', '<a href="#l0-quadlet">Part 3</a>'],
         ['LiteLLM has no database, or uses a database inside another app&#x27;s Postgres', '<a href="#l0-db">Part 4</a>'],
-        ['The gateway doesn&#x27;t serve <code>lab-chat</code> and <code>lab-agent</code> yet', '<a href="#l0-labprep">Part 5</a>'],
-        ['Upgrades, backups and other ways to run it', '<a href="#l0-options">Part 6</a>'],
+        ['Upgrades, backups and other ways to run it', '<a href="#l0-options">Part 5</a>'],
     ]),
 
     '<h3 id="l0-podman">Part 1: Podman</h3>',
@@ -188,20 +187,15 @@ printf '%s\n' \
   | sudo tee /opt/litellm/litellm.env >/dev/null
 unset DBPASS UIPASS
 """),
-    p('<strong>Config.</strong> <code>model_list</code> maps the names clients ask for to real models; <a href="#l0-labprep">Part 5</a> explains the two lab names. <code>os.environ/NAME</code> tells LiteLLM to read a value from the environment.'),
+    p('<strong>Config.</strong> <code>model_list</code> is the list of models the gateway serves. <code>model_name</code> is the name clients ask for; <code>model</code> is the real model, where the <code>openai/</code> prefix means &quot;talk to this server with the OpenAI API&quot;, which LM Studio speaks. <code>os.environ/NAME</code> tells LiteLLM to read a value from the environment. Add one entry per model you want to serve.'),
     code(r"""
 sudo tee /opt/litellm/config.yaml >/dev/null <<'EOF'
 model_list:
-  - model_name: lab-chat
+  - model_name: qwen3.8-27b
     litellm_params:
-      model: openai/qwen/qwen3.8-27b       # "openai/" = speak the OpenAI API to this server
+      model: openai/qwen/qwen3.8-27b       # the model's id in LM Studio
       api_base: os.environ/LMSTUDIO_API_BASE
-      api_key: not-needed
-  - model_name: lab-agent
-    litellm_params:
-      model: openai/qwen/qwen3.8-27b
-      api_base: os.environ/LMSTUDIO_API_BASE
-      api_key: not-needed
+      api_key: not-needed                  # LM Studio doesn't check keys
 
 litellm_settings:
   drop_params: true          # ignore request options the model server doesn't support
@@ -279,6 +273,7 @@ sudo firewall-cmd --permanent --add-port=4000/tcp && sudo firewall-cmd --reload 
 curl -s http://192.168.1.101:4000/health/liveliness; echo     # "I'm alive!"
 curl -s http://192.168.1.101:4000/health/readiness             # "db": "connected"
 """),
+    note('In LM Studio, give the model a default <strong>context length of 32k or more</strong> (gear icon on the model, then Context Length). LM Studio loads models on demand with that setting, and reasoning (&quot;thinking&quot;) models spend tokens thinking before they answer. With a small context they can use it all up and return an empty reply with <code>finish_reason: &quot;length&quot;</code>.', 'Model server:'),
     p('The admin UI is at <code>http://192.168.1.101:4000/ui</code> (user <code>admin</code>, the password you chose). The first start runs about 185 database migrations and takes a minute or two.'),
 
     '<h3 id="l0-quadlet">Part 3: Convert a hand-started container into a Quadlet</h3>',
@@ -371,38 +366,7 @@ curl -s http://192.168.1.101:4000/health/readiness                # "db": "conne
     p('Make a request or two, then check that the newest spend log row is in the <em>new</em> database: <code>sudo podman exec litellm-db psql -U litellm -d litellm -Atc &#x27;select max(&quot;startTime&quot;) from &quot;LiteLLM_SpendLogs&quot;&#x27;</code>. Once you&#x27;re satisfied, drop the old copy (<code>sudo podman exec postgresdb dropdb -U admin litellm</code>) and keep the dump file as a backup.'),
     note('An external Postgres (a database server, a managed service) works the same way: create a database and user there, point <code>DATABASE_URL</code> at it, and leave out the <code>litellm-db</code> files and the <code>Requires=</code> line.', 'Other options:'),
 
-    '<h3 id="l0-labprep">Part 5: Prepare the gateway for these labs</h3>',
-    p('The labs ask for two model names, <code>lab-chat</code> and <code>lab-agent</code>. They&#x27;re <strong>aliases</strong>: clients never name the real model, and the gateway decides which model answers. Moving <code>lab-agent</code> to a bigger model or to a cloud provider later means changing one line here, and every agent follows. Back up the config, add the two entries to the end of the existing <code>model_list</code>, and restart:'),
-    code(r"""
-sudo cp -a /opt/litellm/config.yaml /opt/litellm/config.yaml.bak-$(date +%F)
-sudo vi /opt/litellm/config.yaml
-"""),
-    code(r"""
-  - model_name: lab-chat                   # what chat apps ask for
-    litellm_params:
-      model: openai/qwen/qwen3.8-27b
-      api_base: os.environ/LMSTUDIO_API_BASE
-      api_key: not-needed
-  - model_name: lab-agent                  # what agents ask for (must support tool calling)
-    litellm_params:
-      model: openai/qwen/qwen3.8-27b
-      api_base: os.environ/LMSTUDIO_API_BASE
-      api_key: not-needed
-"""),
-    code(r"""
-sudo systemctl restart litellm
-MK=$(sudo grep ^LITELLM_MASTER_KEY /opt/litellm/litellm.env | cut -d= -f2)
-curl -s http://192.168.1.101:4000/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id' | grep lab-
-"""),
-    ul([
-        'Both point at the same model so LM Studio never has to swap models in and out of GPU memory. On a single GPU, alternating between two large models makes every request wait for a model load.',
-        '<code>LMSTUDIO_API_BASE</code> must be in <code>litellm.env</code> (<code>LMSTUDIO_API_BASE=http://192.168.1.194:1234/v1</code>).',
-        'In LM Studio, give the model a default <strong>context length of 32k or more</strong> (gear icon on the model, then Context Length). Reasoning (&quot;thinking&quot;) models spend tokens thinking before they answer; with a small context they can use it all up and return an empty reply with <code>finish_reason: &quot;length&quot;</code>.',
-        'A cloud model instead: <code>model: anthropic/claude-haiku-4-5-20251001</code> with <code>api_key: os.environ/ANTHROPIC_API_KEY</code>, or <code>model: openai/gpt-4.1-mini</code> with <code>api_key: os.environ/OPENAI_API_KEY</code>, and the key in <code>litellm.env</code>.',
-        'YAML is indentation-sensitive, and each top-level key (<code>model_list:</code>, <code>litellm_settings:</code>) may appear only once. If LiteLLM won&#x27;t start after an edit, <code>sudo journalctl -u litellm -n 50</code> shows the error; restore the backup to get going again.',
-    ]),
-
-    '<h3 id="l0-options">Part 6: Upgrades, backups and options</h3>',
+    '<h3 id="l0-options">Part 5: Upgrades, backups and options</h3>',
     p('<strong>Which change needs what.</strong>'),
     table(['You changed', 'Run'], [
         ['<code>config.yaml</code> or <code>litellm.env</code>', '<code>sudo systemctl restart litellm</code> (a Quadlet restart creates a fresh container, so env file changes are picked up)'],
@@ -422,6 +386,7 @@ curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
 """),
     ul([
         '<strong>Pin the version.</strong> A floating tag such as <code>main-stable</code> or <code>latest</code> means you can&#x27;t tell which build you run, and a pull can silently change it. Compromised LiteLLM releases were published to PyPI in March 2026, so know exactly what you run. For full reproducibility, pin the digest: <code>Image=ghcr.io/berriai/litellm@sha256:...</code> (<code>sudo podman image inspect --format &#x27;{{index .RepoDigests 0}}&#x27; &lt;image&gt;</code> prints it).',
+        'Cloud models go in <code>model_list</code> the same way: <code>model: anthropic/claude-haiku-4-5-20251001</code> with <code>api_key: os.environ/ANTHROPIC_API_KEY</code>, or <code>model: openai/gpt-4.1-mini</code> with <code>api_key: os.environ/OPENAI_API_KEY</code>, and the key itself in <code>litellm.env</code>.',
         '<code>LITELLM_SALT_KEY</code> encrypts provider keys you store through the UI. Never change it after that, or LiteLLM can&#x27;t decrypt them. Older installs without one use the master key, which then mustn&#x27;t change either.',
         '<code>:Z</code> on a mount relabels the file for SELinux. Without it the container gets &quot;permission denied&quot; reading <code>config.yaml</code>.',
         'Without Podman: <code>pip install &#x27;litellm[proxy]==1.104.0&#x27;</code> in a Python 3.12 venv runs the same gateway with <code>litellm --config config.yaml --port 4000</code>. You then write your own systemd unit to keep it running.',
@@ -430,8 +395,8 @@ curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
 )
 
 # ---------------------------------------------------------------- lab 1
-L1 = lab(1, 'Connect to the Gateway', '192.168.1.100 → 192.168.1.101 (read-only)',
-    goal('set up your shell on the agent host, and confirm the gateway has everything the labs need: healthy, a database, the two lab model names, and a service that survives reboots. Nothing in this lab changes the gateway.'),
+L1 = lab(1, 'Connect to the Gateway and Add the Lab Model Names', '192.168.1.100 → 192.168.1.101',
+    goal('set up your shell on the agent host, confirm the gateway is healthy, has a database and survives reboots, then give it two new model names, <code>lab-chat</code> and <code>lab-agent</code>, that every later lab uses.'),
     h3('1. Your shell on the agent host'),
     p('You type every command from here on on <strong>192.168.1.100</strong> unless a step says otherwise. Two shell variables hold the gateway address and the <strong>master key</strong>, LiteLLM&#x27;s admin password. Whoever runs the gateway has it; on .101 it&#x27;s in <code>/opt/litellm/litellm.env</code>. <code>read -rsp</code> reads it without echoing it or saving it in your shell history.'),
     code(r"""
@@ -448,12 +413,7 @@ curl -s $GW/health/readiness | jq '{status, db}'            # db must be "connec
 curl -s $GW/openapi.json | jq -r .info.version              # the LiteLLM version
 """),
     p('<code>/health/liveliness</code> only says the process is running. <code>/health/readiness</code> also checks the database, which the labs need from Lab 3 on: virtual keys, agents and spend logs all live there. If <code>db</code> isn&#x27;t <code>connected</code>, see <a href="#l0-db">Lab 0, Part 4</a>.'),
-    h3('3. Does it serve the lab models?'),
-    code(r"""
-curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'
-"""),
-    p('Look for <code>lab-chat</code> and <code>lab-agent</code> in the list. If they&#x27;re missing, <a href="#l0-labprep">Lab 0, Part 5</a> adds them. A wrong master key returns an authentication error instead of a list.'),
-    h3('4. Will it come back after a reboot?'),
+    h3('3. Will it come back after a reboot?'),
     p('On <strong>.101</strong>, ask Podman whether the container belongs to a systemd service. This only reads:'),
     code(r"""
 ssh 192.168.1.101
@@ -466,15 +426,58 @@ systemctl is-active litellm-db 2>/dev/null; systemctl is-enabled podman-restart.
         ['<code>unit=</code> (empty), anything else', 'It won&#x27;t come back after a reboot', '<a href="#l0-quadlet">Lab 0, Part 3</a>.'],
     ]),
     p('Its database has to come back too. <code>active</code> for <code>litellm-db</code> means it has its own Postgres service, as in Lab 0. Anything else: find the database host in <code>DATABASE_URL</code> and check that it starts at boot.'),
-    h3('Verify'),
-    p('You&#x27;re ready for the labs when all of these are true:'),
+    h3('4. Add the two lab model names'),
+    p('Look at the models the gateway serves now:'),
+    code(r"""
+curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'
+# qwen3.8-27b
+# ...
+"""),
+    p('Every later lab asks for one of two names: <code>lab-chat</code> (chat apps) or <code>lab-agent</code> (agents, which need a model that can call tools). Neither is a new model. Each is an extra <code>model_list</code> entry, an <strong>alias</strong>, that forwards to a model you already have. Using aliases has two benefits:'),
     ul([
-        '<code>/health/readiness</code> shows <code>&quot;db&quot;: &quot;connected&quot;</code>.',
-        '<code>/v1/models</code> lists <code>lab-chat</code> and <code>lab-agent</code>.',
-        'The container&#x27;s <code>unit=</code> is <code>litellm.service</code>, or you&#x27;ve accepted the <code>podman-restart</code> setup.',
+        'The lab commands work unchanged whatever model you run. You map the two names to your model once, here.',
+        'It&#x27;s how a gateway is meant to be used. Apps ask for a role, not a specific model, so you can later move <code>lab-agent</code> to a bigger model or a cloud provider by changing one line, and no app or agent has to change.',
     ]),
+    p('On <strong>.101</strong>, back up the config and open it:'),
+    code(r"""
+ssh 192.168.1.101
+sudo cp -a /opt/litellm/config.yaml /opt/litellm/config.yaml.bak-$(date +%F)
+sudo vi /opt/litellm/config.yaml
+"""),
+    p('Add these two entries at the end of the existing <code>model_list</code>, indented like the entries already there. Both use the same real model as an existing entry (<code>qwen/qwen3.8-27b</code> here; use your own model&#x27;s id). Only <code>model_name</code> is new:'),
+    code(r"""
+  - model_name: lab-chat                   # the name chat apps ask for
+    litellm_params:
+      model: openai/qwen/qwen3.8-27b       # the real model it forwards to
+      api_base: os.environ/LMSTUDIO_API_BASE
+      api_key: not-needed
+  - model_name: lab-agent                  # the name agents ask for
+    litellm_params:
+      model: openai/qwen/qwen3.8-27b
+      api_base: os.environ/LMSTUDIO_API_BASE
+      api_key: not-needed
+"""),
+    p('LiteLLM reads its config only at startup, so restart it. The gateway is down for about 20 seconds:'),
+    code(r"""
+sudo systemctl restart litellm             # or "sudo podman restart litellm" if it isn't a Quadlet service
+sudo journalctl -u litellm -f              # Ctrl-C once you see "Uvicorn running"
+"""),
+    h3('Verify (back on .100)'),
+    code(r"""
+curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id' | grep lab-
+# lab-chat
+# lab-agent
+
+curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"model": "lab-agent", "messages": [{"role": "user", "content": "Say hi in five words."}]}' \
+  | jq '{model, answer: .choices[0].message.content}'
+"""),
+    p('The answer comes from qwen3.8-27b, but the response says <code>&quot;model&quot;: &quot;lab-agent&quot;</code>: the client only ever sees the alias.'),
     h3('Notes'),
     ul([
+        'Both names point at the same model on purpose. On a single GPU, alternating between two large models makes LM Studio unload one and load the other, and every request waits for the load.',
+        'YAML is indentation-sensitive, and each top-level key (<code>model_list:</code>, <code>litellm_settings:</code>) may appear only once. If LiteLLM won&#x27;t start after the edit, <code>sudo journalctl -u litellm -n 50</code> shows the error; copy the backup back and restart to get going again.',
+        'If the reply is empty and <code>finish_reason</code> is <code>&quot;length&quot;</code>, the model ran out of context while thinking. Raise its context length in LM Studio (Lab 0, Part 2 has the note).',
         'Don&#x27;t open <code>/health</code> on its own (without <code>/liveliness</code> or <code>/readiness</code>). It sends a real request to <em>every</em> model the gateway serves, which makes LM Studio load each one in turn and can stall everyone else using it.',
         'The admin UI at <code>http://192.168.1.101:4000/ui</code> shows the same information under <strong>Models</strong> and <strong>Settings</strong>.',
     ]),
@@ -750,7 +753,7 @@ COPY agent.py a2a_server.py ./
 USER 1001
 CMD ["python", "a2a_server.py"]
 EOF
-sudo podman build -t localhost/lab-agent:1 /opt/agents
+sudo podman build -t localhost/a2a-agent:1 /opt/agents
 """),
     p('<code>USER 1001</code> runs the agent as an unprivileged user inside the container. The <code>localhost/</code> prefix marks an image you built yourself, so Podman never tries to pull it from a registry.'),
     h3('3. A second key, then one env file per agent'),
@@ -773,7 +776,7 @@ Description=ops-agent (A2A)
 
 [Container]
 ContainerName=ops-agent
-Image=localhost/lab-agent:1
+Image=localhost/a2a-agent:1
 PublishPort=8601:8601
 EnvironmentFile=/opt/agents/ops-agent.env
 Environment=GW=http://192.168.1.101:4000
@@ -795,7 +798,7 @@ Description=writer-agent (A2A)
 
 [Container]
 ContainerName=writer-agent
-Image=localhost/lab-agent:1
+Image=localhost/a2a-agent:1
 PublishPort=8602:8602
 EnvironmentFile=/opt/agents/writer-agent.env
 Environment=GW=http://192.168.1.101:4000
@@ -1162,7 +1165,7 @@ L11 = lab(11, 'Operate It: Reboots, Logs, Usage, Kill Switches, Upgrades', '192.
     table(['Host', 'Service', 'Port', 'Files'], [
         ['.101', '<code>litellm</code>, <code>litellm-db</code> (set up before the labs)', '4000', '<code>/opt/litellm/</code>, <code>/etc/containers/systemd/litellm*</code>'],
         ['.100', '<code>open-webui</code>', '3000', '<code>/opt/open-webui/</code>, volume <code>open-webui</code>'],
-        ['.100', '<code>ops-agent</code>, <code>writer-agent</code>', '8601, 8602', '<code>/opt/agents/</code>, image <code>localhost/lab-agent:1</code>'],
+        ['.100', '<code>ops-agent</code>, <code>writer-agent</code>', '8601, 8602', '<code>/opt/agents/</code>, image <code>localhost/a2a-agent:1</code>'],
         ['.100', '<code>lab-tools</code>', '8701', '<code>/opt/lab-tools/</code>, image <code>localhost/lab-tools:1</code>'],
         ['.100', 'scripts (not services)', '&ndash;', '<code>~/gw-labs/</code>'],
     ]),
@@ -1214,11 +1217,11 @@ curl -s -X DELETE $GW/v1/agents/<agent_id> -H "Authorization: Bearer $MK"
     h3('6. Upgrades'),
     p('<strong>An agent:</strong> edit the code in <code>/opt/agents</code>, rebuild with a new tag, point the Quadlet at it, restart. Keeping the old tag makes rolling back a one-line change.'),
     code(r"""
-sudo podman build -t localhost/lab-agent:2 /opt/agents
-sudo sed -i 's#localhost/lab-agent:1#localhost/lab-agent:2#' /etc/containers/systemd/{ops,writer}-agent.container
+sudo podman build -t localhost/a2a-agent:2 /opt/agents
+sudo sed -i 's#localhost/a2a-agent:1#localhost/a2a-agent:2#' /etc/containers/systemd/{ops,writer}-agent.container
 sudo systemctl daemon-reload && sudo systemctl restart ops-agent writer-agent
 """),
-    p('Upgrading LiteLLM itself, and backing up its database, are in <a href="#l0-options">Lab 0, Part 6</a>.'),
+    p('Upgrading LiteLLM itself, and backing up its database, are in <a href="#l0-options">Lab 0, Part 5</a>.'),
     h3('Clean up the labs'),
     code(r"""
 # on .100: stop and remove the services, their files and images
@@ -1226,7 +1229,7 @@ sudo systemctl stop open-webui ops-agent writer-agent lab-tools
 sudo rm /etc/containers/systemd/{open-webui.container,open-webui.volume,ops-agent.container,writer-agent.container,lab-tools.container}
 sudo systemctl daemon-reload
 sudo podman volume rm open-webui
-sudo podman rmi localhost/lab-agent:1 localhost/lab-tools:1
+sudo podman rmi localhost/a2a-agent:1 localhost/lab-tools:1
 sudo rm -rf /opt/agents /opt/lab-tools /opt/open-webui ~/gw-labs
 # the gateway: delete the lab keys and agents in the admin UI (Virtual Keys, Agents);
 # on .101, remove the mcp_servers block from Lab 8 (and the lab- models, if you added them
