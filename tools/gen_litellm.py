@@ -1047,7 +1047,7 @@ sudo cp ~/gw-labs/agent.py /opt/agents/
     write_file('/opt/agents/a2a_server.py', 'a2a_server.py', sudo=True),
     p('What the program does, part by part. Most of it is the <code>a2a-sdk</code> library doing the protocol work; your own code is the one line that calls <code>agent.run()</code>.'),
     explain(
-        ('import agent', 'Load your Lab 5 program as a module, so this file can call its <code>run()</code> function. Because <code>agent.py</code> only runs its question-from-the-command-line part when started directly (<code>__main__</code>), importing it does nothing else.'),
+        ('import agent', 'Load your Lab 5 program as a module, so this file can call its <code>run()</code> function. Importing it sets up its gateway client, which is why the container needs <code>GW</code> and <code>AGENT_KEY</code>; the part that takes a question from the command line (<code>__main__</code>) only runs when the file is started directly, so it&#x27;s skipped.'),
         ('NAME / DESCRIPTION / PORT / PUBLIC_URL', 'Settings read from environment variables, which the Quadlet files in step 4 set differently for each agent. <code>PUBLIC_URL</code> has no default: the program stops with an error if it&#x27;s missing, rather than advertising a wrong address.'),
         ('class Executor(AgentExecutor): execute(...)', 'What happens when a message arrives. The library calls <code>execute()</code> with the message (<code>context</code>) and a queue (<code>event_queue</code>) for sending updates back to the caller.'),
         ('task = ... new_task_from_user_message(...)', 'In A2A every piece of work is a <strong>task</strong> with an ID and a state. Create one for this message (or continue the existing one), and send it to the caller.'),
