@@ -163,7 +163,7 @@ overview = f'''<section class="intro" id="overview">
   ])}
   <h3>Shell basics the labs rely on</h3>
   <ul>
-    <li><strong>Variables.</strong> <code>export GW=http://...</code> stores a value; <code>$GW</code> uses it. The labs keep the gateway address in <code>$GW</code> and keys in variables like <code>$MK</code>, so you never paste a key into a command. Variables only last as long as the shell, so after you log in again you re-enter the ones you need.</li>
+    <li><strong>Variables.</strong> <code>export GW=http://...</code> stores a value; <code>$GW</code> uses it. The labs keep the gateway address in <code>$GW</code> and keys in variables like <code>$MK</code>, so you never paste a key into a command. Variables only last as long as the shell. From Lab 3 on, every key you create is also saved in <code>~/gw-labs/keys.env</code>, so after you log in again, <code>. ~/gw-labs/keys.env</code> brings them all back; only <code>$GW</code> and the master key need setting again.</li>
     <li><strong>Reading a secret.</strong> <code>read -rsp &#x27;Prompt: &#x27; MK</code> asks you to paste a value and stores it in <code>MK</code>. <code>-s</code> hides what you type, <code>-p</code> shows the prompt, <code>-r</code> keeps backslashes as they are. The <code>echo</code> after it just moves to a new line, since the hidden input doesn&#x27;t.</li>
     <li><strong><code>$(...)</code></strong> runs the command inside and drops its output in place. <code>$(date +%F)</code> becomes today&#x27;s date, such as <code>2026-10-06</code>, which the labs use to name backup files.</li>
     <li><strong>Quotes.</strong> Inside <code>&#x27;single quotes&#x27;</code> the shell changes nothing, which is why JSON is written that way. Inside <code>&quot;double quotes&quot;</code> it still replaces <code>$VARIABLES</code>, which is why the <code>Authorization</code> header uses them.</li>
@@ -767,21 +767,23 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
 """),
     explain(
         ('curl -s $GW/key/generate -H "Authorization: Bearer $MK"', 'Ask the gateway to create a key. Only the master key may do that.'),
-        ("-d '{...}'", 'The settings for the new key, explained in the list below.'),
+        ('"key_alias": "chat-ui"', 'The key&#x27;s name, which you&#x27;ll see in logs and in the UI. It must be unique.'),
+        ('"models": [...]', 'The allow-list: the only models this key may use. Leave it out and the key can use every model.'),
+        ('"rpm_limit": 60', 'Requests per minute. Request number 61 inside a minute gets HTTP 429.'),
         ("| jq '{key_alias, key, models, rpm_limit}'", 'The response repeats every setting the key has, most of them defaults. Show only the four that matter here, including the new key itself.'),
     ),
-    ul([
-        '<code>key_alias</code> is the name you&#x27;ll see in logs and in the UI. It must be unique: re-running a step that creates a key fails with &quot;Key with alias ... already exists&quot;, so delete the old key (Lab 11) or pick another alias.',
-        '<code>models</code> is the allow-list. Leave it out and the key can use every model.',
-        '<code>rpm_limit</code> is requests per minute. Request number 61 inside a minute gets HTTP 429.',
-    ]),
-    p('Copy the <code>key</code> value now. LiteLLM stores only a hash of it, so it can never show you the key again. Keep it in a variable for this lab:'),
+    p('Copy the <code>key</code> value now. LiteLLM stores only a hash of it, so it can never show you the key again. Put it in a variable, and save it in a file only you can read, so it survives logging out:'),
     code(r"""
 read -rsp 'chat-ui key: ' UIKEY; echo
+touch ~/gw-labs/keys.env && chmod 600 ~/gw-labs/keys.env
+echo "UIKEY=$UIKEY" >> ~/gw-labs/keys.env
 """),
     explain(
-        ("read -rsp 'chat-ui key: ' UIKEY; echo", 'Paste the <code>sk-...</code> value from the output above. It&#x27;s stored in <code>UIKEY</code> for the rest of this lab and Lab 4. Every later lab saves its new key into a variable the same way.'),
+        ("read -rsp 'chat-ui key: ' UIKEY; echo", 'Paste the <code>sk-...</code> value from the output above. It&#x27;s stored in <code>UIKEY</code>; Labs 4 and 7 use it too.'),
+        ('touch ... && chmod 600 ...', 'Create <code>~/gw-labs/keys.env</code> if it doesn&#x27;t exist, and make it readable and writable by you only (<code>600</code>), before any key goes in.'),
+        ('echo "UIKEY=$UIKEY" >> ~/gw-labs/keys.env', 'Add the line <code>UIKEY=sk-...</code> to the file. <code>&gt;&gt;</code> appends, so keys from later labs pile up in the same file. The key is filled in from the variable, so it never appears in your shell history.'),
     ),
+    note('In a new shell, <code>. ~/gw-labs/keys.env</code> sets <code>UIKEY</code> and every key you save in later labs again. The leading <code>.</code> runs the file in the current shell, so the variables stay set. Every lab that creates a key adds it to this file the same way.', 'Tip:'),
     h3('2. See the limits work'),
     code(r"""
 # allowed model: answers
@@ -803,7 +805,7 @@ curl -s $GW/key/generate -H "Authorization: Bearer $UIKEY" -H 'Content-Type: app
         ("jq -r '.error.message'", 'When the gateway refuses a request, its answer is <code>{&quot;error&quot;: {&quot;message&quot;: ...}}</code>. This prints just the reason.'),
         ("/key/generate ... -d '{}'", 'Try to create a key (<code>{}</code> means no settings). An app key isn&#x27;t allowed to, so this fails too.'),
     ),
-    h3('3. Look a key up, change it, block it'),
+    h3('3. Look a key up and change it'),
     code(r"""
 curl -s "$GW/key/info?key=$UIKEY" -H "Authorization: Bearer $MK" | jq '.info | {key_alias, models, rpm_limit, spend}'
 
@@ -825,10 +827,10 @@ curl -s "$GW/key/list?return_full_object=true" -H "Authorization: Bearer $MK" | 
         ('/key/list?return_full_object=true', 'List every key with all its details, not just the hashes.'),
         ('jq -r \'.keys[] | "\\(.key_alias)\\t\\(.models)"\'', 'For each key, print a line of text: <code>\\(...)</code> inserts a field&#x27;s value into the string, and <code>\\t</code> is a tab between the two columns.'),
     ),
-    p('Blocking and deleting a key is in Lab 11.'),
     h3('Notes'),
     ul([
         'Budgets: add <code>&quot;max_budget&quot;: 5, &quot;budget_duration&quot;: &quot;30d&quot;</code> to cap a key at $5 a month. LiteLLM prices requests from its price list, so this works for cloud models. Local models cost $0, so a budget never trips for them; use <code>rpm_limit</code> instead.',
+        'Creating a key whose alias already exists fails with &quot;Key with alias ... already exists&quot;. To start over, delete the old one by name: <code>curl -s $GW/key/delete -H &quot;Authorization: Bearer $MK&quot; -H &#x27;Content-Type: application/json&#x27; -d &#x27;{&quot;key_aliases&quot;: [&quot;chat-ui&quot;]}&#x27;</code>, then remove its line from <code>keys.env</code>.',
         'Everything here is also in the admin UI under <strong>Virtual Keys</strong>, including the one-time display of a new key.',
         'Store app keys the way the next labs do: in a root-only env file (<code>chmod 600</code>) that Podman passes to the container, never in a Quadlet file or a script.',
     ]),
@@ -936,11 +938,13 @@ L5 = lab(5, 'Agent 1: Your First Tool-Using Agent', '192.168.1.100 → 192.168.1
 curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
   -d '{"key_alias": "ops-agent", "models": ["lab-agent"], "rpm_limit": 30}' | jq -r .key
 read -rsp 'ops-agent key: ' OPS_KEY; echo
+echo "OPS_KEY=$OPS_KEY" >> ~/gw-labs/keys.env
 """),
     explain(
         ('curl -s $GW/key/generate ...', 'Create a key named <code>ops-agent</code> that may use only <code>lab-agent</code>, at most 30 requests a minute (Lab 3 explains each setting).'),
         ('| jq -r .key', 'Print only the new key.'),
         ("read -rsp 'ops-agent key: ' OPS_KEY; echo", 'Paste it to store it in <code>OPS_KEY</code>.'),
+        ('echo "OPS_KEY=$OPS_KEY" >> ~/gw-labs/keys.env', 'Save it in your key file too, as in Lab 3.'),
     ),
     h3('2. The agent'),
     write_file('~/gw-labs/agent.py', 'agent.py'),
@@ -1025,6 +1029,7 @@ sudo podman build -t localhost/a2a-agent:1 /opt/agents
 curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
   -d '{"key_alias": "writer-agent", "models": ["lab-agent"], "rpm_limit": 30}' | jq -r .key
 read -rsp 'writer-agent key: ' WRITER_KEY; echo
+echo "WRITER_KEY=$WRITER_KEY" >> ~/gw-labs/keys.env
 
 sudo touch /opt/agents/ops-agent.env /opt/agents/writer-agent.env
 sudo chmod 600 /opt/agents/ops-agent.env /opt/agents/writer-agent.env
@@ -1032,7 +1037,7 @@ echo "AGENT_KEY=$OPS_KEY"    | sudo tee /opt/agents/ops-agent.env >/dev/null
 echo "AGENT_KEY=$WRITER_KEY" | sudo tee /opt/agents/writer-agent.env >/dev/null
 """),
     explain(
-        ('curl ... / read -rsp ...', 'A second key, for <code>writer-agent</code>, stored in <code>WRITER_KEY</code>. Same steps as for <code>ops-agent</code> in Lab 5.'),
+        ('curl ... / read -rsp ... / echo ... >> keys.env', 'A second key, for <code>writer-agent</code>, stored in <code>WRITER_KEY</code> and saved in your key file. Same steps as for <code>ops-agent</code> in Lab 5.'),
         ('sudo touch ... / sudo chmod 600 ...', 'Create one root-only env file per agent.'),
         ('echo "AGENT_KEY=$OPS_KEY" | sudo tee ...', '<code>echo</code> prints the line with your key filled in, and <code>sudo tee</code> writes it into the agent&#x27;s env file. Each agent gets its own key, so the logs tell them apart.'),
     ),
@@ -1222,11 +1227,12 @@ cat ~/gw-labs/ops-caller.json               # check the ID was filled in
 curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
   -d @$HOME/gw-labs/ops-caller.json | jq -r .key
 read -rsp 'ops-caller key: ' CALLER_KEY; echo
+echo "CALLER_KEY=$CALLER_KEY" >> ~/gw-labs/keys.env
 """),
     explain(
         ('OPS_ID=$(curl ... | jq -r \'... select(.agent_name=="ops-agent") | .agent_id\')', 'List the agents, keep the one named <code>ops-agent</code>, print its ID, and store that in <code>OPS_ID</code> (<code>$(...)</code> captures the output). <code>echo</code> shows it so you can see it worked.'),
         ('cat > ~/gw-labs/ops-caller.json <<EOF', 'Write the new key&#x27;s settings to a file. The heredoc is unquoted, so <code>$OPS_ID</code> is replaced with the real ID. <code>object_permission.agents</code> is the list of agents this key may reach.'),
-        ('curl ... -d @$HOME/gw-labs/ops-caller.json | jq -r .key', 'Create the key from that file and print it, then paste it into <code>CALLER_KEY</code>.'),
+        ('curl ... -d @$HOME/gw-labs/ops-caller.json | jq -r .key', 'Create the key from that file and print it, then paste it into <code>CALLER_KEY</code> and save it in your key file.'),
     ),
     h3('Verify'),
     code(r"""
@@ -1345,9 +1351,11 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
   -d '{"key_alias": "mcp-agent", "models": ["lab-agent"], "object_permission": {"mcp_servers": ["lab_tools"]}}' \
   | jq -r .key
 read -rsp 'mcp-agent key: ' MCP_KEY; echo
+echo "MCP_KEY=$MCP_KEY" >> ~/gw-labs/keys.env
 """),
     explain(
         ('"object_permission": {"mcp_servers": ["lab_tools"]}', 'Grant this key the <code>lab_tools</code> server. Because a name works here, no variable is needed and the JSON can stay in single quotes.'),
+        ("read -rsp ... / echo ... >> keys.env", 'Paste the key into <code>MCP_KEY</code> and save it in your key file.'),
     ),
     h3('4. An agent with no tools of its own'),
     p('<code>mcp_agent.py</code> connects to the gateway&#x27;s MCP endpoint, asks which tools its key may use, hands them to the model, and sends each tool call back through the gateway. Compare it to <code>agent.py</code>: the loop is the same, and the tool code is gone.'),
@@ -1409,12 +1417,13 @@ cat ~/gw-labs/coordinator-key.json
 curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
   -d @$HOME/gw-labs/coordinator-key.json | jq -r .key
 read -rsp 'coordinator key: ' COORD_KEY; echo
+echo "COORD_KEY=$COORD_KEY" >> ~/gw-labs/keys.env
 """),
     explain(
         ('jq -c \'[.[] | select(... or ...) | .agent_id]\'', 'Keep the two agents by name, take their IDs, and collect them into a JSON list (the outer <code>[ ]</code>). <code>-c</code> prints it compactly on one line, ready to drop into the key&#x27;s settings.'),
         ('IDS=$(...)', 'Store that list in <code>IDS</code>.'),
         ('cat > ~/gw-labs/coordinator-key.json <<EOF', 'Write the key&#x27;s settings, with <code>$IDS</code> replaced by the list. It already has its brackets and quotes, so it goes in without any.'),
-        ('curl ... -d @$HOME/gw-labs/coordinator-key.json', 'Create the key, and paste it into <code>COORD_KEY</code>.'),
+        ('curl ... -d @$HOME/gw-labs/coordinator-key.json', 'Create the key, paste it into <code>COORD_KEY</code>, and save it in your key file.'),
     ),
     h3('2. The coordinator'),
     write_file('~/gw-labs/coordinator.py', 'coordinator.py'),
