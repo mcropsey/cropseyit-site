@@ -1045,6 +1045,21 @@ sudo cp ~/gw-labs/agent.py /opt/agents/
         ('sudo cp ~/gw-labs/agent.py /opt/agents/', 'Copy your Lab 5 agent there, unchanged.'),
     ),
     write_file('/opt/agents/a2a_server.py', 'a2a_server.py', sudo=True),
+    p('What the program does, part by part. Most of it is the <code>a2a-sdk</code> library doing the protocol work; your own code is the one line that calls <code>agent.run()</code>.'),
+    explain(
+        ('import agent', 'Load your Lab 5 program as a module, so this file can call its <code>run()</code> function. Because <code>agent.py</code> only runs its question-from-the-command-line part when started directly (<code>__main__</code>), importing it does nothing else.'),
+        ('NAME / DESCRIPTION / PORT / PUBLIC_URL', 'Settings read from environment variables, which the Quadlet files in step 4 set differently for each agent. <code>PUBLIC_URL</code> has no default: the program stops with an error if it&#x27;s missing, rather than advertising a wrong address.'),
+        ('class Executor(AgentExecutor): execute(...)', 'What happens when a message arrives. The library calls <code>execute()</code> with the message (<code>context</code>) and a queue (<code>event_queue</code>) for sending updates back to the caller.'),
+        ('task = ... new_task_from_user_message(...)', 'In A2A every piece of work is a <strong>task</strong> with an ID and a state. Create one for this message (or continue the existing one), and send it to the caller.'),
+        ('updater.update_status(... TASK_STATE_WORKING ...)', 'Mark the task as &quot;working&quot;. A caller that streams or polls sees this while the agent thinks.'),
+        ('await asyncio.to_thread(agent.run, get_message_text(...))', 'The one line that does the work: take the text out of the message and pass it to your Lab 5 agent. <code>agent.run()</code> is ordinary blocking code, so <code>to_thread</code> runs it in a background thread and the server can keep answering other requests meanwhile.'),
+        ('updater.add_artifact(...) / update_status(... COMPLETED, ...)', 'Attach the answer to the task as an <strong>artifact</strong> (A2A&#x27;s word for a task&#x27;s output), then mark the task completed with the answer as its final message. That&#x27;s the <code>.result.task.status.message</code> you read in Verify.'),
+        ('cancel(...): raise NotImplementedError', 'Callers may ask to cancel a task. This agent doesn&#x27;t support that, and says so.'),
+        ('card = AgentCard(...)', 'The <strong>agent card</strong>: name, description, version, the input and output types it accepts (plain text), that it doesn&#x27;t stream, the address and protocol to call it on (<code>supported_interfaces</code>), and its skills. A caller reads this to decide whether and how to use the agent.'),
+        ('DefaultRequestHandler(..., task_store=InMemoryTaskStore(), ...)', 'Connects the protocol to your <code>Executor</code>. Tasks are kept in memory, so they&#x27;re forgotten when the container restarts; that&#x27;s fine for short questions.'),
+        ('app = Starlette(routes=[...])', 'A small web app with two sets of routes: the agent card at <code>/.well-known/agent-card.json</code>, and JSON-RPC messages at <code>/</code>.'),
+        ('uvicorn.run(app, host="0.0.0.0", port=PORT)', 'Start the web server on every network interface of the container, on <code>PORT</code>.'),
+    ),
     h3('2. Build the image'),
     p('A <code>Containerfile</code> is Podman&#x27;s name for a Dockerfile; the syntax is the same. Pin the library versions so a rebuild next month gets the same code.'),
     code(r"""
@@ -1073,6 +1088,8 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
 read -rsp 'writer-agent key: ' WRITER_KEY; echo
 echo "WRITER_KEY=$WRITER_KEY" >> ~/gw-labs/keys.env
 
+. ~/gw-labs/keys.env
+echo ${OPS_KEY:0:6} ${WRITER_KEY:0:6}      # must print sk-... sk-...; if either is missing, stop here
 sudo touch /opt/agents/ops-agent.env /opt/agents/writer-agent.env
 sudo chmod 600 /opt/agents/ops-agent.env /opt/agents/writer-agent.env
 echo "AGENT_KEY=$OPS_KEY"    | sudo tee /opt/agents/ops-agent.env >/dev/null
@@ -1080,6 +1097,7 @@ echo "AGENT_KEY=$WRITER_KEY" | sudo tee /opt/agents/writer-agent.env >/dev/null
 """),
     explain(
         ('curl ... / read -rsp ... / echo ... >> keys.env', 'A second key, for <code>writer-agent</code>, stored in <code>WRITER_KEY</code> and saved in your key file. Same steps as for <code>ops-agent</code> in Lab 5.'),
+        ('. ~/gw-labs/keys.env / echo ${OPS_KEY:0:6} ...', 'Load your saved keys and print the start of both. If one is missing, its agent would still start and show <code>active</code>, but every message would fail with a 401 from the gateway.'),
         ('sudo touch ... / sudo chmod 600 ...', 'Create one root-only env file per agent.'),
         ('echo "AGENT_KEY=$OPS_KEY" | sudo tee ...', '<code>echo</code> prints the line with your key filled in, and <code>sudo tee</code> writes it into the agent&#x27;s env file. Each agent gets its own key, so the logs tell them apart.'),
     ),
@@ -1135,14 +1153,20 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl start ops-agent writer-agent
 systemctl is-active ops-agent writer-agent                   # active, active
-sudo firewall-cmd --permanent --add-port={8601,8602}/tcp && sudo firewall-cmd --reload   # if firewalld is running
+
+systemctl is-active firewalld              # "inactive": skip the next line
+sudo firewall-cmd --permanent --add-port={8601,8602}/tcp && sudo firewall-cmd --reload
 """),
     explain(
+        ('ContainerName= / PublishPort= / [Service] / [Install]', 'The same as in Lab 4: a fixed container name, the port on the host, restart if it stops, start at boot.'),
         ('Image=localhost/a2a-agent:1', 'Both services run the image you just built. What makes them different agents is only their settings.'),
+        ('EnvironmentFile=/opt/agents/ops-agent.env', 'Load the agent&#x27;s key (<code>AGENT_KEY</code>) from its root-only file, so the key isn&#x27;t in the Quadlet file.'),
+        ('Environment=GW=http://192.168.1.101:4000', 'The gateway&#x27;s address. <code>agent.py</code> sends every model request there, just as when you ran it by hand with <code>$GW</code> set.'),
         ('Environment=AGENT_NAME= / PORT= / PUBLIC_URL=', 'Settings the program reads at startup: its name, the port to listen on, and the address to advertise in its agent card.'),
         ('Environment=AGENT_TOOLS=off / AGENT_PROMPT="..."', '<code>writer-agent</code> only: no tools, and a different system prompt. The double quotes keep a value with spaces together.'),
         ('sudo systemctl start ops-agent writer-agent', 'Start both services with one command.'),
         ('systemctl is-active ops-agent writer-agent', 'Print one word per service: <code>active</code> if it&#x27;s running.'),
+        ('systemctl is-active firewalld', 'As in Lab 4: only if this prints <code>active</code> do you need the <code>firewall-cmd</code> line.'),
         ('--add-port={8601,8602}/tcp', 'The shell expands the braces into two arguments, <code>--add-port=8601/tcp --add-port=8602/tcp</code>, opening both ports at once.'),
     ),
     h3('Verify: talk to an agent directly'),
@@ -1173,7 +1197,7 @@ sudo journalctl -u ops-agent -n 5 --no-pager                   # the [tool] line
     p('The reply is an A2A <strong>task</strong>: it has a state (<code>TASK_STATE_COMPLETED</code>) and the answer as a message. Long-running agents use the same structure to report progress.'),
     h3('Notes'),
     ul([
-        'Changed <code>agent.py</code> or <code>a2a_server.py</code>? Copy it to <code>/opt/agents</code>, rebuild the image, then <code>sudo systemctl restart ops-agent writer-agent</code>. A restart creates a fresh container from the current image.',
+        'Changed <code>agent.py</code>? Copy it, rebuild the image and restart both agents: <code>sudo cp ~/gw-labs/agent.py /opt/agents/ &amp;&amp; sudo podman build -t localhost/a2a-agent:1 /opt/agents &amp;&amp; sudo systemctl restart ops-agent writer-agent</code>. (For <code>a2a_server.py</code>, edit it in <code>/opt/agents</code> with <code>sudo vi</code> and run just the last two.) A restart creates a fresh container from the new image.',
         'Changed only a <code>.container</code> file? <code>sudo systemctl daemon-reload</code>, then restart that service.',
         'Right now anyone on the LAN can call these agents directly on ports 8601 and 8602, with no key. Lab 7 puts them behind the gateway, which checks a key on every call. If you want only the gateway to reach them, allow only 192.168.1.101 to those ports in your firewall.',
         'If <code>systemctl start</code> fails, <code>sudo journalctl -u ops-agent -n 30</code> shows the Python traceback, usually a missing variable or a typo in the env file.',
