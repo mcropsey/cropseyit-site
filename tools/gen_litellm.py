@@ -653,6 +653,7 @@ curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type:
 # ---------------------------------------------------------------- lab 2
 L2 = lab(2, 'Chat Through the Gateway: curl and Python', '192.168.1.100 → 192.168.1.101',
     goal('understand a chat request and its response, see why a chat client has to send the whole conversation every time, and build a small streaming chat program in Python.'),
+    note('Every command uses <code>$GW</code> and <code>$MK</code> from <a href="#lab-1">Lab 1, step 1</a>. They only last as long as your shell, so if you logged out since, set them again first. <code>echo $GW</code> prints the address if they&#x27;re still set.'),
     h3('1. One request, piece by piece'),
     code(r"""
 curl -s $GW/v1/chat/completions \
@@ -666,13 +667,15 @@ curl -s $GW/v1/chat/completions \
         ]
       }' | jq
 """),
-    ul([
-        'The <code>\\</code> at the end of each line continues the command onto the next, so one long command can be split up readably.',
-        '<code>-H &#x27;Content-Type: application/json&#x27;</code> says the body is JSON, and <code>-d &#x27;{...}&#x27;</code> is the body itself. Sending a body makes it a POST request. The single quotes keep the shell away from the JSON&#x27;s own double quotes.',
-        '<code>/v1/chat/completions</code> is the OpenAI chat API. LiteLLM speaks it no matter which provider is behind the alias, so any OpenAI-compatible app or library can use the gateway.',
-        '<code>Authorization: Bearer</code> carries the key. The master key works for now; Lab 3 gives each app its own key.',
-        '<code>messages</code> is the conversation: a <code>system</code> message sets the behaviour, and <code>user</code> messages are what you type.',
-    ]),
+    explain(
+        ('curl -s $GW/v1/chat/completions', 'Send the request to <code>/v1/chat/completions</code>, the OpenAI chat API. LiteLLM speaks it whatever provider is behind the alias, so any OpenAI-compatible app or library can use the gateway.'),
+        ('-H "Authorization: Bearer $MK"', 'The key. The master key works for now; Lab 3 gives each app its own key.'),
+        ("-H 'Content-Type: application/json'", 'Tell the gateway the body is JSON.'),
+        ("-d '{...}'", 'The body. Sending one makes this a POST request. The single quotes keep the shell away from the JSON&#x27;s own double quotes.'),
+        ('"model": "lab-chat"', 'Which model to use: the alias you added in Lab 1.'),
+        ('"messages": [...]', 'The conversation. The <code>system</code> message sets the behaviour; <code>user</code> messages are what you type.'),
+        ('| jq', 'Pretty-print the whole response.'),
+    ),
     p('In the response, the answer is in <code>choices[0].message.content</code>, <code>usage</code> counts the tokens in and out, and <code>model</code> is the alias you asked for. To print just the answer, replace <code>jq</code> with <code>jq -r &#x27;.choices[0].message.content&#x27;</code>.'),
     h3('2. The API has no memory'),
     p('Ask a follow-up question on its own and the model has no idea what you mean:'),
@@ -713,20 +716,20 @@ curl -sN $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type
         ('"stream": true', 'Ask for a streamed answer: a series of <code>data:</code> lines, each holding a few characters in <code>delta.content</code>, ending with <code>data: [DONE]</code>. No <code>jq</code> here, because the output isn&#x27;t a single JSON document.'),
     ),
     h3('4. A chat program in Python'),
-    p('Install Python 3.12 and the libraries every lab uses into a virtual environment in <code>~/gw-labs</code>. The <code>openai</code> library works with any OpenAI-compatible server; pointing <code>base_url</code> at the gateway is all it takes.'),
+    p('Set up a Python virtual environment in <code>~/gw-labs</code> and install the <code>openai</code> library. It works with any OpenAI-compatible server; pointing <code>base_url</code> at the gateway is all it takes. Later labs add the other libraries they need to the same environment.'),
     code(r"""
 sudo dnf -y install python3.12 python3.12-pip
 mkdir -p ~/gw-labs && cd ~/gw-labs
 python3.12 -m venv .venv
 . .venv/bin/activate                       # run this again in every new shell
-pip install "openai==3.24.0" "httpx==0.28.1" "mcp==2.3.0"
+pip install "openai==3.24.0"
 """),
     explain(
-        ('sudo dnf -y install python3.12 python3.12-pip', 'Install Python 3.12 and its package installer, <code>pip</code>, alongside the system Python.'),
+        ('sudo dnf -y install python3.12 python3.12-pip', 'Install Python 3.12 and its package installer, <code>pip</code>, alongside the system Python. If they&#x27;re already there, <code>dnf</code> just says so and changes nothing.'),
         ('mkdir -p ~/gw-labs && cd ~/gw-labs', 'Make a working directory for the lab scripts and move into it.'),
         ('python3.12 -m venv .venv', 'Create a <strong>virtual environment</strong> in <code>.venv</code>: a private copy of Python where you can install libraries without touching the system&#x27;s.'),
         ('. .venv/bin/activate', 'Switch this shell to that environment, so <code>python</code> and <code>pip</code> mean the ones in <code>.venv</code>. Your prompt starts with <code>(.venv)</code> while it&#x27;s active. The leading <code>.</code> means &quot;run this file in the current shell&quot;.'),
-        ('pip install "openai==3.24.0" ...', 'Install the libraries the labs use, at the exact versions they were tested with (<code>==</code>). <code>openai</code> talks to chat APIs, <code>httpx</code> makes HTTP requests, <code>mcp</code> is used in Lab 8.'),
+        ('pip install "openai==3.24.0"', 'Install the <code>openai</code> library, which talks to chat APIs, at the exact version the labs were tested with (<code>==</code>).'),
     ),
     p('<code>chat.py</code> keeps the history in a list (step 2) and streams each answer (step 3):'),
     write_file('~/gw-labs/chat.py', 'chat.py'),
@@ -945,6 +948,7 @@ read -rsp 'ops-agent key: ' OPS_KEY; echo
     h3('3. Run it'),
     code(r"""
 cd ~/gw-labs && . .venv/bin/activate
+pip install "httpx==0.28.1"
 AGENT_KEY=$OPS_KEY python agent.py "Is http://192.168.1.101:4000/health/liveliness answering, is port 22 open on 192.168.1.100, and what time is it?"
 #   [tool] check_url({'url': 'http://192.168.1.101:4000/health/liveliness'}) -> HTTP 200 in 16 ms
 #   [tool] check_port({'host': '192.168.1.100', 'port': 22}) -> 192.168.1.100:22 is open
@@ -955,6 +959,7 @@ AGENT_KEY=$OPS_KEY python agent.py "Is http://192.168.1.101:4000/health/liveline
 """),
     explain(
         ('cd ~/gw-labs && . .venv/bin/activate', 'Go to the lab directory and switch to its Python environment (Lab 2). Needed again in every new shell.'),
+        ('pip install "httpx==0.28.1"', 'Install <code>httpx</code>, which the agent&#x27;s <code>check_url</code> tool uses to make web requests. Only needed once.'),
         ('AGENT_KEY=$OPS_KEY python agent.py "..."', 'Run the agent with its own key, set for this command only, and pass your question as the argument. The quotes keep the question together as one argument.'),
     ),
     p('The <code>[tool]</code> lines are the loop at work: the model chose which tools to call and with what arguments, and the program ran them. Try a question that needs no tools (&quot;What is a TCP port?&quot;) and one about a port that&#x27;s closed.'),
@@ -1350,6 +1355,7 @@ read -rsp 'mcp-agent key: ' MCP_KEY; echo
     h3('Verify'),
     code(r"""
 cd ~/gw-labs && . .venv/bin/activate
+pip install "mcp==2.3.0"
 AGENT_KEY=$MCP_KEY python mcp_agent.py "Resolve github.com, check whether port 4000 is open on 192.168.1.101, and fetch http://192.168.1.101:4000/health/liveliness."
 # tools from the gateway: ['lab_tools-check_url', 'lab_tools-check_port', 'lab_tools-dns_lookup']
 #   [mcp] lab_tools-dns_lookup({'name': 'github.com'}) -> 140.82.112.3
@@ -1358,6 +1364,8 @@ AGENT_KEY=$MCP_KEY python mcp_agent.py "Resolve github.com, check whether port 4
 # All three checks done: ...
 """),
     explain(
+        ('cd ~/gw-labs && . .venv/bin/activate', 'Go to the lab directory and switch to its Python environment.'),
+        ('pip install "mcp==2.3.0"', 'Install the <code>mcp</code> library, which <code>mcp_agent.py</code> uses to talk to the gateway&#x27;s MCP endpoint. Only needed once.'),
         ('AGENT_KEY=$MCP_KEY python mcp_agent.py "..."', 'Run the MCP agent with the <code>mcp-agent</code> key. The first line it prints is the tool list it got from the gateway; each <code>[mcp]</code> line is a tool call the gateway passed on to the MCP server.'),
     ),
     p('A key that was never granted <code>lab_tools</code> can&#x27;t even connect. Try the <code>ops-agent</code> key:'),
