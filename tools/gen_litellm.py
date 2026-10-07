@@ -547,9 +547,8 @@ curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
 # ---------------------------------------------------------------- lab 1
 L1 = lab(1, 'Connect to the Gateway and Add the Lab Model Names', '192.168.1.100 → 192.168.1.101',
     goal('get the master key, set up your shell on the agent host, then give the gateway two new model names, <code>lab-chat</code> and <code>lab-agent</code>, that every later lab uses.'),
-    p('This lab assumes LiteLLM is already installed and working on .101. It doesn&#x27;t check or change how the gateway runs; if something is missing, <a href="#lab-0">Lab 0</a> covers it.'),
     h3('1. The master key and your shell'),
-    p('First, get the <strong>master key</strong>, LiteLLM&#x27;s admin password. It was generated when the gateway was installed (<a href="#l0-install">Lab 0, Part 2</a>) and lives on the gateway in <code>/opt/litellm/litellm.env</code>, readable by root only. Read it on .101:'),
+    p('First, get the <strong>master key</strong>, LiteLLM&#x27;s admin password. It lives on the gateway in <code>/opt/litellm/litellm.env</code>, readable by root only. Read it on .101:'),
     code(r"""
 ssh 192.168.1.101
 sudo grep '^LITELLM_MASTER_KEY=' /opt/litellm/litellm.env   # the key is everything after the =
@@ -560,16 +559,6 @@ exit
         ("sudo grep '^LITELLM_MASTER_KEY=' /opt/litellm/litellm.env", 'Print the line of the env file that sets the master key. <code>sudo</code> is needed because the file is root-only (<code>600</code>). <code>^</code> means &quot;at the start of the line&quot;, so only that one line matches. The key is the part after <code>=</code>, starting with <code>sk-</code>; copy it.'),
         ('exit', 'Log out of .101 again.'),
     ),
-    p('If that prints nothing, the gateway was set up differently. Ask the running container instead, which works however the key was passed in (env file or <code>-e</code> on a hand-typed <code>podman run</code>):'),
-    code(r"""
-sudo podman exec litellm printenv LITELLM_MASTER_KEY        # on .101
-sudo grep -n 'master_key' /opt/litellm/config.yaml           # if that is empty too
-"""),
-    explain(
-        ('sudo podman exec litellm printenv LITELLM_MASTER_KEY', 'Run <code>printenv</code> inside the container named <code>litellm</code> and print that one environment variable, which is exactly what LiteLLM sees.'),
-        ("sudo grep -n 'master_key' /opt/litellm/config.yaml", 'Show the <code>master_key</code> line of the config, with its line number (<code>-n</code>). If it says <code>os.environ/SOMETHING</code>, the key is in the variable <code>SOMETHING</code>: run the <code>printenv</code> command again with that name. If it holds a literal <code>sk-...</code> value, that value is the key.'),
-    ),
-    p('If none of these gives a key, the gateway has no master key, and the later labs can&#x27;t create keys or register agents. Add one as in <a href="#l0-install">Lab 0, Part 2</a>. Whoever runs the gateway can also just hand you the key.'),
     p('Now set up your shell. You type every command from here on on <strong>192.168.1.100</strong> unless a step says otherwise. Two shell variables hold the gateway address and the master key. <code>read -rsp</code> reads the key without echoing it or saving it in your shell history.'),
     code(r"""
 ssh 192.168.1.100
@@ -583,7 +572,7 @@ curl -s $GW/health/readiness | jq '{status, db}'   # quick check: "healthy" and 
         ('sudo dnf -y install jq', 'Install jq, which every lab uses to read the gateway&#x27;s JSON answers.'),
         ('export GW=http://192.168.1.101:4000', 'Store the gateway&#x27;s address in <code>GW</code>, so later commands can say <code>$GW/v1/models</code> instead of the full address. <code>export</code> also passes it to programs you run, such as the Python scripts.'),
         ("read -rsp 'LiteLLM master key: ' MK; echo; export MK", 'Paste the master key when asked. It goes into <code>MK</code> without appearing on screen or in your shell history, and <code>export</code> makes it available to programs too. The labs use it as <code>$MK</code>.'),
-        ("curl -s $GW/health/readiness | jq '{status, db}'", 'A quick check that you can reach the gateway and that its database is connected. No key needed. The answer has many fields; <code>jq &#x27;{status, db}&#x27;</code> keeps just those two. If it fails, fix the gateway first (<a href="#lab-0">Lab 0</a>).'),
+        ("curl -s $GW/health/readiness | jq '{status, db}'", 'A quick check that you can reach the gateway and that its database is connected. No key needed. The answer has many fields; <code>jq &#x27;{status, db}&#x27;</code> keeps just those two.'),
     ),
     note('Put the <code>export GW=...</code> line in <code>~/.bashrc</code> so new shells have it. Don&#x27;t do that with the master key; re-enter it when you need it.', 'Tip:'),
     h3('2. Add the two lab model names'),
@@ -625,7 +614,7 @@ sudo vi /opt/litellm/config.yaml
       api_base: os.environ/LMSTUDIO_API_BASE
       api_key: not-needed
 """),
-    p('While the file is open, check that <code>general_settings:</code> has the line <code>store_model_in_db: true</code> (indented two spaces). Agents you register in Lab 7 are saved in the database, and LiteLLM only loads them back after a restart when this is on. If it&#x27;s missing, add it; a fresh install from Lab 0 already has it.'),
+    p('While the file is open, check that <code>general_settings:</code> has the line <code>store_model_in_db: true</code> (indented two spaces). Agents you register in Lab 7 are saved in the database, and LiteLLM only loads them back after a restart when this is on. If it&#x27;s missing, add it.'),
     p('LiteLLM reads its config only at startup, so restart it. The gateway is down for about 20 seconds:'),
     code(r"""
 sudo systemctl restart litellm             # or "sudo podman restart litellm" if it isn't a Quadlet service
@@ -655,7 +644,7 @@ curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type:
     ul([
         'Both names point at the same model on purpose. On a single GPU, alternating between two large models makes LM Studio unload one and load the other, and every request waits for the load.',
         'YAML is indentation-sensitive, and each top-level key (<code>model_list:</code>, <code>litellm_settings:</code>) may appear only once. If LiteLLM won&#x27;t start after the edit, <code>sudo journalctl -u litellm -n 50</code> shows the error; copy the backup back and restart to get going again.',
-        'If the reply is empty and <code>finish_reason</code> is <code>&quot;length&quot;</code>, the model ran out of context while thinking. Raise its context length in LM Studio (Lab 0, Part 2 has the note).',
+        'If the reply is empty and <code>finish_reason</code> is <code>&quot;length&quot;</code>, the model ran out of context while thinking. In LM Studio, open the model&#x27;s settings (gear icon) and raise Context Length to at least 32k.',
         'Don&#x27;t open <code>/health</code> on its own (without <code>/liveliness</code> or <code>/readiness</code>). It sends a real request to <em>every</em> model the gateway serves, which makes LM Studio load each one in turn and can stall everyone else using it.',
         'The admin UI at <code>http://192.168.1.101:4000/ui</code> shows the same information under <strong>Models</strong> and <strong>Settings</strong>.',
     ]),
