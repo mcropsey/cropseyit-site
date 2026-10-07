@@ -1734,21 +1734,25 @@ sudo podman ps
         ('sudo podman ps', 'List the running containers, with how long each has been up and its ports.'),
     ),
     h3('2. The reboot test'),
-    p('This is the real proof. Reboot the agent host, and then the gateway:'),
+    p('This is the real proof that everything you built comes back on its own. Reboot the agent host; the gateway keeps running:'),
     code(r"""
-sudo systemctl reboot                      # on .100; reconnect after a minute
+sudo systemctl reboot                      # on .100; your session drops
+ssh 192.168.1.100                          # log in again after a minute
 systemctl is-active open-webui ops-agent writer-agent lab-tools    # all "active"
 curl -s http://localhost:8601/.well-known/agent-card.json | jq -r .name
 
-# on .101
-sudo systemctl reboot
-curl -s http://192.168.1.101:4000/health/readiness | jq '{status, db}'
+export GW=http://192.168.1.101:4000
+read -rsp 'LiteLLM master key: ' MK; echo; export MK
+. ~/gw-labs/keys.env
+curl -s $GW/health/readiness | jq '{status, db}'
 """),
     explain(
-        ('sudo systemctl reboot', 'Restart the machine. Your SSH session drops; log in again once it&#x27;s back.'),
+        ('sudo systemctl reboot', 'Restart .100. Your SSH session drops.'),
+        ('ssh 192.168.1.100', 'Log in again once it&#x27;s back up.'),
         ('systemctl is-active ...', 'One word per service. Every line should be <code>active</code>, without you having started anything.'),
         ('curl ... agent-card.json | jq -r .name', 'Ask <code>ops-agent</code> for its card and print its name: proof that it&#x27;s answering, not just running.'),
-        ('curl .../health/readiness', 'On the gateway, the same readiness check as Lab 1, step 1, including the database.'),
+        ('export GW=... / read -rsp ... MK / . ~/gw-labs/keys.env', 'A reboot empties every shell variable. Set the gateway address and master key again as in Lab 1, and load your saved app keys. The rest of this lab needs them.'),
+        ('curl -s $GW/health/readiness ...', 'Check you can still reach the gateway and its database from .100.'),
     ),
     p('If a service isn&#x27;t active, check that its file is in <code>/etc/containers/systemd/</code>, that it has an <code>[Install]</code> section with <code>WantedBy=multi-user.target</code>, and run <code>sudo /usr/libexec/podman/quadlet -dryrun</code> to see Quadlet&#x27;s complaints about any file it couldn&#x27;t convert.'),
     h3('3. Logs'),
@@ -1784,6 +1788,12 @@ cat > ~/gw-labs/ops-key.json <<EOF
 EOF
 curl -s $GW/key/block   -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
   -d @$HOME/gw-labs/ops-key.json | jq '{key_alias, blocked}'
+
+# ask ops-agent directly, as in Lab 6: it's running, but can't reach the model now
+curl -s http://192.168.1.100:8601/ -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' \
+  -d @$HOME/gw-labs/ask.json | jq
+sudo journalctl -u ops-agent -n 5 --no-pager                   # "Key is blocked"
+
 curl -s $GW/key/unblock -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
   -d @$HOME/gw-labs/ops-key.json | jq '{key_alias, blocked}'
 
@@ -1793,15 +1803,21 @@ cat > ~/gw-labs/delete-keys.json <<EOF
 EOF
 curl -s $GW/key/delete  -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
   -d @$HOME/gw-labs/delete-keys.json
+sed -i '/^CALLER_KEY=/d' ~/gw-labs/keys.env
 
 # stop an agent from being reachable through the gateway
-curl -s -X DELETE $GW/v1/agents/<agent_id> -H "Authorization: Bearer $MK"
+OPS_ID=$(curl -s $GW/v1/agents -H "Authorization: Bearer $MK" | jq -r '.[] | select(.agent_name=="ops-agent") | .agent_id')
+curl -s -X DELETE $GW/v1/agents/$OPS_ID -H "Authorization: Bearer $MK"
 """),
     explain(
         ('cat > ~/gw-labs/ops-key.json <<EOF', 'A request body naming the key to act on, with <code>$OPS_KEY</code> filled in. Block and unblock both use it.'),
-        ('/key/block, then /key/unblock', 'Block the key and show that <code>blocked</code> is now <code>true</code>; try the agent while it&#x27;s blocked, then unblock it.'),
+        ('/key/block', 'Block the key. The answer shows <code>blocked</code> is now <code>true</code>. Unlike other key changes, which can take a minute to apply (Lab 3), a block takes effect on the very next request.'),
+        ('curl -s http://192.168.1.100:8601/ ... | jq', 'Ask <code>ops-agent</code> a question directly, skipping the gateway, with the <code>ask.json</code> from Lab 6. The agent still runs, but its own model request is refused, so you get an error back instead of an answer.'),
+        ('sudo journalctl -u ops-agent -n 5 --no-pager', 'The agent&#x27;s log shows why: the gateway answered its model request with &quot;Key is blocked&quot;.'),
+        ('/key/unblock', 'Unblock it, which also takes effect at once. Ask again and the answer is back.'),
         ('{"keys": ["$CALLER_KEY"]} / /key/delete', 'Delete takes a list, so you can remove several keys at once. A deleted key can&#x27;t be brought back.'),
-        ('curl -s -X DELETE $GW/v1/agents/<agent_id>', 'Remove an agent&#x27;s registration. <code>-X DELETE</code> sends a DELETE request instead of a GET. Replace <code>&lt;agent_id&gt;</code> with an ID from the agent list in Lab 7.'),
+        ("sed -i '/^CALLER_KEY=/d' ~/gw-labs/keys.env", 'Remove the deleted key&#x27;s line from your key file: <code>sed -i</code> edits the file in place, and <code>/^CALLER_KEY=/d</code> deletes the line that starts with <code>CALLER_KEY=</code>.'),
+        ('OPS_ID=$(...) / curl -s -X DELETE $GW/v1/agents/$OPS_ID', 'Look up <code>ops-agent</code>&#x27;s ID by name, as in Lab 7, and remove its registration. <code>-X DELETE</code> sends a DELETE request instead of a GET. The service on .100 keeps running, but the gateway no longer forwards to it, and <code>/a2a/ops-agent</code> answers &quot;not found&quot;.'),
     ),
     p('Blocking <code>ops-agent</code>&#x27;s key stops that agent from reaching any model, even when someone calls it directly on port 8601. That&#x27;s the advantage of agents having their own keys instead of sharing one.'),
     h3('6. Upgrades'),
@@ -1825,17 +1841,31 @@ sudo rm /etc/containers/systemd/{open-webui.container,open-webui.volume,ops-agen
 sudo systemctl daemon-reload
 sudo podman volume rm open-webui
 sudo podman rmi -i localhost/a2a-agent:1 localhost/a2a-agent:2 localhost/lab-tools:1
-sudo rm -rf /opt/agents /opt/lab-tools /opt/open-webui ~/gw-labs
-# the gateway: delete the lab keys and agents in the admin UI (Virtual Keys, Agents);
-# on .101, remove the mcp_servers block from Lab 8 (and the lab- models, if you added them
-# only for these labs) from config.yaml, then: sudo systemctl restart litellm
+sudo rm -rf /opt/agents /opt/lab-tools /opt/open-webui
+cd ~/gw-labs && claude mcp remove lab-tools; cd ~   # only if you did the Claude Code part of Lab 10
+
+# on .100 still: delete the lab keys and agent registrations on the gateway
+curl -s $GW/key/delete -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d '{"key_aliases": ["chat-ui", "ops-agent", "writer-agent", "ops-caller", "mcp-agent", "coordinator", "coding-agent"]}'
+for a in ops-agent writer-agent; do
+  ID=$(curl -s $GW/v1/agents -H "Authorization: Bearer $MK" | jq -r --arg n "$a" '.[] | select(.agent_name == $n) | .agent_id')
+  [ -n "$ID" ] && curl -s -X DELETE $GW/v1/agents/$ID -H "Authorization: Bearer $MK"; echo
+done
+rm -rf ~/gw-labs
+
+# on .101: remove the mcp_servers block from Lab 8 (and the lab- models, if you added them
+# only for these labs) from /opt/litellm/config.yaml, then: sudo systemctl restart litellm
 """),
     explain(
         ('sudo systemctl stop ...', 'Stop the four services, and <code>open-webui-volume</code>, the small service Quadlet made from the <code>.volume</code> file. Left running, systemd keeps it marked as done after the volume is gone, which can confuse a later redo of Lab 4.'),
         ('sudo rm /etc/containers/systemd/{...}', 'Delete their Quadlet files. After the <code>daemon-reload</code> the services no longer exist.'),
         ('sudo podman volume rm open-webui', 'Delete Open WebUI&#x27;s data: accounts and chats.'),
         ('sudo podman rmi -i ...', 'Delete the images you built, including version 2 of the agent image from the upgrade step. <code>-i</code> skips any that don&#x27;t exist instead of stopping with an error.'),
-        ('sudo rm -rf /opt/agents ... ~/gw-labs', 'Delete the lab directories and everything in them. <code>-r</code> includes their contents and <code>-f</code> skips the prompts, so check the paths before you press Enter.'),
+        ('sudo rm -rf /opt/agents /opt/lab-tools /opt/open-webui', 'Delete the lab directories and everything in them. <code>-r</code> includes their contents and <code>-f</code> skips the prompts, so check the paths before you press Enter.'),
+        ('claude mcp remove lab-tools', 'Undo the <code>claude mcp add</code> from Lab 10. It was saved for the <code>~/gw-labs</code> directory, so run it from there.'),
+        ('curl -s $GW/key/delete ... "key_aliases": [...]', 'Delete every key the labs created, by name, in one request. Names that are already gone, such as <code>ops-caller</code> from step 5, don&#x27;t cause an error.'),
+        ('for a in ops-agent writer-agent; do ... done', 'For each agent, look up its ID by name and delete its registration. <code>[ -n &quot;$ID&quot; ] &amp;&amp;</code> skips the delete if the agent is already gone, like <code>ops-agent</code> after step 5.'),
+        ('rm -rf ~/gw-labs', 'Last, delete your lab directory, including <code>keys.env</code>, the scripts and the opencode file. It comes after the gateway clean-up because <code>$MK</code> and the key names are all you need there, and nothing in the directory is used again.'),
     ),
 )
 
