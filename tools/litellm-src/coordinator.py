@@ -24,12 +24,18 @@ def ask_agent(agent: str, message: str) -> str:
     body = {"jsonrpc": "2.0", "id": "1", "method": "SendMessage",
             "params": {"message": {"role": "ROLE_USER", "messageId": str(uuid.uuid4()),
                                    "parts": [{"text": message}]}}}
-    r = httpx.post(f"{GW}/a2a/{agent}", json=body, headers={**auth, "A2A-Version": "1.0"}, timeout=300)
-    data = r.json()
+    try:
+        r = httpx.post(f"{GW}/a2a/{agent}", json=body, headers={**auth, "A2A-Version": "1.0"}, timeout=300)
+        data = r.json()
+    except (httpx.HTTPError, ValueError) as err:    # too slow, unreachable, or a reply that isn't JSON
+        return f"error from {agent}: {err!r}"
     if "error" in data:
         return f"error from {agent}: {data['error']}"
-    task = data["result"]["task"]
-    return "\n".join(p.get("text", "") for p in task["status"]["message"]["parts"])
+    try:
+        task = data["result"]["task"]
+        return "\n".join(p.get("text", "") for p in task["status"]["message"]["parts"])
+    except (KeyError, TypeError):
+        return f"error from {agent}: unexpected reply {str(data)[:300]}"
 
 
 def main(goal: str) -> None:
@@ -54,11 +60,18 @@ def main(goal: str) -> None:
             return
         messages.append(msg.model_dump(exclude_none=True))
         for call in msg.tool_calls:
-            args = json.loads(call.function.arguments)
-            print(f"  -> {args['agent']}: {args['message']}", file=sys.stderr)
-            answer = ask_agent(**args)
-            print(f"  <- {args['agent']}: {answer[:200]}", file=sys.stderr)
+            try:
+                args = json.loads(call.function.arguments or "{}")
+                agent, message = args["agent"], args["message"]
+            except (ValueError, KeyError, TypeError) as err:    # arguments that don't fit: tell the model
+                answer = f"error: ask_agent needs JSON with agent and message ({err!r})"
+                print(f"  !! {answer}", file=sys.stderr)
+            else:
+                print(f"  -> {agent}: {message}", file=sys.stderr)
+                answer = ask_agent(agent, message)
+                print(f"  <- {agent}: {answer[:200]}", file=sys.stderr)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": answer})
+    print("Stopped: too many steps.")
 
 
 if __name__ == "__main__":

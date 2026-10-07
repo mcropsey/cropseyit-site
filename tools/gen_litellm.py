@@ -1531,10 +1531,21 @@ echo "COORD_KEY=$COORD_KEY" >> ~/gw-labs/keys.env
     ),
     h3('2. The coordinator'),
     write_file('~/gw-labs/coordinator.py', 'coordinator.py'),
-    p('Two details worth noticing. The <code>enum</code> in the tool&#x27;s parameters limits the model to agent names that actually exist. The system prompt says it can&#x27;t check anything itself, which stops it guessing instead of delegating.'),
+    p('What the program does, part by part:'),
+    explain(
+        ('llm = OpenAI(...) / auth = {...}', 'The gateway client for model requests, as in Lab 5, and the <code>Authorization</code> header for the plain HTTP calls below. Both use the coordinator&#x27;s key.'),
+        ('list_agents()', 'GET <code>/v1/agents</code> with the coordinator&#x27;s key, the same call as in Lab 7. The gateway returns only the agents this key was granted, and the function turns that into <code>{name: description}</code>.'),
+        ('ask_agent(agent, message)', 'Build the same A2A message as <code>ask.json</code> in Lab 6 (with a fresh <code>messageId</code> each time, from <code>uuid4()</code>) and POST it to <code>/a2a/&lt;agent&gt;</code> on the gateway. It returns the reply text from the task, as your <code>jq</code> filter did in Lab 6.'),
+        ('except ... return f"error from {agent}: ..."', 'Anything that goes wrong (the agent is too slow, its service is down, the gateway sends back an error or something unexpected) becomes a text answer instead of a crash. The model reads it and can try again, try another agent, or report the problem.'),
+        ('roster = ...', 'One line per agent, <code>- name: description</code>, added to the system prompt. That&#x27;s how the model knows which agent does what.'),
+        ('tools = [ask_agent ...]', 'The coordinator&#x27;s only tool. <code>&quot;enum&quot;: list(agents)</code> limits <code>agent</code> to names that actually exist, so the model can&#x27;t invent one.'),
+        ('"You cannot check anything yourself..."', 'The system prompt. Telling it that it can&#x27;t do the work itself stops it guessing an answer instead of delegating.'),
+        ('for _ in range(8): ...', 'The agent loop from Lab 5 with one tool. Each tool call is decoded; if the arguments don&#x27;t fit, the model is told so (the <code>!!</code> line). Otherwise it prints <code>-&gt;</code>, asks the agent, prints <code>&lt;-</code> and adds the answer as a <code>tool</code> message. After 8 passes it stops.'),
+    ),
     h3('Verify'),
     code(r"""
-cd ~/gw-labs && . .venv/bin/activate
+cd ~/gw-labs && . .venv/bin/activate && . ./keys.env
+START=$(date -u +%FT%T)                    # remember when this run started, for the next step
 AGENT_KEY=$COORD_KEY python coordinator.py
 # agents on the gateway: ['ops-agent', 'writer-agent']
 #   -> ops-agent: Check http://192.168.1.101:4000/health/liveliness and whether SSH (port 22) is open on 192.168.1.100 ...
@@ -1544,6 +1555,8 @@ AGENT_KEY=$COORD_KEY python coordinator.py
 # **Status update: all services operational** ...
 """),
     explain(
+        ('cd ~/gw-labs && . .venv/bin/activate && . ./keys.env', 'Go to the lab directory, switch to its Python environment and load your saved keys, so <code>$COORD_KEY</code> is set even in a new shell.'),
+        ('START=$(date -u +%FT%T)', 'Save the current time in UTC, such as <code>2026-10-06T14:05:09</code>. The next step uses it to count only the requests this run caused.'),
         ('AGENT_KEY=$COORD_KEY python coordinator.py', 'Run the coordinator with its key. With no question given, it uses a built-in example. <code>-&gt;</code> lines are messages it sends to an agent, <code>&lt;-</code> lines are the answers.'),
     ),
     p('Give it your own goals: &quot;Find out whether Open WebUI on 192.168.1.100:3000 is up and write a one-line note for the team.&quot; While it runs, <code>sudo journalctl -u ops-agent -f</code> in another terminal shows the tool calls happening inside the delegated agent.'),
@@ -1551,17 +1564,20 @@ AGENT_KEY=$COORD_KEY python coordinator.py
     code(r"""
 curl -s "$GW/spend/logs?start_date=$(date -u +%F)&end_date=$(date -u -d tomorrow +%F)&summarize=false" \
   -H "Authorization: Bearer $MK" \
-  | jq -r 'group_by(.metadata.user_api_key_alias)[] | "\(.[0].metadata.user_api_key_alias // "master")\t\(length) requests"'
+  | jq -r --arg start "$START" '[.[] | select(.startTime >= $start)]
+      | group_by(.metadata.user_api_key_alias)[] | "\(.[0].metadata.user_api_key_alias // "master")\t\(length) requests"'
 # coordinator    4 requests
 # ops-agent      ...
 # writer-agent   ...
 """),
     explain(
         ('curl -s "$GW/spend/logs?..."', 'Today&#x27;s request log, as in Lab 5.'),
+        ('--arg start "$START"', 'Pass the shell&#x27;s <code>$START</code> into <code>jq</code>, where it&#x27;s called <code>$start</code>.'),
+        ('[.[] | select(.startTime >= $start)]', 'Keep only the requests made since the coordinator run began. The log has every request from today, including the earlier labs&#x27;, which would hide what this one question caused. Times in the log look like <code>2026-10-06T14:05:12.303000Z</code>, so comparing them as text works.'),
         ("group_by(.metadata.user_api_key_alias)[]", 'Sort the requests into groups, one per key alias, and go through each group.'),
         ('"\\(.[0].metadata.user_api_key_alias // \"master\")\\t\\(length) requests"', 'For each group, print the alias (taken from its first request) and how many requests it holds. <code>//</code> means &quot;or, if empty&quot;: requests made with the master key have no alias.'),
     ),
-    p('One question to the coordinator turned into requests under three different keys. That&#x27;s the point of putting the gateway in the middle: you can see how much work each agent did, and limit or switch off any one of them.'),
+    p('Spend logs are written in batches, so wait a minute after the run before you look. One question to the coordinator turned into requests under three different keys. That&#x27;s the point of putting the gateway in the middle: you can see how much work each agent did, and limit or switch off any one of them.'),
     h3('Notes'),
     ul([
         'To add a specialist, run another agent from the same image (a new <code>.container</code> file with a new name, port and prompt), register it, and grant its ID to the coordinator&#x27;s key. The coordinator&#x27;s code doesn&#x27;t change.',
