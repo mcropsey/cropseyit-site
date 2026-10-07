@@ -646,7 +646,7 @@ curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type:
         'YAML is indentation-sensitive, and each top-level key (<code>model_list:</code>, <code>litellm_settings:</code>) may appear only once. If LiteLLM won&#x27;t start after the edit, <code>sudo journalctl -u litellm -n 50</code> shows the error; copy the backup back and restart to get going again.',
         'If the reply is empty and <code>finish_reason</code> is <code>&quot;length&quot;</code>, the model ran out of context while thinking. In LM Studio, open the model&#x27;s settings (gear icon) and raise Context Length to at least 32k.',
         'Don&#x27;t open <code>/health</code> on its own (without <code>/liveliness</code> or <code>/readiness</code>). It sends a real request to <em>every</em> model the gateway serves, which makes LM Studio load each one in turn and can stall everyone else using it.',
-        'The admin UI at <code>http://192.168.1.101:4000/ui</code> shows the same information under <strong>Models</strong> and <strong>Settings</strong>.',
+        'The admin UI at <code>http://192.168.1.101:4000/ui</code> shows the same information under <strong>Models</strong> and <strong>Settings</strong>. To log in, get the username and password on .101 with <code>sudo grep &#x27;^UI_&#x27; /opt/litellm/litellm.env</code>: it prints the <code>UI_USERNAME=</code> and <code>UI_PASSWORD=</code> lines, and the value after each <code>=</code> is what you type. Later labs use this UI to look at logs.',
     ]),
 )
 
@@ -746,7 +746,7 @@ KEY=$MK python chat.py
     h3('Notes'),
     ul([
         'Change the model per run with <code>MODEL=lab-agent KEY=$MK python chat.py</code>. The program doesn&#x27;t know or care which real model answers.',
-        'The admin UI at <code>http://192.168.1.101:4000/ui</code> has a <strong>Playground</strong> page that does the same thing in the browser.',
+        'The admin UI at <code>http://192.168.1.101:4000/ui</code> (login: <a href="#lab-1">Lab 1</a>, Notes) has a <strong>Playground</strong> page that does the same thing in the browser.',
         'If a request hangs for a minute and then answers, LM Studio was loading the model. The first request after a model unloads is always slow.',
     ]),
 )
@@ -841,6 +841,8 @@ L4 = lab(4, 'A Chat Web UI: Open WebUI on Podman', '192.168.1.100 (Open WebUI) â
     goal('run Open WebUI as a Quadlet on .100, connected to the gateway with the <code>chat-ui</code> key from Lab 3, so you get a ChatGPT-style web page that starts at boot.'),
     h3('1. The key goes in an env file'),
     code(r"""
+. ~/gw-labs/keys.env
+echo ${UIKEY:0:6}                          # must print sk-...; if it's empty, stop here
 sudo mkdir -p /opt/open-webui
 sudo touch /opt/open-webui/open-webui.env
 sudo chmod 600 /opt/open-webui/open-webui.env
@@ -851,11 +853,13 @@ WEBUI_SECRET_KEY=$(openssl rand -hex 32)
 EOF
 """),
     explain(
+        ('. ~/gw-labs/keys.env', 'Load your saved keys (Lab 3), so <code>$UIKEY</code> holds the <code>chat-ui</code> key even in a new shell.'),
+        ('echo ${UIKEY:0:6}', 'Print just the first six characters of the key, enough to see it&#x27;s set without showing it all. If it prints an empty line, <code>UIKEY</code> isn&#x27;t set, and the env file would get a blank key: Open WebUI would start but show no models, without any error.'),
         ('sudo mkdir -p /opt/open-webui', 'A directory for Open WebUI&#x27;s settings file.'),
         ('sudo touch ... / sudo chmod 600 ...', 'Create the env file empty and root-only before the key goes in.'),
         ('sudo tee ... <<EOF', 'Write the three settings. The heredoc is unquoted, so <code>$UIKEY</code> becomes your <code>chat-ui</code> key and <code>$(openssl rand -hex 32)</code> becomes a random secret. Check with <code>sudo cat /opt/open-webui/open-webui.env</code>.'),
     ),
-    p('<code>OPENAI_API_BASE_URL</code> points Open WebUI at the gateway as if it were OpenAI. <code>WEBUI_SECRET_KEY</code> signs login sessions; keeping it fixed means you stay logged in across restarts. (In a new shell, <code>read -rsp</code> the key into <code>UIKEY</code> again first.)'),
+    p('<code>OPENAI_API_BASE_URL</code> points Open WebUI at the gateway as if it were OpenAI. <code>WEBUI_SECRET_KEY</code> signs login sessions; keeping it fixed means you stay logged in across restarts.'),
     h3('2. The Quadlet units'),
     p('A named volume keeps Open WebUI&#x27;s users, chats and settings when the container is replaced. The container listens on 8080 inside; <code>PublishPort=3000:8080</code> makes that port 3000 on the host.'),
     code(r"""
@@ -887,9 +891,12 @@ EOF
     explain(
         ("sudo tee /etc/containers/systemd/... <<'EOF'", 'Write each Quadlet file into the directory systemd reads them from. The heredocs are quoted because there&#x27;s nothing for the shell to fill in.'),
         ('open-webui.volume', 'A named volume, <code>open-webui</code>, for the app&#x27;s data.'),
+        ('ContainerName=open-webui', 'The name the container gets, so <code>sudo podman ps</code> and <code>podman logs</code> show <code>open-webui</code> instead of a generated name.'),
+        ('Image=ghcr.io/open-webui/open-webui:v0.11.4', 'The image to run, pinned to the version the lab was tested with. A tag like <code>:main</code> would change under you; a fixed version only changes when you edit this line.'),
+        ('PublishPort=3000:8080', 'Make the container&#x27;s port 8080 reachable as port 3000 on the host.'),
         ('Volume=open-webui.volume:/app/backend/data', 'Mount that volume where Open WebUI keeps its database inside the container.'),
         ('EnvironmentFile= / Environment=', 'Settings from the env file (the gateway URL and key), plus one extra setting written directly, since it isn&#x27;t secret.'),
-        ('[Service] / [Install]', 'Restart it if it stops, allow 15 minutes for the first start, and start it at boot. The same pattern as the gateway in Lab 0.'),
+        ('[Service] / [Install]', '<code>Restart=always</code> restarts the container if it stops. <code>TimeoutStartSec=900</code> allows 15 minutes for the first start. <code>WantedBy=multi-user.target</code> starts it at boot.'),
     ),
     p('<code>ENABLE_OLLAMA_API=false</code> stops it looking for a local Ollama it doesn&#x27;t need. <code>TimeoutStartSec=900</code> gives the first start time to pull the image, which is several GB.'),
     h3('3. Start it'),
@@ -897,21 +904,24 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl start open-webui            # first start pulls the image: a few minutes
 systemctl status open-webui --no-pager
-sudo firewall-cmd --permanent --add-port=3000/tcp && sudo firewall-cmd --reload   # if firewalld is running
 curl -s http://localhost:3000/health; echo                     # {"status":true}
+
+systemctl is-active firewalld              # "inactive": skip the next line
+sudo firewall-cmd --permanent --add-port=3000/tcp && sudo firewall-cmd --reload
 """),
     explain(
         ('sudo systemctl daemon-reload', 'Generate <code>open-webui.service</code> from the files you just wrote.'),
         ('sudo systemctl start open-webui', 'Start it. The command waits while the image downloads.'),
         ('systemctl status open-webui --no-pager', 'Show whether it&#x27;s running and its last few log lines. <code>--no-pager</code> prints straight to the screen instead of opening a scrollable view.'),
-        ('sudo firewall-cmd ...', 'Open port 3000 so your browser can reach it from another machine.'),
         ('curl -s http://localhost:3000/health; echo', 'Ask Open WebUI itself whether it&#x27;s up. <code>localhost</code> means this machine.'),
+        ('systemctl is-active firewalld', 'Is the host firewall running? If it prints <code>inactive</code>, nothing blocks port 3000, so skip the next line; <code>firewall-cmd</code> would only fail with &quot;FirewallD is not running&quot;.'),
+        ('sudo firewall-cmd ...', 'If it printed <code>active</code>: open port 3000 so your browser can reach it from another machine, and apply the change.'),
     ),
     h3('Verify'),
     ol([
         'Open <code>http://192.168.1.100:3000</code> and sign up. <strong>The first account becomes the admin.</strong>',
         'The model menu at the top lists <code>lab-chat</code> and <code>lab-agent</code>, the two models the <code>chat-ui</code> key allows, and nothing else the gateway serves.',
-        'Send a message. Then, in the gateway UI (<code>http://192.168.1.101:4000/ui</code>, <strong>Logs</strong>), you&#x27;ll see the request under the key alias <code>chat-ui</code>.',
+        'Send a message. Then, in the gateway&#x27;s admin UI (<code>http://192.168.1.101:4000/ui</code>, <strong>Logs</strong>; the login is in <a href="#lab-1">Lab 1</a>, Notes), you&#x27;ll see the request under the key alias <code>chat-ui</code>.',
     ]),
     h3('Notes'),
     ul([
