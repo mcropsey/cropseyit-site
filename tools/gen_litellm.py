@@ -278,12 +278,14 @@ litellm_settings:
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
+  store_model_in_db: true    # reload agents and other API-added objects from the database at every start
 EOF
 """),
     explain(
         ("sudo tee /opt/litellm/config.yaml >/dev/null <<'EOF'", 'Write the YAML below into <code>config.yaml</code>. The heredoc is quoted, so <code>os.environ/...</code> lines are saved as typed; LiteLLM looks those values up in the env file when it starts. The secrets stay out of this file, so it&#x27;s safe to show people.'),
         ('drop_params / request_timeout', 'Two quality-of-life settings: silently drop request options LM Studio doesn&#x27;t support instead of failing, and wait up to 10 minutes for slow local models.'),
         ('general_settings', 'The master key and database, both read from the environment.'),
+        ('store_model_in_db: true', 'Agents you register through the API (Lab 7) are saved in the database, but LiteLLM only loads them back when it starts if this is on. Without it, every restart or reboot empties the gateway&#x27;s agent list, although the rows are still in the database. It also lets you add models from the admin UI.'),
     ),
     p('<strong>Quadlet files.</strong> A network, a volume for the database files, and one <code>.container</code> file per container. <code>Requires=</code> and <code>After=</code> start the database first, and <code>Notify=healthy</code> makes systemd wait until Postgres actually answers before it starts LiteLLM.'),
     code(r"""
@@ -432,7 +434,7 @@ sudo podman rm -f litellm
 sudo systemctl daemon-reload
 sudo systemctl start litellm
 sudo podman inspect litellm | jq -r '.[0].Config.Labels.PODMAN_SYSTEMD_UNIT'    # litellm.service
-curl -s http://192.168.1.101:4000/health/readiness
+curl -s http://192.168.1.101:4000/health/readiness             # empty for ~20 s while it starts; run it again
 """),
     explain(
         ('sudo podman rm -f litellm', 'Stop and delete the hand-started container (<code>-f</code> stops it first). Only the container goes; its config and data are files and volumes outside it.'),
@@ -583,11 +585,13 @@ ssh 192.168.1.101
 sudo podman inspect litellm | jq '.[0] | {unit: .Config.Labels.PODMAN_SYSTEMD_UNIT, restart: .HostConfig.RestartPolicy.Name}'
 systemctl is-active litellm-db
 systemctl is-enabled podman-restart.service
+sudo grep store_model_in_db /opt/litellm/config.yaml
 """),
     explain(
         ('sudo podman inspect litellm | jq ...', 'From everything Podman knows about the container, show two things: <code>unit</code>, the systemd service that created it (Podman labels containers created by a service), and <code>restart</code>, its restart policy.'),
         ('systemctl is-active litellm-db', 'Is there a running database service with that name? Prints <code>active</code>, or <code>inactive</code> if there&#x27;s no such service.'),
         ('systemctl is-enabled podman-restart.service', 'Is the service that restarts hand-started containers at boot switched on? Prints <code>enabled</code> or <code>disabled</code>.'),
+        ('sudo grep store_model_in_db /opt/litellm/config.yaml', 'Print the config line with this setting, or nothing if it isn&#x27;t there. See below.'),
     ),
     table(['What you see', 'Means', 'Do'], [
         ['<code>&quot;unit&quot;: &quot;litellm.service&quot;</code>', 'It&#x27;s a Quadlet (or other systemd) service', 'Nothing.'],
@@ -595,6 +599,7 @@ systemctl is-enabled podman-restart.service
         ['<code>&quot;unit&quot;: null</code>, anything else', 'It won&#x27;t come back after a reboot', '<a href="#l0-quadlet">Lab 0, Part 3</a>.'],
     ]),
     p('Its database has to come back too. <code>active</code> for <code>litellm-db</code> means it has its own Postgres service, as in Lab 0. Anything else: find the database host in <code>DATABASE_URL</code> and check that it starts at boot.'),
+    p('The agents you register in Lab 7 have to come back too. They&#x27;re stored in the database, but LiteLLM only loads them again at startup when <code>general_settings</code> has <code>store_model_in_db: true</code>. Without it, the restart in Lab 8 empties the gateway&#x27;s agent list and Lab 9 finds no agents. If the <code>grep</code> printed nothing, add the line under <code>general_settings:</code> (indented two spaces) when you edit the config in step 4.'),
     h3('4. Add the two lab model names'),
     p('Look at the models the gateway serves now:'),
     code(r"""
@@ -1266,6 +1271,7 @@ curl -s $GW/v1/agents -H "Authorization: Bearer $UIKEY" | jq length
         'There are two keys in every gateway call to an agent. The <strong>caller&#x27;s</strong> key decides whether it may reach the agent. The <strong>agent&#x27;s own</strong> key (in its env file) is what the agent uses for its model calls. The logs show both, so you can tell who asked and what the agent spent answering.',
         'LiteLLM also accepts older A2A v0.3 clients (<code>&quot;method&quot;: &quot;message/send&quot;</code>, parts with <code>&quot;kind&quot;: &quot;text&quot;</code>) and translates them for these 1.0 agents.',
         'The admin UI&#x27;s <strong>Agents</strong> page shows the same registrations, and can add or delete them.',
+        'Registrations are kept in the database. They survive a gateway restart only if the config has <code>store_model_in_db: true</code> (<a href="#lab-1">Lab 1</a>, step 3). If <code>/v1/agents</code> comes back empty after a restart, that setting is missing.',
         'To change where an agent lives, delete its registration (<code>curl -X DELETE $GW/v1/agents/&lt;agent_id&gt;</code>) and register it again with the new <code>url</code>. Its ID changes, so update the keys that were granted the old one.',
         'Treat what an agent returns, including its card, as untrusted text. Another agent&#x27;s reply can contain instructions aimed at the model reading it.',
     ]),
@@ -1674,21 +1680,21 @@ sudo systemctl daemon-reload && sudo systemctl restart ops-agent writer-agent
     h3('Clean up the labs'),
     code(r"""
 # on .100: stop and remove the services, their files and images
-sudo systemctl stop open-webui ops-agent writer-agent lab-tools
+sudo systemctl stop open-webui ops-agent writer-agent lab-tools open-webui-volume
 sudo rm /etc/containers/systemd/{open-webui.container,open-webui.volume,ops-agent.container,writer-agent.container,lab-tools.container}
 sudo systemctl daemon-reload
 sudo podman volume rm open-webui
-sudo podman rmi localhost/a2a-agent:1 localhost/lab-tools:1
+sudo podman rmi -i localhost/a2a-agent:1 localhost/a2a-agent:2 localhost/lab-tools:1
 sudo rm -rf /opt/agents /opt/lab-tools /opt/open-webui ~/gw-labs
 # the gateway: delete the lab keys and agents in the admin UI (Virtual Keys, Agents);
 # on .101, remove the mcp_servers block from Lab 8 (and the lab- models, if you added them
 # only for these labs) from config.yaml, then: sudo systemctl restart litellm
 """),
     explain(
-        ('sudo systemctl stop ...', 'Stop the four services.'),
+        ('sudo systemctl stop ...', 'Stop the four services, and <code>open-webui-volume</code>, the small service Quadlet made from the <code>.volume</code> file. Left running, systemd keeps it marked as done after the volume is gone, which can confuse a later redo of Lab 4.'),
         ('sudo rm /etc/containers/systemd/{...}', 'Delete their Quadlet files. After the <code>daemon-reload</code> the services no longer exist.'),
         ('sudo podman volume rm open-webui', 'Delete Open WebUI&#x27;s data: accounts and chats.'),
-        ('sudo podman rmi ...', 'Delete the two images you built.'),
+        ('sudo podman rmi -i ...', 'Delete the images you built, including version 2 of the agent image from the upgrade step. <code>-i</code> skips any that don&#x27;t exist instead of stopping with an error.'),
         ('sudo rm -rf /opt/agents ... ~/gw-labs', 'Delete the lab directories and everything in them. <code>-r</code> includes their contents and <code>-f</code> skips the prompts, so check the paths before you press Enter.'),
     ),
 )
