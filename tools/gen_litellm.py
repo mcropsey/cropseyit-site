@@ -141,14 +141,14 @@ overview = f'''<section class="intro" id="overview">
   <p>Every container in these labs runs under <strong>rootful Podman</strong> (<code>sudo podman</code>); there&#x27;s no Docker anywhere. A container started with plain <code>podman run</code> stops when the host reboots and stays stopped, because there&#x27;s no always-running daemon to bring it back, as there is with Docker. There are two ways to fix that:</p>
   {table(['Approach', 'How it works', 'Use it when'], [
       ['<strong>Quadlet</strong> (used in every lab)', 'You write a small <code>.container</code> file in <code>/etc/containers/systemd/</code>. Podman turns it into a normal systemd service, so <code>systemctl start</code>, <code>status</code>, <code>restart</code> and <code>journalctl</code> all work, and the <code>[Install]</code> section starts it at boot.', 'Anything that should keep running. This is the Red Hat-recommended way on Podman 4.4 and newer (Rocky 9 and 10 have Podman 5).'],
-      ['<code>podman run --restart=always</code> plus <code>podman-restart.service</code>', '<code>--restart=always</code> restarts a crashed container. After a reboot, <code>podman-restart.service</code> (if it&#x27;s enabled) starts every container that has that restart policy.', 'A quick fix for a container someone already started by hand. Lab 1 shows how to check for this and how to convert to a Quadlet.'],
+      ['<code>podman run --restart=always</code> plus <code>podman-restart.service</code>', '<code>--restart=always</code> restarts a crashed container. After a reboot, <code>podman-restart.service</code> (if it&#x27;s enabled) starts every container that has that restart policy.', 'A quick fix for a container someone already started by hand. <a href="#l0-quadlet">Lab 0, Part 3</a> converts one to a Quadlet.'],
   ])}
   <p>A Quadlet file has three sections: <code>[Unit]</code> (a description and what it depends on), <code>[Container]</code> (everything you&#x27;d otherwise type after <code>podman run</code>: image, ports, volumes, environment), and <code>[Service]</code>/<code>[Install]</code> (systemd&#x27;s restart policy and &quot;start at boot&quot;). After adding or changing one, run <code>sudo systemctl daemon-reload</code> so systemd regenerates the service. You don&#x27;t run <code>systemctl enable</code> on Quadlet services; the <code>[Install]</code> section takes care of that.</p>
 
   <h2>Before you start</h2>
   <ul>
     <li>SSH with sudo on 192.168.1.100 and 192.168.1.101, both Rocky Linux 9 or 10 with Podman 5.</li>
-    <li>LiteLLM running on .101 with a <strong>master key</strong> and a <strong>database</strong> (virtual keys, used from Lab 3 on, need it). Lab 1 checks both; Lab 0 covers whatever is missing.</li>
+    <li>LiteLLM running on .101 with a <strong>master key</strong> and a <strong>database</strong> (virtual keys, used from Lab 3 on, need it). Lab 0 covers whatever is missing.</li>
     <li>A model that can call tools. These labs use <code>qwen/qwen3.8-27b</code> in LM Studio. In LM Studio, set its default <strong>context length to at least 32k</strong> (gear icon on the model, then Context Length). LM Studio loads models on demand with that setting, and a small default leaves a &quot;thinking&quot; model no room to answer.</li>
     <li>The labs were tested with LiteLLM <strong>v1.104.0</strong>, Podman 5.8, Python 3.12, <code>openai</code> 3.24, <code>mcp</code> 2.3 and <code>a2a-sdk</code> 1.2.</li>
   </ul>
@@ -187,8 +187,8 @@ curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'
 
   <h2>Lab order</h2>
   {table(['Lab', 'What you build', 'Needs'], [
-      ['0', 'Reference, not a lab: installing LiteLLM, converting it to a Quadlet, giving it its own Postgres, upgrades', 'only what Lab 1 finds missing'],
-      ['1', 'Connect to the gateway, check it&#x27;s ready, and add the two model names the labs use', 'a running gateway'],
+      ['0', 'Reference, not a lab: installing LiteLLM, converting it to a Quadlet, giving it its own Postgres, upgrades', 'only if your gateway is missing something'],
+      ['1', 'Get the master key, connect to the gateway, and add the two model names the labs use', 'a running gateway'],
       ['2&ndash;4', 'Chat: curl and Python, virtual keys, a chat web UI', '1'],
       ['5&ndash;9', 'Agents: first agent, agents as services, A2A through the gateway, MCP tools, a coordinator', '1, 3'],
       ['10', 'A coding agent (opencode or Claude Code) through the gateway', '1, 3 (8 for MCP)'],
@@ -203,7 +203,7 @@ L0 = lab(0, 'Reference: Setting Up LiteLLM (only if you need to)', '192.168.1.10
     p('The rest of the labs never install or reconfigure LiteLLM. They talk to it through its API, as any app would. Use this table to find which parts of this lab, if any, you need:'),
     table(['Your situation', 'Do'], [
         ['No LiteLLM yet', '<a href="#l0-podman">Part 1</a>, <a href="#l0-install">Part 2</a>'],
-        ['LiteLLM was started by hand with <code>podman run</code>, so it isn&#x27;t a systemd service (Lab 1 checks this)', '<a href="#l0-quadlet">Part 3</a>'],
+        ['LiteLLM was started by hand with <code>podman run</code>, so it isn&#x27;t a systemd service', '<a href="#l0-quadlet">Part 3</a>'],
         ['LiteLLM has no database, or uses a database inside another app&#x27;s Postgres', '<a href="#l0-db">Part 4</a>'],
         ['Upgrades, backups and other ways to run it', '<a href="#l0-options">Part 5</a>'],
     ]),
@@ -550,8 +550,9 @@ curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
 
 # ---------------------------------------------------------------- lab 1
 L1 = lab(1, 'Connect to the Gateway and Add the Lab Model Names', '192.168.1.100 → 192.168.1.101',
-    goal('set up your shell on the agent host, confirm the gateway is healthy, has a database and survives reboots, then give it two new model names, <code>lab-chat</code> and <code>lab-agent</code>, that every later lab uses.'),
-    h3('1. Your shell on the agent host'),
+    goal('get the master key, set up your shell on the agent host, then give the gateway two new model names, <code>lab-chat</code> and <code>lab-agent</code>, that every later lab uses.'),
+    p('This lab assumes LiteLLM is already installed and working on .101. It doesn&#x27;t check or change how the gateway runs; if something is missing, <a href="#lab-0">Lab 0</a> covers it.'),
+    h3('1. The master key and your shell'),
     p('First, get the <strong>master key</strong>, LiteLLM&#x27;s admin password. It was generated when the gateway was installed (<a href="#l0-install">Lab 0, Part 2</a>) and lives on the gateway in <code>/opt/litellm/litellm.env</code>, readable by root only. Read it on .101:'),
     code(r"""
 ssh 192.168.1.101
@@ -579,49 +580,17 @@ ssh 192.168.1.100
 sudo dnf -y install jq                     # pretty-prints and filters JSON answers
 export GW=http://192.168.1.101:4000
 read -rsp 'LiteLLM master key: ' MK; echo; export MK
+curl -s $GW/health/readiness | jq '{status, db}'   # quick check: "healthy" and "connected"
 """),
     explain(
         ('ssh 192.168.1.100', 'Log in to the agent host.'),
         ('sudo dnf -y install jq', 'Install jq, which every lab uses to read the gateway&#x27;s JSON answers.'),
         ('export GW=http://192.168.1.101:4000', 'Store the gateway&#x27;s address in <code>GW</code>, so later commands can say <code>$GW/v1/models</code> instead of the full address. <code>export</code> also passes it to programs you run, such as the Python scripts.'),
         ("read -rsp 'LiteLLM master key: ' MK; echo; export MK", 'Paste the master key when asked. It goes into <code>MK</code> without appearing on screen or in your shell history, and <code>export</code> makes it available to programs too. The labs use it as <code>$MK</code>.'),
+        ("curl -s $GW/health/readiness | jq '{status, db}'", 'A quick check that you can reach the gateway and that its database is connected. No key needed. The answer has many fields; <code>jq &#x27;{status, db}&#x27;</code> keeps just those two. If it fails, fix the gateway first (<a href="#lab-0">Lab 0</a>).'),
     ),
     note('Put the <code>export GW=...</code> line in <code>~/.bashrc</code> so new shells have it. Don&#x27;t do that with the master key; re-enter it when you need it.', 'Tip:'),
-    h3('2. Is it up, and does it have a database?'),
-    code(r"""
-curl -s $GW/health/liveliness; echo                        # "I'm alive!" (no key needed)
-curl -s $GW/health/readiness | jq '{status, db}'            # db must be "connected"
-curl -s $GW/openapi.json | jq -r .info.version              # the LiteLLM version
-"""),
-    explain(
-        ('curl -s $GW/health/liveliness; echo', 'Is the gateway process running? It answers <code>&quot;I&#x27;m alive!&quot;</code> without a newline, so <code>echo</code> adds one.'),
-        ("curl -s $GW/health/readiness | jq '{status, db}'", 'Is it ready to work? The answer has many fields; <code>jq &#x27;{status, db}&#x27;</code> keeps only the overall status and the database connection.'),
-        ('curl -s $GW/openapi.json | jq -r .info.version', 'Which version is it? <code>-r</code> prints the version as plain text instead of in quotes.'),
-    ),
-    p('<code>/health/liveliness</code> only says the process is running. <code>/health/readiness</code> also checks the database, which the labs need from Lab 3 on: virtual keys, agents and spend logs all live there. If <code>db</code> isn&#x27;t <code>connected</code>, see <a href="#l0-db">Lab 0, Part 4</a>.'),
-    h3('3. Will it come back after a reboot?'),
-    p('On <strong>.101</strong>, ask Podman whether the container belongs to a systemd service. This only reads:'),
-    code(r"""
-ssh 192.168.1.101
-sudo podman inspect litellm | jq '.[0] | {unit: .Config.Labels.PODMAN_SYSTEMD_UNIT, restart: .HostConfig.RestartPolicy.Name}'
-systemctl is-active litellm-db
-systemctl is-enabled podman-restart.service
-sudo grep store_model_in_db /opt/litellm/config.yaml
-"""),
-    explain(
-        ('sudo podman inspect litellm | jq ...', 'From everything Podman knows about the container, show two things: <code>unit</code>, the systemd service that created it (Podman labels containers created by a service), and <code>restart</code>, its restart policy.'),
-        ('systemctl is-active litellm-db', 'Is there a running database service with that name? Prints <code>active</code>, or <code>inactive</code> if there&#x27;s no such service.'),
-        ('systemctl is-enabled podman-restart.service', 'Is the service that restarts hand-started containers at boot switched on? Prints <code>enabled</code> or <code>disabled</code>.'),
-        ('sudo grep store_model_in_db /opt/litellm/config.yaml', 'Print the config line with this setting, or nothing if it isn&#x27;t there. See below.'),
-    ),
-    table(['What you see', 'Means', 'Do'], [
-        ['<code>&quot;unit&quot;: &quot;litellm.service&quot;</code>', 'It&#x27;s a Quadlet (or other systemd) service', 'Nothing.'],
-        ['<code>&quot;unit&quot;: null</code>, <code>&quot;restart&quot;: &quot;always&quot;</code>, <code>podman-restart</code> <code>enabled</code>', 'Started by hand; comes back at boot through <code>podman-restart.service</code>', 'Works. <a href="#l0-quadlet">Lab 0, Part 3</a> converts it to a Quadlet.'],
-        ['<code>&quot;unit&quot;: null</code>, anything else', 'It won&#x27;t come back after a reboot', '<a href="#l0-quadlet">Lab 0, Part 3</a>.'],
-    ]),
-    p('Its database has to come back too. <code>active</code> for <code>litellm-db</code> means it has its own Postgres service, as in Lab 0. Anything else: find the database host in <code>DATABASE_URL</code> and check that it starts at boot.'),
-    p('The agents you register in Lab 7 have to come back too. They&#x27;re stored in the database, but LiteLLM only loads them again at startup when <code>general_settings</code> has <code>store_model_in_db: true</code>. Without it, the restart in Lab 8 empties the gateway&#x27;s agent list and Lab 9 finds no agents. If the <code>grep</code> printed nothing, add the line under <code>general_settings:</code> (indented two spaces) when you edit the config in step 4.'),
-    h3('4. Add the two lab model names'),
+    h3('2. Add the two lab model names'),
     p('Look at the models the gateway serves now:'),
     code(r"""
 curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'
@@ -660,6 +629,7 @@ sudo vi /opt/litellm/config.yaml
       api_base: os.environ/LMSTUDIO_API_BASE
       api_key: not-needed
 """),
+    p('While the file is open, check that <code>general_settings:</code> has the line <code>store_model_in_db: true</code> (indented two spaces). Agents you register in Lab 7 are saved in the database, and LiteLLM only loads them back after a restart when this is on. If it&#x27;s missing, add it; a fresh install from Lab 0 already has it.'),
     p('LiteLLM reads its config only at startup, so restart it. The gateway is down for about 20 seconds:'),
     code(r"""
 sudo systemctl restart litellm             # or "sudo podman restart litellm" if it isn't a Quadlet service
@@ -1292,7 +1262,7 @@ curl -s $GW/v1/agents -H "Authorization: Bearer $UIKEY" | jq length
         'There are two keys in every gateway call to an agent. The <strong>caller&#x27;s</strong> key decides whether it may reach the agent. The <strong>agent&#x27;s own</strong> key (in its env file) is what the agent uses for its model calls. The logs show both, so you can tell who asked and what the agent spent answering.',
         'LiteLLM also accepts older A2A v0.3 clients (<code>&quot;method&quot;: &quot;message/send&quot;</code>, parts with <code>&quot;kind&quot;: &quot;text&quot;</code>) and translates them for these 1.0 agents.',
         'The admin UI&#x27;s <strong>Agents</strong> page shows the same registrations, and can add or delete them.',
-        'Registrations are kept in the database. They survive a gateway restart only if the config has <code>store_model_in_db: true</code> (<a href="#lab-1">Lab 1</a>, step 3). If <code>/v1/agents</code> comes back empty after a restart, that setting is missing.',
+        'Registrations are kept in the database. They survive a gateway restart only if the config has <code>store_model_in_db: true</code> (<a href="#lab-1">Lab 1</a>, step 2). If <code>/v1/agents</code> comes back empty after a restart, that setting is missing.',
         'To change where an agent lives, delete its registration (<code>curl -X DELETE $GW/v1/agents/&lt;agent_id&gt;</code>) and register it again with the new <code>url</code>. Its ID changes, so update the keys that were granted the old one.',
         'Treat what an agent returns, including its card, as untrusted text. Another agent&#x27;s reply can contain instructions aimed at the model reading it.',
     ]),
@@ -1629,7 +1599,7 @@ curl -s http://192.168.1.101:4000/health/readiness | jq '{status, db}'
         ('sudo systemctl reboot', 'Restart the machine. Your SSH session drops; log in again once it&#x27;s back.'),
         ('systemctl is-active ...', 'One word per service. Every line should be <code>active</code>, without you having started anything.'),
         ('curl ... agent-card.json | jq -r .name', 'Ask <code>ops-agent</code> for its card and print its name: proof that it&#x27;s answering, not just running.'),
-        ('curl .../health/readiness', 'On the gateway, the same readiness check as Lab 1, including the database.'),
+        ('curl .../health/readiness', 'On the gateway, the same readiness check as Lab 1, step 1, including the database.'),
     ),
     p('If a service isn&#x27;t active, check that its file is in <code>/etc/containers/systemd/</code>, that it has an <code>[Install]</code> section with <code>WantedBy=multi-user.target</code>, and run <code>sudo /usr/libexec/podman/quadlet -dryrun</code> to see Quadlet&#x27;s complaints about any file it couldn&#x27;t convert.'),
     h3('3. Logs'),
