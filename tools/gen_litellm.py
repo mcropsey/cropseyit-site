@@ -833,7 +833,7 @@ curl -s "$GW/key/list?return_full_object=true" -H "Authorization: Bearer $MK" | 
         ('curl -s "$GW/key/info?key=$UIKEY"', 'Look up one key. The key goes in the URL after <code>?</code>; the URL is in double quotes so the shell doesn&#x27;t treat <code>?</code> as a filename pattern, while still filling in <code>$UIKEY</code>.'),
         ("jq '.info | {...}'", 'The details are under <code>info</code>; show the alias, allowed models, rate limit and spend so far.'),
         ('cat > ~/gw-labs/chat-ui-update.json <<EOF', 'Write the request body to a file. The heredoc is unquoted, so <code>$UIKEY</code> becomes the actual key. Run <code>cat ~/gw-labs/chat-ui-update.json</code> to see what will be sent.'),
-        ('-d @$HOME/gw-labs/chat-ui-update.json', 'Send that file as the body. <code>@</code> tells curl to read a file instead of taking the text literally. (<code>$HOME</code>, not <code>~</code>: the shell doesn&#x27;t expand <code>~</code> after <code>@</code>.)'),
+        ('-d @$HOME/gw-labs/chat-ui-update.json', 'Send that file as the body. <code>@</code> tells curl to read a file instead of taking the text literally. (<code>$HOME</code>, not <code>~</code>: the shell doesn&#x27;t expand <code>~</code> after <code>@</code>.) The response shows the new limit at once, but the gateway caches keys it has seen recently, so requests made with the key can keep the old limit for up to a minute.'),
         ('/key/list?return_full_object=true', 'List every key with all its details, not just the hashes.'),
         ('jq -r \'.keys[] | "\\(.key_alias)\\t\\(.models)"\'', 'For each key, print a line of text: <code>\\(...)</code> inserts a field&#x27;s value into the string, and <code>\\t</code> is a tab between the two columns.'),
     ),
