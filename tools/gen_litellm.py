@@ -245,7 +245,7 @@ LMSTUDIO_API_BASE=http://192.168.1.194:1234/v1
 EOF
 
 unset DBPASS UIPASS
-sudo grep MASTER_KEY /opt/litellm/litellm.env      # your master key: save it in a password manager
+sudo grep '^LITELLM_MASTER_KEY=' /opt/litellm/litellm.env   # your master key: save it in a password manager
 """),
     explain(
         ('sudo mkdir -p /opt/litellm', 'Make the directory for the gateway&#x27;s files. <code>-p</code> means no error if it already exists.'),
@@ -255,7 +255,7 @@ sudo grep MASTER_KEY /opt/litellm/litellm.env      # your master key: save it in
         ('sudo tee /opt/litellm/db.env >/dev/null <<EOF', 'Write the three lines below into <code>db.env</code>. The heredoc is unquoted (<code>&lt;&lt;EOF</code>), so <code>$DBPASS</code> is replaced with the real password. Postgres reads these variables on first start to create its user and database.'),
         ('sudo tee /opt/litellm/litellm.env ...', 'The same for LiteLLM. Each <code>$(openssl rand -hex 24)</code> is replaced with a fresh random value, so the master key and salt key are generated right here. <code>DATABASE_URL</code> tells LiteLLM where Postgres is: user <code>litellm</code>, that password, host <code>litellm-db</code> (the database container&#x27;s name), port 5432.'),
         ('unset DBPASS UIPASS', 'Remove the passwords from your shell now that they&#x27;re saved in the files.'),
-        ('sudo grep MASTER_KEY ...', 'Print the line containing the master key, which you&#x27;ll need in Lab 1.'),
+        ("sudo grep '^LITELLM_MASTER_KEY=' ...", 'Print the line that sets the master key, the same command as Lab 1 uses. The key is everything after the <code>=</code>.'),
     ),
     p('<strong>Config.</strong> <code>model_list</code> is the list of models the gateway serves. <code>model_name</code> is the name clients ask for; <code>model</code> is the real model, where the <code>openai/</code> prefix means &quot;talk to this server with the OpenAI API&quot;, which LM Studio speaks. <code>os.environ/NAME</code> tells LiteLLM to read a value from the environment. Add one entry per model you want to serve.'),
     code(r"""
@@ -359,7 +359,8 @@ EOF
 sudo systemctl daemon-reload               # turn the Quadlet files into services
 sudo systemctl start litellm               # starts litellm-db first; the first start pulls the images
 sudo journalctl -u litellm -f              # Ctrl-C once you see "Uvicorn running on http://0.0.0.0:4000"
-sudo firewall-cmd --permanent --add-port=4000/tcp && sudo firewall-cmd --reload   # if firewalld is running
+systemctl is-active firewalld              # "inactive": skip the next line
+sudo firewall-cmd --permanent --add-port=4000/tcp && sudo firewall-cmd --reload
 
 curl -s http://192.168.1.101:4000/health/liveliness; echo     # "I'm alive!"
 curl -s http://192.168.1.101:4000/health/readiness             # "db": "connected"
@@ -368,7 +369,8 @@ curl -s http://192.168.1.101:4000/health/readiness             # "db": "connecte
         ('sudo systemctl daemon-reload', 'Make systemd run Quadlet, which reads the files in <code>/etc/containers/systemd/</code> and generates <code>litellm.service</code> and <code>litellm-db.service</code>.'),
         ('sudo systemctl start litellm', 'Start the gateway. Because of <code>Requires=</code>, systemd starts the database first.'),
         ('sudo journalctl -u litellm -f', 'Watch the gateway&#x27;s log as it starts. Ctrl-C stops watching; the service keeps running.'),
-        ('sudo firewall-cmd ... && ...', 'Allow port 4000 through the firewall permanently, then apply the change. <code>&amp;&amp;</code> runs the second command only if the first worked.'),
+        ('systemctl is-active firewalld', 'Is the host firewall running? Only if it prints <code>active</code> do you need the next line.'),
+        ('sudo firewall-cmd ... && ...', 'Allow port 4000 through the firewall permanently, then apply the change. <code>&amp;&amp;</code> runs the second command only if the first worked. Without this, other hosts can&#x27;t reach the gateway.'),
         ('curl -s .../health/liveliness; echo', 'Ask the gateway whether it&#x27;s running. No key is needed. The <code>echo</code> adds the newline the answer lacks.'),
         ('curl -s .../health/readiness', 'Ask whether it&#x27;s ready, which includes a check that the database is reachable.'),
     ),
@@ -393,7 +395,7 @@ sudo chmod 600 /opt/litellm/inspect.bak-*.json         # it contains the env, in
         ('... | sudo tee /opt/litellm/inspect.bak-$(date +%F).json', 'Save the complete inspect output as a backup, named with today&#x27;s date, so you can recreate the container exactly if you need to roll back.'),
         ('sudo chmod 600 ...', 'Make the backup root-only: it includes the environment, and so the master key.'),
     ),
-    p('Translate what you found into a <code>.container</code> file: <code>-p</code> becomes <code>PublishPort=</code>, <code>-v</code> becomes <code>Volume=</code>, <code>--env-file</code> becomes <code>EnvironmentFile=</code>, each network becomes a <code>Network=</code> line, and the arguments after the image name become <code>Exec=</code>. For example, a container created with <code>podman run -d --name litellm --restart=always -p 4000:4000 -v /opt/litellm/config.yaml:/app/config.yaml:ro,Z --env-file /opt/litellm/litellm.env ghcr.io/berriai/litellm:v1.104.0 --config /app/config.yaml --port 4000</code>, and later connected to a network named <code>docker_default</code> where its database lives, becomes:'),
+    p('Translate what you found into a <code>.container</code> file: <code>-p</code> becomes <code>PublishPort=</code>, <code>-v</code> becomes <code>Volume=</code>, <code>--env-file</code> becomes <code>EnvironmentFile=</code>, each network becomes a <code>Network=</code> line, and the arguments after the image name become <code>Exec=</code>. For example, a container created with <code>podman run -d --name litellm --restart=always -p 4000:4000 -v /opt/litellm/config.yaml:/app/config.yaml:ro,Z --env-file /opt/litellm/litellm.env ghcr.io/berriai/litellm:v1.104.0 --config /app/config.yaml --port 4000</code>, and later connected to another app&#x27;s network, here called <code>otherapp_default</code>, where its database lives, becomes:'),
     code(r"""
 sudo tee /etc/containers/systemd/litellm.container >/dev/null <<'EOF'
 [Unit]
@@ -403,7 +405,7 @@ Description=LiteLLM AI gateway
 ContainerName=litellm
 Image=ghcr.io/berriai/litellm:v1.104.0
 Network=podman
-Network=docker_default
+Network=otherapp_default
 PublishPort=4000:4000
 EnvironmentFile=/opt/litellm/litellm.env
 Volume=/opt/litellm/config.yaml:/app/config.yaml:ro,Z
@@ -420,7 +422,7 @@ EOF
 sudo /usr/libexec/podman/quadlet -dryrun 2>/dev/null | grep ^ExecStart    # the podman run command it will use
 """),
     explain(
-        ('Network=podman / Network=docker_default', 'One line per network the container was on. <code>podman</code> is Podman&#x27;s default network; <code>docker_default</code> is the example&#x27;s extra one.'),
+        ('Network=podman / Network=otherapp_default', 'One line per network the container was on. <code>podman</code> is Podman&#x27;s default network; <code>otherapp_default</code> stands for the extra one in the example. Use the names your inspect output showed.'),
         ('quadlet -dryrun', 'Run Quadlet without changing anything and print the services it <em>would</em> generate. <code>2&gt;/dev/null</code> hides its progress messages.'),
         ('| grep ^ExecStart', 'Keep only the lines starting with <code>ExecStart</code>: the exact <code>podman run</code> command systemd will use.'),
     ),
@@ -452,18 +454,21 @@ sudo podman exec litellm-db psql -U litellm -d litellm -c 'select version();'
     explain(
         ('sudo podman exec litellm-db psql ...', 'Run <code>psql</code>, the Postgres command-line client, inside the new database container: log in as user <code>litellm</code> (<code>-U</code>) to database <code>litellm</code> (<code>-d</code>) and run one SQL command (<code>-c</code>). A version string back means the database is up and the login works.'),
     ),
-    p('<strong>2. Copy the data.</strong> Stop LiteLLM so nothing is written during the copy, then dump the old database and load it into the new one. The example assumes the old database is <code>litellm</code> in a container named <code>postgresdb</code> with the admin user <code>admin</code>; check yours with <code>sudo grep DATABASE_URL /opt/litellm/litellm.env</code>. <code>--no-owner --no-privileges</code> leaves out the old server&#x27;s user names, so everything ends up owned by the new <code>litellm</code> user.'),
+    p('<strong>2. Copy the data.</strong> Stop LiteLLM so nothing is written during the copy, then dump the old database and load it into the new one. First, put the old database&#x27;s container name and admin user in two variables; <code>sudo grep DATABASE_URL /opt/litellm/litellm.env</code> shows the user, and <code>sudo podman ps</code> the container. The commands assume the old database itself is called <code>litellm</code>. <code>--no-owner --no-privileges</code> leaves out the old server&#x27;s user names, so everything ends up owned by the new <code>litellm</code> user.'),
     code(r"""
+OLD_CTR=old-postgres                       # the container the old database runs in
+OLD_USER=postgres                          # a user that can read the old database
 sudo systemctl stop litellm                # or: sudo podman stop litellm
-sudo podman exec postgresdb pg_dump -U admin -d litellm --no-owner --no-privileges \
+sudo podman exec $OLD_CTR pg_dump -U $OLD_USER -d litellm --no-owner --no-privileges \
   | sudo tee /opt/litellm/litellm-db-$(date +%F).sql >/dev/null
 sudo chmod 600 /opt/litellm/litellm-db-*.sql
 sudo cat /opt/litellm/litellm-db-$(date +%F).sql \
   | sudo podman exec -i litellm-db psql -q -v ON_ERROR_STOP=1 -U litellm -d litellm >/dev/null && echo restored
 """),
     explain(
+        ('OLD_CTR=... / OLD_USER=...', 'Replace the example values with yours. The rest of this part uses <code>$OLD_CTR</code> and <code>$OLD_USER</code>, so you type the names only once.'),
         ('sudo systemctl stop litellm', 'Stop the gateway so no new keys or logs are written while you copy.'),
-        ('podman exec postgresdb pg_dump ...', '<code>pg_dump</code> runs inside the <em>old</em> database container and prints the whole <code>litellm</code> database as SQL commands that rebuild it.'),
+        ('podman exec $OLD_CTR pg_dump ...', '<code>pg_dump</code> runs inside the <em>old</em> database container and prints the whole <code>litellm</code> database as SQL commands that rebuild it.'),
         ('| sudo tee /opt/litellm/litellm-db-$(date +%F).sql', 'Save that SQL to a dated file on the host. It&#x27;s your copy and your backup.'),
         ('sudo cat ... | podman exec -i litellm-db psql ...', 'Feed the file into <code>psql</code> in the <em>new</em> container. <code>-i</code> lets <code>podman exec</code> pass your input into the container. <code>-q</code> is quiet, and <code>ON_ERROR_STOP=1</code> stops at the first error instead of carrying on with half a database.'),
         ('>/dev/null && echo restored', 'Hide psql&#x27;s output and print <code>restored</code> only if it succeeded.'),
@@ -471,7 +476,7 @@ sudo cat /opt/litellm/litellm-db-$(date +%F).sql \
     p('Check that the important tables arrived with the same number of rows (run each line against both databases):'),
     code(r"""
 for t in LiteLLM_VerificationToken LiteLLM_SpendLogs LiteLLM_AgentsTable _prisma_migrations; do
-  old=$(sudo podman exec postgresdb psql -U admin   -d litellm -Atc "select count(*) from \"$t\"")
+  old=$(sudo podman exec $OLD_CTR psql -U $OLD_USER -d litellm -Atc "select count(*) from \"$t\"")
   new=$(sudo podman exec litellm-db psql -U litellm -d litellm -Atc "select count(*) from \"$t\"")
   echo "$t  old=$old  new=$new"
 done
@@ -503,7 +508,7 @@ curl -s http://192.168.1.101:4000/health/readiness                # "db": "conne
         ('sudo vi ...litellm.container', 'Open the Quadlet file and make the three changes in the grey comments. In <code>vi</code>: <code>i</code> to type, Esc then <code>:wq</code> to save and quit.'),
         ('daemon-reload / start / curl readiness', 'Apply the changed file, start the gateway, and check that it reaches the new database.'),
     ),
-    p('Make a request or two, then check that the newest spend log row is in the <em>new</em> database: <code>sudo podman exec litellm-db psql -U litellm -d litellm -Atc &#x27;select max(&quot;startTime&quot;) from &quot;LiteLLM_SpendLogs&quot;&#x27;</code>. Once you&#x27;re satisfied, drop the old copy (<code>sudo podman exec postgresdb dropdb -U admin litellm</code>) and keep the dump file as a backup.'),
+    p('Make a request or two, then check that the newest spend log row is in the <em>new</em> database: <code>sudo podman exec litellm-db psql -U litellm -d litellm -Atc &#x27;select max(&quot;startTime&quot;) from &quot;LiteLLM_SpendLogs&quot;&#x27;</code>. Once you&#x27;re satisfied, drop the old copy (<code>sudo podman exec $OLD_CTR dropdb -U $OLD_USER litellm</code>) and keep the dump file as a backup.'),
     note('An external Postgres (a database server, a managed service) works the same way: create a database and user there, point <code>DATABASE_URL</code> at it, and leave out the <code>litellm-db</code> files and the <code>Requires=</code> line.', 'Other options:'),
 
     '<h3 id="l0-options">Part 5: Upgrades, backups and options</h3>',
@@ -511,7 +516,7 @@ curl -s http://192.168.1.101:4000/health/readiness                # "db": "conne
     table(['You changed', 'Run'], [
         ['<code>config.yaml</code> or <code>litellm.env</code>', '<code>sudo systemctl restart litellm</code> (a Quadlet restart creates a fresh container, so env file changes are picked up)'],
         ['A <code>.container</code>, <code>.network</code> or <code>.volume</code> file', '<code>sudo systemctl daemon-reload</code>, then restart the service'],
-        ['Keys, agents, MCP servers (through the API or UI)', 'Nothing; they&#x27;re stored in the database and take effect at once'],
+        ['Keys, agents, MCP servers (through the API or UI)', 'Nothing; they&#x27;re stored in the database. The gateway caches keys, so a change to a key that was used recently can take up to a minute to apply. Blocking a key applies at once.'],
     ]),
     p('<strong>Back up the database</strong> before every upgrade, and on a schedule if the spend logs matter to you:'),
     code(r"""
@@ -525,17 +530,19 @@ sudo chmod 600 /opt/litellm/backup-*.sql
     ),
     p('<strong>Upgrade LiteLLM</strong> by changing the image tag. Read the release notes for the versions you&#x27;re skipping first; LiteLLM runs its own database migrations at startup.'),
     code(r"""
-sudo sed -i 's#litellm:v1.104.0#litellm:v1.105.0#' /etc/containers/systemd/litellm.container
+sudo sed -i 's#^Image=ghcr.io/berriai/litellm:.*#Image=ghcr.io/berriai/litellm:v1.105.0#' /etc/containers/systemd/litellm.container
+grep ^Image= /etc/containers/systemd/litellm.container
 sudo systemctl daemon-reload && sudo systemctl restart litellm      # pulls the new image, then migrates
 curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
 """),
     explain(
-        ("sudo sed -i 's#litellm:v1.104.0#litellm:v1.105.0#' ...", 'Edit the Quadlet file in place, replacing the old image tag with the new one. Opening it in <code>vi</code> and changing the <code>Image=</code> line does the same.'),
+        ("sudo sed -i 's#^Image=ghcr.io/berriai/litellm:.*#...:v1.105.0#' ...", 'Edit the Quadlet file in place: replace the whole <code>Image=</code> line, whatever tag it has now (<code>.*</code> matches the rest of the line), with the new pinned version. Opening it in <code>vi</code> and changing the line does the same.'),
+        ('grep ^Image= ...', 'Show the line, to check the change went in before you restart.'),
         ('daemon-reload && restart litellm', 'Regenerate the service from the changed file, then restart it. The new container uses the new image, which Podman downloads first.'),
         ('curl ... /openapi.json | jq -r .info.version', 'The gateway describes its own API at <code>/openapi.json</code>, including its version number. This prints just the version.'),
     ),
     ul([
-        '<strong>Pin the version.</strong> A floating tag such as <code>main-stable</code> or <code>latest</code> means you can&#x27;t tell which build you run, and a pull can silently change it. Compromised LiteLLM releases were published to PyPI in March 2026, so know exactly what you run. For full reproducibility, pin the digest: <code>Image=ghcr.io/berriai/litellm@sha256:...</code> (<code>sudo podman image inspect --format &#x27;{{index .RepoDigests 0}}&#x27; &lt;image&gt;</code> prints it).',
+        '<strong>Pin the version.</strong> A floating tag such as <code>main-stable</code> or <code>latest</code> means you can&#x27;t tell which build you run, and a pull can silently change it. On 24 March 2026, LiteLLM versions 1.82.7 and 1.82.8 on PyPI carried credential-stealing code for a few hours before they were removed, so know exactly what you run. For full reproducibility, pin the digest: <code>Image=ghcr.io/berriai/litellm@sha256:...</code> (<code>sudo podman image inspect --format &#x27;{{index .RepoDigests 0}}&#x27; &lt;image&gt;</code> prints it).',
         'Cloud models go in <code>model_list</code> the same way: <code>model: anthropic/claude-haiku-4-5-20251001</code> with <code>api_key: os.environ/ANTHROPIC_API_KEY</code>, or <code>model: openai/gpt-4.1-mini</code> with <code>api_key: os.environ/OPENAI_API_KEY</code>, and the key itself in <code>litellm.env</code>.',
         '<code>LITELLM_SALT_KEY</code> encrypts provider keys you store through the UI. Never change it after that, or LiteLLM can&#x27;t decrypt them. Older installs without one use the master key, which then mustn&#x27;t change either.',
         '<code>:Z</code> on a mount relabels the file for SELinux. Without it the container gets &quot;permission denied&quot; reading <code>config.yaml</code>.',
