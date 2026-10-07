@@ -552,7 +552,28 @@ curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
 L1 = lab(1, 'Connect to the Gateway and Add the Lab Model Names', '192.168.1.100 → 192.168.1.101',
     goal('set up your shell on the agent host, confirm the gateway is healthy, has a database and survives reboots, then give it two new model names, <code>lab-chat</code> and <code>lab-agent</code>, that every later lab uses.'),
     h3('1. Your shell on the agent host'),
-    p('You type every command from here on on <strong>192.168.1.100</strong> unless a step says otherwise. Two shell variables hold the gateway address and the <strong>master key</strong>, LiteLLM&#x27;s admin password. Whoever runs the gateway has it; on .101 it&#x27;s in <code>/opt/litellm/litellm.env</code>. <code>read -rsp</code> reads it without echoing it or saving it in your shell history.'),
+    p('First, get the <strong>master key</strong>, LiteLLM&#x27;s admin password. It was generated when the gateway was installed (<a href="#l0-install">Lab 0, Part 2</a>) and lives on the gateway in <code>/opt/litellm/litellm.env</code>, readable by root only. Read it on .101:'),
+    code(r"""
+ssh 192.168.1.101
+sudo grep '^LITELLM_MASTER_KEY=' /opt/litellm/litellm.env   # the key is everything after the =
+exit
+"""),
+    explain(
+        ('ssh 192.168.1.101', 'Log in to the gateway host.'),
+        ("sudo grep '^LITELLM_MASTER_KEY=' /opt/litellm/litellm.env", 'Print the line of the env file that sets the master key. <code>sudo</code> is needed because the file is root-only (<code>600</code>). <code>^</code> means &quot;at the start of the line&quot;, so only that one line matches. The key is the part after <code>=</code>, starting with <code>sk-</code>; copy it.'),
+        ('exit', 'Log out of .101 again.'),
+    ),
+    p('If that prints nothing, the gateway was set up differently. Ask the running container instead, which works however the key was passed in (env file or <code>-e</code> on a hand-typed <code>podman run</code>):'),
+    code(r"""
+sudo podman exec litellm printenv LITELLM_MASTER_KEY        # on .101
+sudo grep -n 'master_key' /opt/litellm/config.yaml           # if that is empty too
+"""),
+    explain(
+        ('sudo podman exec litellm printenv LITELLM_MASTER_KEY', 'Run <code>printenv</code> inside the container named <code>litellm</code> and print that one environment variable, which is exactly what LiteLLM sees.'),
+        ("sudo grep -n 'master_key' /opt/litellm/config.yaml", 'Show the <code>master_key</code> line of the config, with its line number (<code>-n</code>). If it says <code>os.environ/SOMETHING</code>, the key is in the variable <code>SOMETHING</code>: run the <code>printenv</code> command again with that name. If it holds a literal <code>sk-...</code> value, that value is the key.'),
+    ),
+    p('If none of these gives a key, the gateway has no master key, and the later labs can&#x27;t create keys or register agents. Add one as in <a href="#l0-install">Lab 0, Part 2</a>. Whoever runs the gateway can also just hand you the key.'),
+    p('Now set up your shell. You type every command from here on on <strong>192.168.1.100</strong> unless a step says otherwise. Two shell variables hold the gateway address and the master key. <code>read -rsp</code> reads the key without echoing it or saving it in your shell history.'),
     code(r"""
 ssh 192.168.1.100
 sudo dnf -y install jq                     # pretty-prints and filters JSON answers
