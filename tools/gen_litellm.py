@@ -1353,6 +1353,12 @@ sudo mkdir -p /opt/lab-tools
 """),
     explain(('sudo mkdir -p /opt/lab-tools', 'A directory for the MCP server&#x27;s program and <code>Containerfile</code>, like <code>/opt/agents</code> in Lab 6.')),
     write_file('/opt/lab-tools/lab_tools.py', 'lab_tools.py', sudo=True),
+    explain(
+        ('mcp = MCPServer("lab-tools")', 'Create an MCP server named <code>lab-tools</code>. The library handles the protocol: listing tools, checking arguments, returning results.'),
+        ('@mcp.tool()', 'Put above a function, this registers it as a tool. The function&#x27;s name becomes the tool&#x27;s name, its docstring becomes the description the model reads, and its type hints (<code>host: str, port: int</code>) become the parameter schema, so you don&#x27;t write <code>TOOL_SPECS</code> by hand as in Lab 5.'),
+        ('check_url / check_port / dns_lookup', 'The same kind of plain Python functions as in Lab 5, plus a DNS lookup. If a caller sends a missing or wrong-type argument, the library refuses the call with an error message before the function runs.'),
+        ('mcp.run(transport="streamable-http", host="0.0.0.0", port=8701)', 'Serve the tools over HTTP on port 8701, at the path <code>/mcp</code>. &quot;Streamable HTTP&quot; is MCP&#x27;s network transport; the other common one, stdio, only works for a program started on the same machine.'),
+    ),
     code(r"""
 sudo tee /opt/lab-tools/Containerfile >/dev/null <<'EOF'
 FROM docker.io/library/python:3.12.15-slim
@@ -1382,13 +1388,16 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl start lab-tools
 systemctl is-active lab-tools
-sudo firewall-cmd --permanent --add-port=8701/tcp && sudo firewall-cmd --reload   # if firewalld is running
+
+systemctl is-active firewalld              # "inactive": skip the next line
+sudo firewall-cmd --permanent --add-port=8701/tcp && sudo firewall-cmd --reload
 """),
     explain(
         ('Containerfile', 'The same recipe as the agent image in Lab 6, with the <code>mcp</code> library and one program. <code>EXPOSE 8701</code> documents the port it listens on.'),
         ('sudo podman build -t localhost/lab-tools:1 /opt/lab-tools', 'Build the image and name it <code>localhost/lab-tools</code>, version <code>1</code>.'),
         ('lab-tools.container', 'A Quadlet service for it, publishing port 8701. It has no env file: the tools need no key, because the MCP server never calls the gateway.'),
-        ('daemon-reload / start / is-active / firewall-cmd', 'Generate the service, start it, check it&#x27;s running, and open its port, as in the earlier labs.'),
+        ('daemon-reload / start / is-active', 'Generate the service, start it, and check it&#x27;s running.'),
+        ('systemctl is-active firewalld / firewall-cmd ...', 'As in Lab 4: open port 8701 only if the firewall is <code>active</code>.'),
     ),
     h3('2. Register it with LiteLLM (on .101)'),
     p('MCP servers are part of the gateway config. Add this block at the end of <code>/opt/litellm/config.yaml</code> as a new top-level key, then restart:'),
@@ -1400,15 +1409,19 @@ mcp_servers:
     description: Home-lab checks (URL, port, DNS)
 """),
     code(r"""
+ssh 192.168.1.101
 sudo cp -a /opt/litellm/config.yaml /opt/litellm/config.yaml.bak-$(date +%F)
 sudo vi /opt/litellm/config.yaml             # paste the block above at the end, starting in column 1
 sudo systemctl restart litellm
 sudo journalctl -u litellm -f                # Ctrl-C once you see "Uvicorn running"
+exit                                         # back to .100
 """),
     explain(
+        ('ssh 192.168.1.101', 'Log in to the gateway host. The config file is there, not on .100.'),
         ('mcp_servers: / lab_tools: / url: / transport: http', 'A new top-level section of the config, not indented. It names the server <code>lab_tools</code> and tells the gateway where it is and that it speaks MCP over plain HTTP.'),
         ('sudo cp -a ... / sudo vi ...', 'Back up the config, then open it to paste the block, as in Lab 1.'),
         ('sudo systemctl restart litellm / journalctl -f', 'Restart so the gateway reads the change, and watch it start.'),
+        ('exit', 'Log out of .101, back to your shell on .100.'),
     ),
     p('Back on .100, check that LiteLLM sees the tools:'),
     code(r"""
@@ -1437,15 +1450,27 @@ echo "MCP_KEY=$MCP_KEY" >> ~/gw-labs/keys.env
     h3('4. An agent with no tools of its own'),
     p('<code>mcp_agent.py</code> connects to the gateway&#x27;s MCP endpoint, asks which tools its key may use, hands them to the model, and sends each tool call back through the gateway. Compare it to <code>agent.py</code>: the loop is the same, and the tool code is gone.'),
     write_file('~/gw-labs/mcp_agent.py', 'mcp_agent.py'),
+    p('What the program does, part by part:'),
+    explain(
+        ('import httpx2', 'The HTTP library the <code>mcp</code> client uses. It isn&#x27;t installed separately: it comes with <code>mcp</code>.'),
+        ('llm = OpenAI(...)', 'The same gateway client as in Lab 5, for model requests.'),
+        ('call_tool(mcp, name, arguments)', 'Runs one tool through the gateway, like <code>call_tool</code> in Lab 5. Unknown tools and bad arguments already come back from the MCP server as error text; this also catches broken JSON from the model and errors from the gateway, and hands them to the model instead of crashing.'),
+        ('httpx2.AsyncClient(headers={"Authorization": ...})', 'An HTTP client that sends the agent&#x27;s key with every request. The gateway uses it to decide which MCP servers this agent may see.'),
+        ('Client(streamable_http_client(GW + "/mcp/", ...))', 'Connect to the gateway&#x27;s MCP endpoint, which looks like one MCP server that holds every tool the key may use. <code>async with</code> closes the connection when the block ends.'),
+        ('tools = (await mcp.list_tools()).tools', 'Ask which tools exist. This replaces the tool functions and <code>TOOLS</code> table from Lab 5: the agent learns its tools at startup.'),
+        ('specs = [...]', 'Turn each MCP tool description into the format the chat API expects, the same shape as <code>TOOL_SPECS</code> in Lab 5. <code>input_schema</code> is the JSON Schema the MCP server built from the type hints.'),
+        ('for _ in range(8): ...', 'The same agent loop as Lab 5: ask the model; if it wants tools, run each one (here through <code>call_tool</code>, which goes to the gateway, which goes to the MCP server) and add the results as <code>tool</code> messages; stop when it answers in text, or after 8 passes.'),
+        ('asyncio.run(main(...))', 'The <code>mcp</code> library is asynchronous (<code>async</code>/<code>await</code>), so the program runs inside <code>asyncio</code>. The logic is the same as in <code>agent.py</code>.'),
+    ),
     h3('Verify'),
     code(r"""
 cd ~/gw-labs && . .venv/bin/activate
 pip install "mcp==2.3.0"
 AGENT_KEY=$MCP_KEY python mcp_agent.py "Resolve github.com, check whether port 4000 is open on 192.168.1.101, and fetch http://192.168.1.101:4000/health/liveliness."
 # tools from the gateway: ['lab_tools-check_url', 'lab_tools-check_port', 'lab_tools-dns_lookup']
-#   [mcp] lab_tools-dns_lookup({'name': 'github.com'}) -> 140.82.112.3
-#   [mcp] lab_tools-check_port({'host': '192.168.1.101', 'port': 4000}) -> 192.168.1.101:4000 is open
-#   [mcp] lab_tools-check_url({'url': 'http://192.168.1.101:4000/health/liveliness'}) -> HTTP 200 in 18 ms
+#   [mcp] lab_tools-dns_lookup({"name":"github.com"}) -> 140.82.112.3
+#   [mcp] lab_tools-check_port({"host":"192.168.1.101","port":4000}) -> 192.168.1.101:4000 is open
+#   [mcp] lab_tools-check_url({"url":"http://192.168.1.101:4000/health/liveliness"}) -> HTTP 200 in 18 ms
 # All three checks done: ...
 """),
     explain(
@@ -1455,10 +1480,12 @@ AGENT_KEY=$MCP_KEY python mcp_agent.py "Resolve github.com, check whether port 4
     ),
     p('A key that was never granted <code>lab_tools</code> can&#x27;t even connect. Try the <code>ops-agent</code> key:'),
     code(r"""
+. ~/gw-labs/keys.env                       # OPS_KEY from Lab 5
 curl -s $GW/mcp-rest/tools/list -H "Authorization: Bearer $OPS_KEY" | jq -r .message
 # ... The key is not allowed to access any MCP servers.
 """),
     explain(
+        ('. ~/gw-labs/keys.env', 'Load your saved keys, so <code>$OPS_KEY</code> is set even in a new shell.'),
         ('... $OPS_KEY | jq -r .message', 'The same tool list request with a key that wasn&#x27;t granted the server. This endpoint reports refusals in a <code>message</code> field.'),
     ),
     p('<code>mcp_agent.py</code> run with that key stops at the connect step with <code>MCPError: Server returned an error response</code> for the same reason.'),

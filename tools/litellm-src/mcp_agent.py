@@ -18,6 +18,15 @@ llm = OpenAI(base_url=GW + "/v1", api_key=KEY)
 SYSTEM = "You are a home-lab operations assistant. Use the tools to check facts. Answer briefly."
 
 
+async def call_tool(mcp: Client, name: str, arguments: str) -> str:
+    """Run one tool through the gateway. Mistakes go back to the model as text, so it can retry."""
+    try:
+        result = await mcp.call_tool(name, json.loads(arguments or "{}"))
+    except Exception as err:                    # bad JSON from the model, or the gateway refused the call
+        return f"error: {err}"
+    return "\n".join(c.text for c in result.content if c.type == "text")
+
+
 async def main(question: str) -> None:
     http = httpx2.AsyncClient(headers={"Authorization": f"Bearer {KEY}"}, timeout=60)
     async with Client(streamable_http_client(GW + "/mcp/", http_client=http)) as mcp:
@@ -34,11 +43,10 @@ async def main(question: str) -> None:
                 return
             messages.append(msg.model_dump(exclude_none=True))
             for call in msg.tool_calls:
-                args = json.loads(call.function.arguments or "{}")
-                result = await mcp.call_tool(call.function.name, args)
-                text = "\n".join(c.text for c in result.content if c.type == "text")
-                print(f"  [mcp] {call.function.name}({args}) -> {text}", file=sys.stderr)
+                text = await call_tool(mcp, call.function.name, call.function.arguments)
+                print(f"  [mcp] {call.function.name}({call.function.arguments}) -> {text}", file=sys.stderr)
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": text})
+        print("Stopped: too many steps.")
 
 
 if __name__ == "__main__":
