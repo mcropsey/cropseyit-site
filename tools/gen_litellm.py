@@ -1587,21 +1587,25 @@ curl -s "$GW/spend/logs?start_date=$(date -u +%F)&end_date=$(date -u -d tomorrow
 )
 
 # ---------------------------------------------------------------- lab 10
-L10 = lab(10, 'Coding Agents Through the Gateway: opencode and Claude Code', 'any host with the agent installed → 192.168.1.101',
+L10 = lab(10, 'Coding Agents Through the Gateway: opencode and Claude Code', '192.168.1.100 → 192.168.1.101',
     goal('point a coding agent at the gateway instead of straight at a model server, with its own key, so its usage is logged and limited like every other agent, and give it the <code>lab_tools</code> MCP tools.'),
+    p('Both opencode and Claude Code are assumed to be installed on .100, where your keys are. Neither setup below changes the agents&#x27; normal configuration: opencode gets an extra config file that you name on the command line, and Claude Code gets its settings from environment variables in one shell.'),
     h3('1. A key for coding agents'),
     code(r"""
 curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
   -d '{"key_alias": "coding-agent", "models": ["lab-agent"], "rpm_limit": 120, "object_permission": {"mcp_servers": ["lab_tools"]}}' \
   | jq -r .key
+read -rsp 'coding-agent key: ' CODING_KEY; echo
+echo "CODING_KEY=$CODING_KEY" >> ~/gw-labs/keys.env
 """),
     explain(
-        ('curl -s $GW/key/generate ... | jq -r .key', 'Create a <code>coding-agent</code> key that may use <code>lab-agent</code>, up to 120 requests a minute, plus the <code>lab_tools</code> MCP server from Lab 8. Copy the key it prints; step 2 or 3 asks for it.'),
+        ('curl -s $GW/key/generate ... | jq -r .key', 'Create a <code>coding-agent</code> key that may use <code>lab-agent</code>, up to 120 requests a minute, plus the <code>lab_tools</code> MCP server from Lab 8. Coding agents send many requests per task, so the limit is higher than the other agents&#x27;.'),
+        ("read -rsp ... / echo ... >> keys.env", 'Paste the key into <code>CODING_KEY</code> and save it in your key file, as in the earlier labs.'),
     ),
-    p('Coding agents send many requests per task, so give them a higher <code>rpm_limit</code> than the other agents.'),
     h3('2. opencode'),
-    p('opencode can talk to any OpenAI-compatible server. Add the gateway as a provider in <code>~/.config/opencode/opencode.json</code> (or the <code>config.json</code> you already have; merge these keys into it). <code>{env:LITELLM_KEY}</code> reads the key from an environment variable, so the key isn&#x27;t stored in the file.'),
+    p('opencode can talk to any OpenAI-compatible server. Rather than edit your usual <code>~/.config/opencode/config.json</code>, put the gateway settings in a separate file. When the <code>OPENCODE_CONFIG</code> environment variable names a file, opencode loads it <em>on top of</em> your usual config: it adds the gateway provider and makes <code>lab-agent</code> the default, and your existing providers and MCP servers stay as they are. Without the variable, opencode behaves exactly as before.'),
     code(r"""
+cat > ~/gw-labs/opencode-lab.json <<'EOF'
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "litellm/lab-agent",
@@ -1627,27 +1631,33 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
     }
   }
 }
+EOF
 """),
     explain(
+        ("cat > ~/gw-labs/opencode-lab.json <<'EOF'", 'Write the file. The heredoc is quoted, so <code>{env:LITELLM_KEY}</code> is saved as typed: it&#x27;s opencode&#x27;s own syntax for reading an environment variable when it starts, which keeps the key out of the file.'),
         ('"model": "litellm/lab-agent"', 'The default model, written as <code>provider/model</code>: the <code>lab-agent</code> model from the provider defined below.'),
         ('"provider": {"litellm": {...}}', 'A provider named <code>litellm</code>. <code>npm</code> names the client library opencode uses for any OpenAI-compatible server; <code>options</code> gives it the gateway&#x27;s address and the key.'),
-        ('"models": {"lab-agent": {...}}', 'Which models to offer from that provider. <code>tools: true</code> says it can call tools; <code>limit</code> tells opencode how much it can send and receive.'),
+        ('"models": {"lab-agent": {...}}', 'Which models to offer from that provider. <code>tools: true</code> says it can call tools; <code>limit</code> tells opencode how much it can send and receive. Set <code>context</code> to the context length the model is actually loaded with, so opencode compacts the conversation before it overflows.'),
         ('"mcp": {"lab-tools": {...}}', 'An MCP server: the gateway&#x27;s <code>/mcp/</code> endpoint, with the same key sent in the <code>Authorization</code> header.'),
     ),
     code(r"""
-read -rsp 'coding-agent key: ' LITELLM_KEY; echo; export LITELLM_KEY
+. ~/gw-labs/keys.env
+export LITELLM_KEY=$CODING_KEY
+export OPENCODE_CONFIG=~/gw-labs/opencode-lab.json
+opencode debug config | jq -r .model                # litellm/lab-agent
 opencode run "Reply with the single word pong."
 opencode run "Use the lab-tools check_port tool to check whether port 22 is open on 192.168.1.101."
 """),
     explain(
-        ("read -rsp 'coding-agent key: ' LITELLM_KEY; echo; export LITELLM_KEY", 'Paste the key from step 1 into <code>LITELLM_KEY</code> and export it, so opencode can read it through <code>{env:LITELLM_KEY}</code>.'),
-        ('opencode run "..."', 'Run one task without opening opencode&#x27;s full-screen interface. The first proves the model works; the second makes it use an MCP tool.'),
+        ('. ~/gw-labs/keys.env / export LITELLM_KEY=$CODING_KEY', 'Load your keys and hand the <code>coding-agent</code> key to opencode under the name the file expects.'),
+        ('export OPENCODE_CONFIG=...', 'Tell opencode to load the lab file on top of your usual config, for every opencode command in this shell. Close the shell (or <code>unset OPENCODE_CONFIG LITELLM_KEY</code>) and opencode is back to normal.'),
+        ('opencode debug config | jq -r .model', 'Print the configuration opencode actually ended up with, and pick out the default model. <code>litellm/lab-agent</code> means the lab file was loaded.'),
+        ('opencode run "..."', 'Run one task without opening opencode&#x27;s full-screen interface. The first proves the model works through the gateway; the second makes it use an MCP tool through the gateway.'),
     ),
-    p('Set <code>limit.context</code> to the context length the model is actually loaded with, so opencode compacts the conversation before it overflows.'),
     h3('3. Claude Code'),
-    p('Claude Code speaks Anthropic&#x27;s Messages API. LiteLLM serves that too, at <code>/v1/messages</code>, and translates it for whatever model is behind the alias, including the local one:'),
+    p('Claude Code speaks Anthropic&#x27;s Messages API. LiteLLM serves that too, at <code>/v1/messages</code>, and translates it for whatever model is behind the alias, including the local one. Check it with the <code>coding-agent</code> key:'),
     code(r"""
-curl -s $GW/v1/messages -H "Authorization: Bearer $MK" -H 'content-type: application/json' \
+curl -s $GW/v1/messages -H "Authorization: Bearer $CODING_KEY" -H 'content-type: application/json' \
   -H 'anthropic-version: 2023-06-01' \
   -d '{"model": "lab-agent", "max_tokens": 400, "messages": [{"role": "user", "content": "Say pong."}]}' \
   | jq -r '.content[] | select(.type == "text") | .text'
@@ -1655,29 +1665,46 @@ curl -s $GW/v1/messages -H "Authorization: Bearer $MK" -H 'content-type: applica
 """),
     explain(
         ('curl -s $GW/v1/messages', 'Anthropic&#x27;s API address on the gateway, instead of the OpenAI-style <code>/v1/chat/completions</code>.'),
+        ('-H "Authorization: Bearer $CODING_KEY"', 'The key Claude Code will use, so this proves that key works with Anthropic-style requests.'),
         ("-H 'anthropic-version: 2023-06-01'", 'The Anthropic API requires a version header. This is the current one, despite the date.'),
         ('"max_tokens": 400', 'The Anthropic API requires a limit on the length of the answer.'),
         ("jq -r '.content[] | select(.type == \"text\") | .text'", 'Anthropic-style answers are a list of blocks (text, thinking, tool calls). Print only the text blocks.'),
     ),
-    p('Then set these in the shell where you start Claude Code:'),
+    p('Then set these in the shell where you start Claude Code. They last only as long as that shell:'),
     code(r"""
+cd ~/gw-labs && . ./keys.env
 export ANTHROPIC_BASE_URL=http://192.168.1.101:4000
-export ANTHROPIC_AUTH_TOKEN=<coding-agent key>     # sent as "Authorization: Bearer"
+export ANTHROPIC_AUTH_TOKEN=$CODING_KEY            # sent as "Authorization: Bearer"
 export ANTHROPIC_MODEL=lab-agent
-export ANTHROPIC_DEFAULT_HAIKU_MODEL=lab-agent     # used for small background tasks
+export ANTHROPIC_DEFAULT_OPUS_MODEL=lab-agent ANTHROPIC_DEFAULT_SONNET_MODEL=lab-agent
+export ANTHROPIC_DEFAULT_FABLE_MODEL=lab-agent ANTHROPIC_DEFAULT_HAIKU_MODEL=lab-agent
+export CLAUDE_CODE_SUBAGENT_MODEL=lab-agent
 claude mcp add --transport http lab-tools http://192.168.1.101:4000/mcp/ \
-  --header "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"
+  --header "Authorization: Bearer $CODING_KEY"
 claude
 """),
     explain(
+        ('cd ~/gw-labs && . ./keys.env', 'Work in the lab directory, and load your keys.'),
         ('export ANTHROPIC_BASE_URL=...', 'Send Claude Code&#x27;s requests to the gateway instead of to Anthropic.'),
-        ('export ANTHROPIC_AUTH_TOKEN=...', 'Your <code>coding-agent</code> key. Replace <code>&lt;coding-agent key&gt;</code>, angle brackets included, or use <code>read -rsp</code> as before.'),
-        ('export ANTHROPIC_MODEL= / ANTHROPIC_DEFAULT_HAIKU_MODEL=', 'Which model names to ask for, for the main work and for small background jobs. Both point at <code>lab-agent</code>.'),
-        ('claude mcp add --transport http lab-tools URL --header ...', 'Register the gateway&#x27;s MCP endpoint with Claude Code under the name <code>lab-tools</code>, sending the key with every call.'),
-        ('claude', 'Start Claude Code.'),
+        ('export ANTHROPIC_AUTH_TOKEN=$CODING_KEY', 'The <code>coding-agent</code> key, sent as a Bearer token.'),
+        ('export ANTHROPIC_MODEL=lab-agent', 'The model name to ask for in the main conversation.'),
+        ('ANTHROPIC_DEFAULT_*_MODEL / CLAUDE_CODE_SUBAGENT_MODEL', 'Claude Code asks for other models too: a small one for background jobs, others when you switch with <code>/model</code>, and one for subagents. The key only allows <code>lab-agent</code>, so map every one of them to it; otherwise those requests are refused.'),
+        ('claude mcp add --transport http lab-tools URL --header ...', 'Register the gateway&#x27;s MCP endpoint with Claude Code under the name <code>lab-tools</code>, sending the key with every call. Unlike the variables, this is saved: in <code>~/.claude.json</code>, with the key written out, and only for the current directory (<code>~/gw-labs</code>), which is Claude Code&#x27;s default. Remove it with <code>claude mcp remove lab-tools</code> when you&#x27;re done.'),
+        ('claude', 'Start Claude Code. Ask it to use the lab-tools <code>check_port</code> tool, as with opencode.'),
     ),
     h3('Verify'),
-    p('Run a small task in either agent, then look in the gateway UI under <strong>Logs</strong>, filtered by key alias <code>coding-agent</code>. Every request the coding agent made is there, including the MCP tool calls.'),
+    p('Run a small task in either agent, then list what the <code>coding-agent</code> key did today. Spend logs are written in batches, so give it a minute:'),
+    code(r"""
+curl -s "$GW/spend/logs?start_date=$(date -u +%F)&end_date=$(date -u -d tomorrow +%F)&summarize=false" \
+  -H "Authorization: Bearer $MK" \
+  | jq -r '.[] | select(.metadata.user_api_key_alias == "coding-agent") | "\(.startTime)  \(.call_type)  tokens=\(.total_tokens)"'
+"""),
+    explain(
+        ('curl -s "$GW/spend/logs?..."', 'Today&#x27;s request log, as in Lab 5.'),
+        ('select(.metadata.user_api_key_alias == "coding-agent")', 'Keep only the requests made with the <code>coding-agent</code> key.'),
+        ('"\\(.startTime)  \\(.call_type)  tokens=\\(.total_tokens)"', 'Print the time, the kind of call and the tokens used. Chat requests show up as <code>acompletion</code> and MCP tool calls as <code>/mcp/</code>; Claude Code&#x27;s Anthropic-style requests get their own call type. All of them are under the same key.'),
+    ),
+    p('The admin UI&#x27;s <strong>Logs</strong> page shows the same, filtered by key alias <code>coding-agent</code>, including the MCP tool calls.'),
     h3('Notes'),
     ul([
         'Use <code>ANTHROPIC_AUTH_TOKEN</code>, not <code>ANTHROPIC_API_KEY</code>. Claude Code treats the latter as a real Anthropic key.',
