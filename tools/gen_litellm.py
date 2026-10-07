@@ -14,7 +14,14 @@ import sys
 
 SITE = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 rh = open(f'{SITE}/rhcsa.html', encoding='utf-8').read()
-STYLE = re.search(r'<style>.*?</style>', rh, re.S).group(0)
+STYLE = re.search(r'<style>.*?</style>', rh, re.S).group(0).replace('</style>', '''
+code.tool { white-space: nowrap; overflow-wrap: normal; }
+.explain { margin: -8px 0 18px; padding: 10px 16px 12px; border: 1px solid var(--rule); border-top: 0; border-radius: 0 0 8px 8px; font-size: .9rem; }
+.explain > p { margin: 0 0 8px; font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--teal); }
+.explain dl { margin: 0; display: grid; grid-template-columns: minmax(0, 18em) minmax(0, 1fr); gap: 8px 18px; }
+.explain dt, .explain dd { margin: 0; min-width: 0; }
+@media (max-width: 640px) { .explain dl { grid-template-columns: minmax(0, 1fr); gap: 2px; } .explain dd { margin-bottom: 8px; } }
+</style>''')
 SCRIPT = re.search(r'<script>.*?</script>', rh, re.S).group(0)
 SRC = f'{SITE}/tools/litellm-src'
 
@@ -42,10 +49,23 @@ def code(text):
             '<pre><code>' + '\n'.join(out) + '</code></pre></div>')
 
 
+def explain(*rows):
+    """A 'what these commands do' box under a code block, from (command, explanation) pairs.
+    A command given as plain text is escaped and shown as code; one starting with '<' is used as is."""
+    items = ''.join(f'<dt>{c if c.startswith("<") else f"<code>{e(c)}</code>"}</dt><dd>{t}</dd>'
+                    for c, t in rows)
+    return f'<div class="explain"><p>What these commands do</p><dl>{items}</dl></div>'
+
+
 def write_file(path, name, sudo=False):
     """A code block that saves one of the tested programs to PATH with a heredoc."""
     cmd = f"sudo tee {path} >/dev/null <<'EOF'" if sudo else f"cat > {path} <<'EOF'"
-    return code(f"{cmd}\n{src(name)}\nEOF")
+    how = (f'<code>sudo tee</code> writes everything between this line and the final <code>EOF</code> line into <code>{path}</code>. '
+           'It runs as root because <code>/opt</code> belongs to root.' if sudo else
+           f'<code>cat &gt;</code> writes everything between this line and the final <code>EOF</code> line into <code>{path}</code>.')
+    return code(f"{cmd}\n{src(name)}\nEOF") + explain(
+        (cmd, how + ' The quotes around <code>&#x27;EOF&#x27;</code> save the program exactly as typed, so the shell doesn&#x27;t touch any <code>$</code> in it. '
+              'Paste the whole block at once, or open the file in an editor and paste just the program.'))
 
 
 def ul(items):
@@ -133,6 +153,38 @@ overview = f'''<section class="intro" id="overview">
     <li>The labs were tested with LiteLLM <strong>v1.104.0</strong>, Podman 5.8, Python 3.12, <code>openai</code> 3.24, <code>mcp</code> 2.3 and <code>a2a-sdk</code> 1.2.</li>
   </ul>
 
+  <h2 id="reading">How to read the commands</h2>
+  <p>The labs are mostly shell commands, and the same handful of tools comes up again and again. Each command block has a <strong>What these commands do</strong> box under it that goes through it line by line. This section explains the tools once, so the boxes can stay short.</p>
+  {table(['Tool', 'What it&#x27;s for here', 'What you&#x27;ll see'], [
+      ['<code class="tool">curl</code>', 'Sends an HTTP request from the command line. The gateway is a web API, so <code>curl</code> is how you talk to it without writing a program.', '<code>-s</code> silent (no progress bar); <code>-H &#x27;Name: value&#x27;</code> adds a header; <code>-d &#x27;...&#x27;</code> sends a request body and makes it a POST; <code>-d @file</code> sends a file&#x27;s contents as the body; <code>-X DELETE</code> picks a different HTTP method; <code>-N</code> shows streamed output as it arrives'],
+      ['<code class="tool">jq</code>', 'Reads the JSON the gateway sends back and pretty-prints or picks out parts of it. Without it you get one long unreadable line.', '<code>jq</code> on its own pretty-prints everything; <code>jq .info.version</code> picks one field; <code>jq &#x27;{a, b}&#x27;</code> keeps only fields <code>a</code> and <code>b</code>; <code>-r</code> prints text without quotes; <code>.[]</code> goes through each item of a list; <code>select(...)</code> keeps only the items that match'],
+      ['<code class="tool">sudo tee FILE</code>', 'Writes its input into a file as root. You can&#x27;t use <code>sudo echo ... &gt; FILE</code>, because the <code>&gt;</code> is handled by <em>your</em> shell, which isn&#x27;t root.', '<code>&gt;/dev/null</code> after it throws away the copy <code>tee</code> also prints to the screen'],
+      ['<code class="tool">&lt;&lt;&#x27;EOF&#x27;</code> &hellip; <code class="tool">EOF</code>', 'A <strong>heredoc</strong>: the lines up to the <code>EOF</code> line are fed to the command as its input. It&#x27;s how the labs write config files and JSON without opening an editor.', 'With quotes (<code>&lt;&lt;&#x27;EOF&#x27;</code>) the text is saved exactly as typed. Without quotes (<code>&lt;&lt;EOF</code>) the shell first replaces variables like <code>$OPS_ID</code> with their values, which is how a key or ID gets into a file'],
+      ['<code class="tool">systemctl</code>', 'Starts, stops and checks services. Every container in the labs is a systemd service, thanks to Quadlet.', '<code>daemon-reload</code> re-reads unit files after you change them; <code>start</code>, <code>restart</code>, <code>status</code>; <code>is-active</code> prints just <code>active</code> or <code>inactive</code>'],
+      ['<code class="tool">journalctl</code>', 'Shows a service&#x27;s log, which for a container is everything the program printed.', '<code>-u NAME</code> picks the service; <code>-f</code> keeps following new lines until Ctrl-C; <code>-n 30</code> shows the last 30 lines'],
+      ['<code class="tool">podman</code>', 'Builds and inspects containers. You rarely start containers with it directly; systemd does that.', '<code>build -t NAME DIR</code> builds an image from the <code>Containerfile</code> in <code>DIR</code>; <code>inspect</code> shows how a container was set up; <code>exec NAME CMD</code> runs a command inside a running container'],
+      ['<code class="tool">firewall-cmd</code>', 'Opens a port in the host firewall so other machines can reach a service.', '<code>--permanent --add-port=3000/tcp</code> saves the rule, and <code>--reload</code> applies it. Skip it if <code>systemctl is-active firewalld</code> says <code>inactive</code>'],
+  ])}
+  <h3>Shell basics the labs rely on</h3>
+  <ul>
+    <li><strong>Variables.</strong> <code>export GW=http://...</code> stores a value; <code>$GW</code> uses it. The labs keep the gateway address in <code>$GW</code> and keys in variables like <code>$MK</code>, so you never paste a key into a command. Variables only last as long as the shell, so after you log in again you re-enter the ones you need.</li>
+    <li><strong>Reading a secret.</strong> <code>read -rsp &#x27;Prompt: &#x27; MK</code> asks you to paste a value and stores it in <code>MK</code>. <code>-s</code> hides what you type, <code>-p</code> shows the prompt, <code>-r</code> keeps backslashes as they are. The <code>echo</code> after it just moves to a new line, since the hidden input doesn&#x27;t.</li>
+    <li><strong><code>$(...)</code></strong> runs the command inside and drops its output in place. <code>$(date +%F)</code> becomes today&#x27;s date, such as <code>2026-10-06</code>, which the labs use to name backup files.</li>
+    <li><strong>Quotes.</strong> Inside <code>&#x27;single quotes&#x27;</code> the shell changes nothing, which is why JSON is written that way. Inside <code>&quot;double quotes&quot;</code> it still replaces <code>$VARIABLES</code>, which is why the <code>Authorization</code> header uses them.</li>
+    <li><strong>Long lines.</strong> A <code>\\</code> at the end of a line means the command carries on to the next line. <code>|</code> sends one command&#x27;s output into the next, as in <code>curl ... | jq</code>.</li>
+    <li><strong>Grey text after <code>#</code></strong> is a comment. The shell ignores it, so you can paste whole blocks. Comment lines that show output tell you what to expect, not what to type.</li>
+  </ul>
+  <p>A typical gateway call, taken apart:</p>
+  {code(r"""
+curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'
+""")}
+  {explain(
+      ('curl -s $GW/v1/models', 'Send a GET request to <code>/v1/models</code> on the gateway, without the progress bar.'),
+      ('-H "Authorization: Bearer $MK"', 'Prove who you are. Every gateway call except the health checks needs a key in this header; <code>$MK</code> is replaced with your key before <code>curl</code> runs.'),
+      ("| jq -r '.data[].id'", 'The answer is <code>{&quot;data&quot;: [{&quot;id&quot;: &quot;qwen3.8-27b&quot;, ...}, ...]}</code>. This goes into <code>data</code>, takes each item&#x27;s <code>id</code>, and prints them one per line.'),
+  )}
+  <p>Calls that send data add <code>-H &#x27;Content-Type: application/json&#x27;</code>, which tells the gateway the body is JSON, and <code>-d</code> with the body. When the body contains a key or ID from a variable, the labs first write it to a small <code>.json</code> file with an unquoted heredoc and then send it with <code>-d @file</code>. You can <code>cat</code> the file to see exactly what&#x27;s being sent.</p>
+
   <h2>Lab order</h2>
   {table(['Lab', 'What you build', 'Needs'], [
       ['0', 'Reference, not a lab: installing LiteLLM, converting it to a Quadlet, giving it its own Postgres, upgrades', 'only what Lab 1 finds missing'],
@@ -163,6 +215,11 @@ sudo dnf -y install podman jq
 podman --version                           # 5.x on Rocky 9.6+ and 10
 ls /usr/libexec/podman/quadlet             # present = Quadlet is available
 """),
+    explain(
+        ('sudo dnf -y install podman jq', 'Install Podman (runs containers) and jq (reads JSON, see <a href="#reading">How to read the commands</a>). <code>-y</code> answers yes to the confirmation prompt.'),
+        ('podman --version', 'Check the version. Quadlet needs 4.4 or newer.'),
+        ('ls /usr/libexec/podman/quadlet', 'Quadlet is a small program shipped with Podman that systemd runs at boot and on <code>daemon-reload</code>. If <code>ls</code> finds it, you have it.'),
+    ),
     p('Everything here runs as root (<code>sudo podman</code>). Root containers and their Quadlet files live in <code>/etc/containers/systemd/</code>; rootless ones would live in <code>~/.config/containers/systemd/</code> and need <code>loginctl enable-linger</code> to start at boot, which is why these labs stick to rootful.'),
 
     '<h3 id="l0-install">Part 2: A fresh install</h3>',
@@ -170,23 +227,40 @@ ls /usr/libexec/podman/quadlet             # present = Quadlet is available
     p('<strong>Secrets.</strong> Two env files, readable by root only. Podman reads them when it creates each container, so no secret appears in a config file or in <code>ps</code> output. The master key must start with <code>sk-</code>.'),
     code(r"""
 sudo mkdir -p /opt/litellm
-sudo install -m 600 /dev/null /opt/litellm/litellm.env      # create both files, readable by root only
-sudo install -m 600 /dev/null /opt/litellm/db.env
+sudo touch /opt/litellm/db.env /opt/litellm/litellm.env
+sudo chmod 600 /opt/litellm/db.env /opt/litellm/litellm.env
+
 DBPASS=$(openssl rand -hex 24)
 read -rsp 'Admin UI password: ' UIPASS; echo
 
-printf '%s\n' "POSTGRES_USER=litellm" "POSTGRES_PASSWORD=$DBPASS" "POSTGRES_DB=litellm" \
-  | sudo tee /opt/litellm/db.env >/dev/null
+sudo tee /opt/litellm/db.env >/dev/null <<EOF
+POSTGRES_USER=litellm
+POSTGRES_PASSWORD=$DBPASS
+POSTGRES_DB=litellm
+EOF
 
-printf '%s\n' \
-  "LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)" \
-  "LITELLM_SALT_KEY=sk-$(openssl rand -hex 24)" \
-  "DATABASE_URL=postgresql://litellm:$DBPASS@litellm-db:5432/litellm" \
-  "UI_USERNAME=admin" "UI_PASSWORD=$UIPASS" \
-  "LMSTUDIO_API_BASE=http://192.168.1.194:1234/v1" \
-  | sudo tee /opt/litellm/litellm.env >/dev/null
+sudo tee /opt/litellm/litellm.env >/dev/null <<EOF
+LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)
+LITELLM_SALT_KEY=sk-$(openssl rand -hex 24)
+DATABASE_URL=postgresql://litellm:$DBPASS@litellm-db:5432/litellm
+UI_USERNAME=admin
+UI_PASSWORD=$UIPASS
+LMSTUDIO_API_BASE=http://192.168.1.194:1234/v1
+EOF
+
 unset DBPASS UIPASS
+sudo grep MASTER_KEY /opt/litellm/litellm.env      # your master key: save it in a password manager
 """),
+    explain(
+        ('sudo mkdir -p /opt/litellm', 'Make the directory for the gateway&#x27;s files. <code>-p</code> means no error if it already exists.'),
+        ('sudo touch ... / sudo chmod 600 ...', 'Create the two env files empty and make them readable and writable by root only (<code>600</code>), <em>before</em> any secret goes into them.'),
+        ('DBPASS=$(openssl rand -hex 24)', '<code>openssl rand -hex 24</code> prints 48 random hex characters. That becomes the database password, kept in a variable for the next steps. You never need to type it.'),
+        ("read -rsp 'Admin UI password: ' UIPASS; echo", 'Ask you for the password you want for the web UI, without showing it on screen.'),
+        ('sudo tee /opt/litellm/db.env >/dev/null <<EOF', 'Write the three lines below into <code>db.env</code>. The heredoc is unquoted (<code>&lt;&lt;EOF</code>), so <code>$DBPASS</code> is replaced with the real password. Postgres reads these variables on first start to create its user and database.'),
+        ('sudo tee /opt/litellm/litellm.env ...', 'The same for LiteLLM. Each <code>$(openssl rand -hex 24)</code> is replaced with a fresh random value, so the master key and salt key are generated right here. <code>DATABASE_URL</code> tells LiteLLM where Postgres is: user <code>litellm</code>, that password, host <code>litellm-db</code> (the database container&#x27;s name), port 5432.'),
+        ('unset DBPASS UIPASS', 'Remove the passwords from your shell now that they&#x27;re saved in the files.'),
+        ('sudo grep MASTER_KEY ...', 'Print the line containing the master key, which you&#x27;ll need in Lab 1.'),
+    ),
     p('<strong>Config.</strong> <code>model_list</code> is the list of models the gateway serves. <code>model_name</code> is the name clients ask for; <code>model</code> is the real model, where the <code>openai/</code> prefix means &quot;talk to this server with the OpenAI API&quot;, which LM Studio speaks. <code>os.environ/NAME</code> tells LiteLLM to read a value from the environment. Add one entry per model you want to serve.'),
     code(r"""
 sudo tee /opt/litellm/config.yaml >/dev/null <<'EOF'
@@ -206,6 +280,11 @@ general_settings:
   database_url: os.environ/DATABASE_URL
 EOF
 """),
+    explain(
+        ("sudo tee /opt/litellm/config.yaml >/dev/null <<'EOF'", 'Write the YAML below into <code>config.yaml</code>. The heredoc is quoted, so <code>os.environ/...</code> lines are saved as typed; LiteLLM looks those values up in the env file when it starts. The secrets stay out of this file, so it&#x27;s safe to show people.'),
+        ('drop_params / request_timeout', 'Two quality-of-life settings: silently drop request options LM Studio doesn&#x27;t support instead of failing, and wait up to 10 minutes for slow local models.'),
+        ('general_settings', 'The master key and database, both read from the environment.'),
+    ),
     p('<strong>Quadlet files.</strong> A network, a volume for the database files, and one <code>.container</code> file per container. <code>Requires=</code> and <code>After=</code> start the database first, and <code>Notify=healthy</code> makes systemd wait until Postgres actually answers before it starts LiteLLM.'),
     code(r"""
 sudo tee /etc/containers/systemd/litellm.network >/dev/null <<'EOF'
@@ -263,6 +342,20 @@ TimeoutStartSec=300
 WantedBy=multi-user.target
 EOF
 """),
+    explain(
+        ('litellm.network', 'A private container network called <code>litellm</code>. Containers on it reach each other by container name, which is why <code>DATABASE_URL</code> can say <code>litellm-db</code>. Nothing outside the host can reach the database.'),
+        ('litellm-db.volume', 'A named volume: storage that Podman manages and that outlives the container, so the database survives restarts and upgrades.'),
+        ('Image=', 'Which image to run, with a pinned version tag. Podman downloads it on the first start.'),
+        ('Network= / Volume=', 'Join the network and mount the volume above. Quadlet files refer to each other by file name (<code>litellm.network</code>).'),
+        ('EnvironmentFile=', 'Load the variables from the env file you made, so secrets don&#x27;t appear in this file.'),
+        ('HealthCmd= / Notify=healthy', 'Every 10 seconds, run <code>pg_isready</code> inside the container to check Postgres answers. <code>Notify=healthy</code> tells systemd the service has only started once that check passes.'),
+        ('Requires= / After=', 'LiteLLM needs the database: start <code>litellm-db</code> first, and wait for it.'),
+        ('PublishPort=4000:4000', 'Make port 4000 inside the container reachable on port 4000 of the host (<code>host:container</code>).'),
+        ('Volume=/opt/litellm/config.yaml:/app/config.yaml:ro,Z', 'Show the host&#x27;s config file inside the container at <code>/app/config.yaml</code>, read-only (<code>ro</code>). <code>Z</code> relabels it for SELinux so the container is allowed to read it.'),
+        ('Exec=', 'Arguments passed to the program in the image: which config to use and which port to listen on.'),
+        ('Restart= / RestartSec= / TimeoutStartSec=', 'Restart it whenever it stops, 10 seconds apart, and allow 5 minutes for the first start, which downloads the image.'),
+        ('WantedBy=multi-user.target', 'Start it at boot.'),
+    ),
     p('<strong>Start and check it.</strong>'),
     code(r"""
 sudo systemctl daemon-reload               # turn the Quadlet files into services
@@ -273,19 +366,35 @@ sudo firewall-cmd --permanent --add-port=4000/tcp && sudo firewall-cmd --reload 
 curl -s http://192.168.1.101:4000/health/liveliness; echo     # "I'm alive!"
 curl -s http://192.168.1.101:4000/health/readiness             # "db": "connected"
 """),
+    explain(
+        ('sudo systemctl daemon-reload', 'Make systemd run Quadlet, which reads the files in <code>/etc/containers/systemd/</code> and generates <code>litellm.service</code> and <code>litellm-db.service</code>.'),
+        ('sudo systemctl start litellm', 'Start the gateway. Because of <code>Requires=</code>, systemd starts the database first.'),
+        ('sudo journalctl -u litellm -f', 'Watch the gateway&#x27;s log as it starts. Ctrl-C stops watching; the service keeps running.'),
+        ('sudo firewall-cmd ... && ...', 'Allow port 4000 through the firewall permanently, then apply the change. <code>&amp;&amp;</code> runs the second command only if the first worked.'),
+        ('curl -s .../health/liveliness; echo', 'Ask the gateway whether it&#x27;s running. No key is needed. The <code>echo</code> adds the newline the answer lacks.'),
+        ('curl -s .../health/readiness', 'Ask whether it&#x27;s ready, which includes a check that the database is reachable.'),
+    ),
     note('In LM Studio, give the model a default <strong>context length of 32k or more</strong> (gear icon on the model, then Context Length). LM Studio loads models on demand with that setting, and reasoning (&quot;thinking&quot;) models spend tokens thinking before they answer. With a small context they can use it all up and return an empty reply with <code>finish_reason: &quot;length&quot;</code>.', 'Model server:'),
     p('The admin UI is at <code>http://192.168.1.101:4000/ui</code> (user <code>admin</code>, the password you chose). The first start runs about 185 database migrations and takes a minute or two.'),
 
     '<h3 id="l0-quadlet">Part 3: Convert a hand-started container into a Quadlet</h3>',
     p('If LiteLLM was started with <code>podman run</code>, it isn&#x27;t a systemd service. With <code>--restart=always</code> and <code>podman-restart.service</code> enabled it does come back after a reboot, but you can&#x27;t manage it with <code>systemctl</code>, its logs aren&#x27;t in the journal, and if the container is removed the only record of how it was created is your memory. Converting fixes all three. First, record exactly how it runs now, and keep a copy for rollback:'),
     code(r"""
-sudo podman inspect litellm --format 'image={{.Config.Image}}
-networks={{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}
-ports={{json .HostConfig.PortBindings}}
-created with: {{join .Config.CreateCommand " "}}'
+sudo podman inspect litellm | jq '.[0] | {
+    image:        .Config.Image,
+    networks:     (.NetworkSettings.Networks | keys),
+    ports:        .HostConfig.PortBindings,
+    created_with: (.Config.CreateCommand | join(" "))
+  }'
 sudo podman inspect litellm | sudo tee /opt/litellm/inspect.bak-$(date +%F).json >/dev/null
 sudo chmod 600 /opt/litellm/inspect.bak-*.json         # it contains the env, including the master key
 """),
+    explain(
+        ('sudo podman inspect litellm', 'Print everything Podman knows about the container, as a large JSON list with one entry.'),
+        ("| jq '.[0] | { ... }'", 'Take that one entry (<code>.[0]</code>) and build a small summary of the four things you need: the image, the networks it&#x27;s on (<code>keys</code> lists their names), the published ports, and the full <code>podman run</code> command it was created with (<code>join(&quot; &quot;)</code> turns the list of words back into one line).'),
+        ('... | sudo tee /opt/litellm/inspect.bak-$(date +%F).json', 'Save the complete inspect output as a backup, named with today&#x27;s date, so you can recreate the container exactly if you need to roll back.'),
+        ('sudo chmod 600 ...', 'Make the backup root-only: it includes the environment, and so the master key.'),
+    ),
     p('Translate what you found into a <code>.container</code> file: <code>-p</code> becomes <code>PublishPort=</code>, <code>-v</code> becomes <code>Volume=</code>, <code>--env-file</code> becomes <code>EnvironmentFile=</code>, each network becomes a <code>Network=</code> line, and the arguments after the image name become <code>Exec=</code>. For example, a container created with <code>podman run -d --name litellm --restart=always -p 4000:4000 -v /opt/litellm/config.yaml:/app/config.yaml:ro,Z --env-file /opt/litellm/litellm.env ghcr.io/berriai/litellm:v1.104.0 --config /app/config.yaml --port 4000</code>, and later connected to a network named <code>docker_default</code> where its database lives, becomes:'),
     code(r"""
 sudo tee /etc/containers/systemd/litellm.container >/dev/null <<'EOF'
@@ -312,17 +421,27 @@ WantedBy=multi-user.target
 EOF
 sudo /usr/libexec/podman/quadlet -dryrun 2>/dev/null | grep ^ExecStart    # the podman run command it will use
 """),
+    explain(
+        ('Network=podman / Network=docker_default', 'One line per network the container was on. <code>podman</code> is Podman&#x27;s default network; <code>docker_default</code> is the example&#x27;s extra one.'),
+        ('quadlet -dryrun', 'Run Quadlet without changing anything and print the services it <em>would</em> generate. <code>2&gt;/dev/null</code> hides its progress messages.'),
+        ('| grep ^ExecStart', 'Keep only the lines starting with <code>ExecStart</code>: the exact <code>podman run</code> command systemd will use.'),
+    ),
     p('Compare that <code>ExecStart</code> line with the original command. When they match, swap the containers. Config, env file and database are untouched; only the container is recreated, so the gateway is down for 20&ndash;30 seconds:'),
     code(r"""
 sudo podman rm -f litellm
 sudo systemctl daemon-reload
 sudo systemctl start litellm
-sudo podman inspect litellm --format '{{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}}'    # litellm.service
+sudo podman inspect litellm | jq -r '.[0].Config.Labels.PODMAN_SYSTEMD_UNIT'    # litellm.service
 curl -s http://192.168.1.101:4000/health/readiness
 """),
+    explain(
+        ('sudo podman rm -f litellm', 'Stop and delete the hand-started container (<code>-f</code> stops it first). Only the container goes; its config and data are files and volumes outside it.'),
+        ('daemon-reload / start litellm', 'Generate the service from your new file and start it. systemd now creates the container.'),
+        ("jq -r '.[0].Config.Labels.PODMAN_SYSTEMD_UNIT'", 'Podman labels every container that a systemd service created with the service&#x27;s name. Seeing <code>litellm.service</code> proves the conversion worked.'),
+    ),
     p('Rollback: delete the <code>.container</code> file, run <code>sudo systemctl daemon-reload</code>, and rerun the original <code>podman run</code> command from the inspect output (plus <code>podman network connect</code> for any extra network).'),
     warn('Check that the database comes back after a reboot too. If LiteLLM&#x27;s database lives in another app&#x27;s container that has no systemd service and a restart policy of <code>no</code>, LiteLLM will start after a reboot and find no database. <code>RestartSec=10</code> keeps it retrying, but the real fix is Part 4.'),
-    note('If converting isn&#x27;t an option right now, at least make sure the existing container restarts at boot: it needs <code>--restart=always</code> (check with <code>sudo podman inspect litellm --format &#x27;{{.HostConfig.RestartPolicy.Name}}&#x27;</code>) and <code>sudo systemctl enable --now podman-restart.service</code>.', 'Quick fix:'),
+    note('If converting isn&#x27;t an option right now, at least make sure the existing container restarts at boot: it needs <code>--restart=always</code> (check with <code>sudo podman inspect litellm | jq -r &#x27;.[0].HostConfig.RestartPolicy.Name&#x27;</code>) and <code>sudo systemctl enable --now podman-restart.service</code>.', 'Quick fix:'),
 
     '<h3 id="l0-db">Part 4: Give LiteLLM its own Postgres</h3>',
     p('LiteLLM works without a database, but then there are no virtual keys, agents, MCP servers stored through the API, or spend logs, so most of these labs won&#x27;t work. A database inside another application&#x27;s Postgres works, but ties the gateway to that application: it shares its admin login and starts and stops with it. This part moves LiteLLM to a Postgres of its own, keeping every key and log.'),
@@ -332,6 +451,9 @@ sudo systemctl daemon-reload
 sudo systemctl start litellm-db
 sudo podman exec litellm-db psql -U litellm -d litellm -c 'select version();'
 """),
+    explain(
+        ('sudo podman exec litellm-db psql ...', 'Run <code>psql</code>, the Postgres command-line client, inside the new database container: log in as user <code>litellm</code> (<code>-U</code>) to database <code>litellm</code> (<code>-d</code>) and run one SQL command (<code>-c</code>). A version string back means the database is up and the login works.'),
+    ),
     p('<strong>2. Copy the data.</strong> Stop LiteLLM so nothing is written during the copy, then dump the old database and load it into the new one. The example assumes the old database is <code>litellm</code> in a container named <code>postgresdb</code> with the admin user <code>admin</code>; check yours with <code>sudo grep DATABASE_URL /opt/litellm/litellm.env</code>. <code>--no-owner --no-privileges</code> leaves out the old server&#x27;s user names, so everything ends up owned by the new <code>litellm</code> user.'),
     code(r"""
 sudo systemctl stop litellm                # or: sudo podman stop litellm
@@ -341,6 +463,13 @@ sudo chmod 600 /opt/litellm/litellm-db-*.sql
 sudo cat /opt/litellm/litellm-db-$(date +%F).sql \
   | sudo podman exec -i litellm-db psql -q -v ON_ERROR_STOP=1 -U litellm -d litellm >/dev/null && echo restored
 """),
+    explain(
+        ('sudo systemctl stop litellm', 'Stop the gateway so no new keys or logs are written while you copy.'),
+        ('podman exec postgresdb pg_dump ...', '<code>pg_dump</code> runs inside the <em>old</em> database container and prints the whole <code>litellm</code> database as SQL commands that rebuild it.'),
+        ('| sudo tee /opt/litellm/litellm-db-$(date +%F).sql', 'Save that SQL to a dated file on the host. It&#x27;s your copy and your backup.'),
+        ('sudo cat ... | podman exec -i litellm-db psql ...', 'Feed the file into <code>psql</code> in the <em>new</em> container. <code>-i</code> lets <code>podman exec</code> pass your input into the container. <code>-q</code> is quiet, and <code>ON_ERROR_STOP=1</code> stops at the first error instead of carrying on with half a database.'),
+        ('>/dev/null && echo restored', 'Hide psql&#x27;s output and print <code>restored</code> only if it succeeded.'),
+    ),
     p('Check that the important tables arrived with the same number of rows (run each line against both databases):'),
     code(r"""
 for t in LiteLLM_VerificationToken LiteLLM_SpendLogs LiteLLM_AgentsTable _prisma_migrations; do
@@ -349,6 +478,12 @@ for t in LiteLLM_VerificationToken LiteLLM_SpendLogs LiteLLM_AgentsTable _prisma
   echo "$t  old=$old  new=$new"
 done
 """),
+    explain(
+        ('for t in A B C D; do ... done', 'A shell loop: run the lines inside once for each table name, with the name in <code>$t</code>.'),
+        ('old=$(... psql -Atc "select count(*) ...")', 'Count the rows of that table in the old database and store the number in <code>old</code>. <code>-At</code> prints just the number, without headers. The table name is in <code>\\&quot;</code> quotes because LiteLLM&#x27;s table names contain capital letters.'),
+        ('new=$(...)', 'The same count in the new database.'),
+        ('echo "$t  old=$old  new=$new"', 'Print both counts side by side. They should match on every line.'),
+    ),
     p('<strong>3. Point LiteLLM at it.</strong> Change <code>DATABASE_URL</code> in the env file to the new database, using the password from <code>db.env</code>. Then make the Quadlet start after the database and join its network. You can drop the old database&#x27;s network if LiteLLM only used it for the database.'),
     code(r"""
 sudo cp -a /opt/litellm/litellm.env /opt/litellm/litellm.env.bak-$(date +%F)
@@ -363,6 +498,13 @@ sudo systemctl daemon-reload
 sudo systemctl start litellm
 curl -s http://192.168.1.101:4000/health/readiness                # "db": "connected"
 """),
+    explain(
+        ('sudo cp -a ... litellm.env.bak-$(date +%F)', 'Back up the env file first. <code>-a</code> keeps its permissions, so the copy is root-only too.'),
+        ('P=$(sudo grep ^POSTGRES_PASSWORD ... | cut -d= -f2)', 'Read the new database&#x27;s password: <code>grep</code> finds the line starting (<code>^</code>) with <code>POSTGRES_PASSWORD</code>, and <code>cut -d= -f2</code> keeps what comes after the <code>=</code>.'),
+        ('sudo sed -i "s#^DATABASE_URL=.*#DATABASE_URL=...#" ...', '<code>sed -i</code> edits the file in place. <code>s#old#new#</code> means substitute: replace the whole <code>DATABASE_URL=</code> line (<code>.*</code> is &quot;everything after&quot;) with the new one. <code>#</code> separates the parts instead of the usual <code>/</code> because the URL is full of slashes.'),
+        ('sudo vi ...litellm.container', 'Open the Quadlet file and make the three changes in the grey comments. In <code>vi</code>: <code>i</code> to type, Esc then <code>:wq</code> to save and quit.'),
+        ('daemon-reload / start / curl readiness', 'Apply the changed file, start the gateway, and check that it reaches the new database.'),
+    ),
     p('Make a request or two, then check that the newest spend log row is in the <em>new</em> database: <code>sudo podman exec litellm-db psql -U litellm -d litellm -Atc &#x27;select max(&quot;startTime&quot;) from &quot;LiteLLM_SpendLogs&quot;&#x27;</code>. Once you&#x27;re satisfied, drop the old copy (<code>sudo podman exec postgresdb dropdb -U admin litellm</code>) and keep the dump file as a backup.'),
     note('An external Postgres (a database server, a managed service) works the same way: create a database and user there, point <code>DATABASE_URL</code> at it, and leave out the <code>litellm-db</code> files and the <code>Requires=</code> line.', 'Other options:'),
 
@@ -378,12 +520,22 @@ curl -s http://192.168.1.101:4000/health/readiness                # "db": "conne
 sudo podman exec litellm-db pg_dump -U litellm litellm | sudo tee /opt/litellm/backup-$(date +%F).sql >/dev/null
 sudo chmod 600 /opt/litellm/backup-*.sql
 """),
+    explain(
+        ('podman exec litellm-db pg_dump -U litellm litellm', 'Dump the whole database as SQL, from inside its container.'),
+        ('| sudo tee /opt/litellm/backup-$(date +%F).sql', 'Save it to a file named with today&#x27;s date. To restore, feed the file back into <code>psql</code> as in Part 4.'),
+        ('sudo chmod 600 ...', 'Root-only: the dump contains the hashed keys and every logged prompt.'),
+    ),
     p('<strong>Upgrade LiteLLM</strong> by changing the image tag. Read the release notes for the versions you&#x27;re skipping first; LiteLLM runs its own database migrations at startup.'),
     code(r"""
 sudo sed -i 's#litellm:v1.104.0#litellm:v1.105.0#' /etc/containers/systemd/litellm.container
 sudo systemctl daemon-reload && sudo systemctl restart litellm      # pulls the new image, then migrates
 curl -s http://192.168.1.101:4000/openapi.json | jq -r .info.version
 """),
+    explain(
+        ("sudo sed -i 's#litellm:v1.104.0#litellm:v1.105.0#' ...", 'Edit the Quadlet file in place, replacing the old image tag with the new one. Opening it in <code>vi</code> and changing the <code>Image=</code> line does the same.'),
+        ('daemon-reload && restart litellm', 'Regenerate the service from the changed file, then restart it. The new container uses the new image, which Podman downloads first.'),
+        ('curl ... /openapi.json | jq -r .info.version', 'The gateway describes its own API at <code>/openapi.json</code>, including its version number. This prints just the version.'),
+    ),
     ul([
         '<strong>Pin the version.</strong> A floating tag such as <code>main-stable</code> or <code>latest</code> means you can&#x27;t tell which build you run, and a pull can silently change it. Compromised LiteLLM releases were published to PyPI in March 2026, so know exactly what you run. For full reproducibility, pin the digest: <code>Image=ghcr.io/berriai/litellm@sha256:...</code> (<code>sudo podman image inspect --format &#x27;{{index .RepoDigests 0}}&#x27; &lt;image&gt;</code> prints it).',
         'Cloud models go in <code>model_list</code> the same way: <code>model: anthropic/claude-haiku-4-5-20251001</code> with <code>api_key: os.environ/ANTHROPIC_API_KEY</code>, or <code>model: openai/gpt-4.1-mini</code> with <code>api_key: os.environ/OPENAI_API_KEY</code>, and the key itself in <code>litellm.env</code>.',
@@ -405,6 +557,12 @@ sudo dnf -y install jq                     # pretty-prints and filters JSON answ
 export GW=http://192.168.1.101:4000
 read -rsp 'LiteLLM master key: ' MK; echo; export MK
 """),
+    explain(
+        ('ssh 192.168.1.100', 'Log in to the agent host.'),
+        ('sudo dnf -y install jq', 'Install jq, which every lab uses to read the gateway&#x27;s JSON answers.'),
+        ('export GW=http://192.168.1.101:4000', 'Store the gateway&#x27;s address in <code>GW</code>, so later commands can say <code>$GW/v1/models</code> instead of the full address. <code>export</code> also passes it to programs you run, such as the Python scripts.'),
+        ("read -rsp 'LiteLLM master key: ' MK; echo; export MK", 'Paste the master key when asked. It goes into <code>MK</code> without appearing on screen or in your shell history, and <code>export</code> makes it available to programs too. The labs use it as <code>$MK</code>.'),
+    ),
     note('Put the <code>export GW=...</code> line in <code>~/.bashrc</code> so new shells have it. Don&#x27;t do that with the master key; re-enter it when you need it.', 'Tip:'),
     h3('2. Is it up, and does it have a database?'),
     code(r"""
@@ -412,18 +570,29 @@ curl -s $GW/health/liveliness; echo                        # "I'm alive!" (no ke
 curl -s $GW/health/readiness | jq '{status, db}'            # db must be "connected"
 curl -s $GW/openapi.json | jq -r .info.version              # the LiteLLM version
 """),
+    explain(
+        ('curl -s $GW/health/liveliness; echo', 'Is the gateway process running? It answers <code>&quot;I&#x27;m alive!&quot;</code> without a newline, so <code>echo</code> adds one.'),
+        ("curl -s $GW/health/readiness | jq '{status, db}'", 'Is it ready to work? The answer has many fields; <code>jq &#x27;{status, db}&#x27;</code> keeps only the overall status and the database connection.'),
+        ('curl -s $GW/openapi.json | jq -r .info.version', 'Which version is it? <code>-r</code> prints the version as plain text instead of in quotes.'),
+    ),
     p('<code>/health/liveliness</code> only says the process is running. <code>/health/readiness</code> also checks the database, which the labs need from Lab 3 on: virtual keys, agents and spend logs all live there. If <code>db</code> isn&#x27;t <code>connected</code>, see <a href="#l0-db">Lab 0, Part 4</a>.'),
     h3('3. Will it come back after a reboot?'),
     p('On <strong>.101</strong>, ask Podman whether the container belongs to a systemd service. This only reads:'),
     code(r"""
 ssh 192.168.1.101
-sudo podman inspect litellm --format 'unit={{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}} restart={{.HostConfig.RestartPolicy.Name}}'
-systemctl is-active litellm-db 2>/dev/null; systemctl is-enabled podman-restart.service
+sudo podman inspect litellm | jq '.[0] | {unit: .Config.Labels.PODMAN_SYSTEMD_UNIT, restart: .HostConfig.RestartPolicy.Name}'
+systemctl is-active litellm-db
+systemctl is-enabled podman-restart.service
 """),
+    explain(
+        ('sudo podman inspect litellm | jq ...', 'From everything Podman knows about the container, show two things: <code>unit</code>, the systemd service that created it (Podman labels containers created by a service), and <code>restart</code>, its restart policy.'),
+        ('systemctl is-active litellm-db', 'Is there a running database service with that name? Prints <code>active</code>, or <code>inactive</code> if there&#x27;s no such service.'),
+        ('systemctl is-enabled podman-restart.service', 'Is the service that restarts hand-started containers at boot switched on? Prints <code>enabled</code> or <code>disabled</code>.'),
+    ),
     table(['What you see', 'Means', 'Do'], [
-        ['<code>unit=litellm.service</code>', 'It&#x27;s a Quadlet (or other systemd) service', 'Nothing.'],
-        ['<code>unit=</code> (empty), <code>restart=always</code>, <code>podman-restart</code> <code>enabled</code>', 'Started by hand; comes back at boot through <code>podman-restart.service</code>', 'Works. <a href="#l0-quadlet">Lab 0, Part 3</a> converts it to a Quadlet.'],
-        ['<code>unit=</code> (empty), anything else', 'It won&#x27;t come back after a reboot', '<a href="#l0-quadlet">Lab 0, Part 3</a>.'],
+        ['<code>&quot;unit&quot;: &quot;litellm.service&quot;</code>', 'It&#x27;s a Quadlet (or other systemd) service', 'Nothing.'],
+        ['<code>&quot;unit&quot;: null</code>, <code>&quot;restart&quot;: &quot;always&quot;</code>, <code>podman-restart</code> <code>enabled</code>', 'Started by hand; comes back at boot through <code>podman-restart.service</code>', 'Works. <a href="#l0-quadlet">Lab 0, Part 3</a> converts it to a Quadlet.'],
+        ['<code>&quot;unit&quot;: null</code>, anything else', 'It won&#x27;t come back after a reboot', '<a href="#l0-quadlet">Lab 0, Part 3</a>.'],
     ]),
     p('Its database has to come back too. <code>active</code> for <code>litellm-db</code> means it has its own Postgres service, as in Lab 0. Anything else: find the database host in <code>DATABASE_URL</code> and check that it starts at boot.'),
     h3('4. Add the two lab model names'),
@@ -433,6 +602,10 @@ curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id'
 # qwen3.8-27b
 # ...
 """),
+    explain(
+        ('curl -s $GW/v1/models -H "Authorization: Bearer $MK"', 'Ask for the list of models. This needs a key, sent in the <code>Authorization</code> header; the master key can see everything.'),
+        ("| jq -r '.data[].id'", 'The list is in <code>data</code>; print each entry&#x27;s <code>id</code>, the name clients ask for, one per line. This call is taken apart in <a href="#reading">How to read the commands</a>.'),
+    ),
     p('Every later lab asks for one of two names: <code>lab-chat</code> (chat apps) or <code>lab-agent</code> (agents, which need a model that can call tools). Neither is a new model. Each is an extra <code>model_list</code> entry, an <strong>alias</strong>, that forwards to a model you already have. Using aliases has two benefits:'),
     ul([
         'The lab commands work unchanged whatever model you run. You map the two names to your model once, here.',
@@ -444,6 +617,10 @@ ssh 192.168.1.101
 sudo cp -a /opt/litellm/config.yaml /opt/litellm/config.yaml.bak-$(date +%F)
 sudo vi /opt/litellm/config.yaml
 """),
+    explain(
+        ('sudo cp -a ... config.yaml.bak-$(date +%F)', 'Keep a dated copy of the working config. If your edit breaks it, copy this back and restart.'),
+        ('sudo vi /opt/litellm/config.yaml', 'Open the config as root. In <code>vi</code>: move to the end of <code>model_list</code>, press <code>o</code> to open a new line, paste, then Esc and <code>:wq</code> to save and quit. Any editor works (<code>sudo nano</code> if you prefer).'),
+    ),
     p('Add these two entries at the end of the existing <code>model_list</code>, indented like the entries already there. Both use the same real model as an existing entry (<code>qwen/qwen3.8-27b</code> here; use your own model&#x27;s id). Only <code>model_name</code> is new:'),
     code(r"""
   - model_name: lab-chat                   # the name chat apps ask for
@@ -462,6 +639,10 @@ sudo vi /opt/litellm/config.yaml
 sudo systemctl restart litellm             # or "sudo podman restart litellm" if it isn't a Quadlet service
 sudo journalctl -u litellm -f              # Ctrl-C once you see "Uvicorn running"
 """),
+    explain(
+        ('sudo systemctl restart litellm', 'Stop the gateway and start it again, so it reads the edited config. With Quadlet a restart also creates a fresh container.'),
+        ('sudo journalctl -u litellm -f', 'Follow its log while it starts. A YAML mistake shows up here as an error and the service keeps restarting.'),
+    ),
     h3('Verify (back on .100)'),
     code(r"""
 curl -s $GW/v1/models -H "Authorization: Bearer $MK" | jq -r '.data[].id' | grep lab-
@@ -472,6 +653,11 @@ curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type:
   -d '{"model": "lab-agent", "messages": [{"role": "user", "content": "Say hi in five words."}]}' \
   | jq '{model, answer: .choices[0].message.content}'
 """),
+    explain(
+        ('... | grep lab-', 'List the models again and keep only the lines containing <code>lab-</code>: your two new names.'),
+        ('curl -s $GW/v1/chat/completions ...', 'Send a chat request to the new name. Lab 2 takes this request apart piece by piece.'),
+        ("jq '{model, answer: .choices[0].message.content}'", 'From the response, show the <code>model</code> field and the reply text, renamed <code>answer</code>. The reply sits at <code>choices[0].message.content</code>: the first (and only) choice&#x27;s message.'),
+    ),
     p('The answer comes from qwen3.8-27b, but the response says <code>&quot;model&quot;: &quot;lab-agent&quot;</code>: the client only ever sees the alias.'),
     h3('Notes'),
     ul([
@@ -500,6 +686,8 @@ curl -s $GW/v1/chat/completions \
       }' | jq
 """),
     ul([
+        'The <code>\\</code> at the end of each line continues the command onto the next, so one long command can be split up readably.',
+        '<code>-H &#x27;Content-Type: application/json&#x27;</code> says the body is JSON, and <code>-d &#x27;{...}&#x27;</code> is the body itself. Sending a body makes it a POST request. The single quotes keep the shell away from the JSON&#x27;s own double quotes.',
         '<code>/v1/chat/completions</code> is the OpenAI chat API. LiteLLM speaks it no matter which provider is behind the alias, so any OpenAI-compatible app or library can use the gateway.',
         '<code>Authorization: Bearer</code> carries the key. The master key works for now; Lab 3 gives each app its own key.',
         '<code>messages</code> is the conversation: a <code>system</code> message sets the behaviour, and <code>user</code> messages are what you type.',
@@ -512,6 +700,10 @@ curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type:
   -d '{"model": "lab-chat", "messages": [{"role": "user", "content": "What did I just ask you?"}]}' \
   | jq -r '.choices[0].message.content'
 """),
+    explain(
+        ('-d \'{"model": ..., "messages": [...]}\'', 'The same request as before, squeezed onto one line, with no system message and one question.'),
+        ("jq -r '.choices[0].message.content'", 'Print only the reply text, as plain text.'),
+    ),
     p('Every chat app, including ChatGPT-style web UIs, keeps the conversation itself and sends the whole history with every request, adding the model&#x27;s earlier answers as <code>assistant</code> messages:'),
     code(r"""
 curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
@@ -521,6 +713,9 @@ curl -s $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type:
         {"role": "user",      "content": "What is my favourite distro?"}
       ]}' | jq -r '.choices[0].message.content'
 """),
+    explain(
+        ('{"role": "assistant", ...}', 'A message the model &quot;said&quot; earlier. You write it yourself here, the way a chat app replays the history. The model treats the three messages as the conversation so far and answers the last one.'),
+    ),
     p('That&#x27;s also why long conversations get slower and more expensive: every turn re-sends everything before it.'),
     h3('3. Streaming'),
     p('With <code>&quot;stream&quot;: true</code>, the gateway sends the answer in small pieces as the model produces them, the way chat UIs show text appearing word by word. <code>curl -N</code> turns off buffering so you see them arrive:'),
@@ -532,6 +727,10 @@ curl -sN $GW/v1/chat/completions -H "Authorization: Bearer $MK" -H 'Content-Type
 # ...
 # data: [DONE]
 """),
+    explain(
+        ('curl -sN', '<code>-N</code> prints each piece the moment it arrives instead of collecting the whole answer first.'),
+        ('"stream": true', 'Ask for a streamed answer: a series of <code>data:</code> lines, each holding a few characters in <code>delta.content</code>, ending with <code>data: [DONE]</code>. No <code>jq</code> here, because the output isn&#x27;t a single JSON document.'),
+    ),
     h3('4. A chat program in Python'),
     p('Install Python 3.12 and the libraries every lab uses into a virtual environment in <code>~/gw-labs</code>. The <code>openai</code> library works with any OpenAI-compatible server; pointing <code>base_url</code> at the gateway is all it takes.'),
     code(r"""
@@ -541,6 +740,13 @@ python3.12 -m venv .venv
 . .venv/bin/activate                       # run this again in every new shell
 pip install "openai==3.24.0" "httpx==0.28.1" "mcp==2.3.0"
 """),
+    explain(
+        ('sudo dnf -y install python3.12 python3.12-pip', 'Install Python 3.12 and its package installer, <code>pip</code>, alongside the system Python.'),
+        ('mkdir -p ~/gw-labs && cd ~/gw-labs', 'Make a working directory for the lab scripts and move into it.'),
+        ('python3.12 -m venv .venv', 'Create a <strong>virtual environment</strong> in <code>.venv</code>: a private copy of Python where you can install libraries without touching the system&#x27;s.'),
+        ('. .venv/bin/activate', 'Switch this shell to that environment, so <code>python</code> and <code>pip</code> mean the ones in <code>.venv</code>. Your prompt starts with <code>(.venv)</code> while it&#x27;s active. The leading <code>.</code> means &quot;run this file in the current shell&quot;.'),
+        ('pip install "openai==3.24.0" ...', 'Install the libraries the labs use, at the exact versions they were tested with (<code>==</code>). <code>openai</code> talks to chat APIs, <code>httpx</code> makes HTTP requests, <code>mcp</code> is used in Lab 8.'),
+    ),
     p('<code>chat.py</code> keeps the history in a list (step 2) and streams each answer (step 3):'),
     write_file('~/gw-labs/chat.py', 'chat.py'),
     code(r"""
@@ -550,6 +756,9 @@ KEY=$MK python chat.py
 # you> What is my name?
 # ai > Your name is Pat.
 """),
+    explain(
+        ('KEY=$MK python chat.py', 'Run the program with the variable <code>KEY</code> set to your master key, for this one command only. <code>chat.py</code> reads the key and the gateway address (<code>$GW</code>) from the environment rather than having them written into the code. Ctrl-D quits.'),
+    ),
     h3('Notes'),
     ul([
         'Change the model per run with <code>MODEL=lab-agent KEY=$MK python chat.py</code>. The program doesn&#x27;t know or care which real model answers.',
@@ -572,6 +781,11 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
         "rpm_limit": 60
       }' | jq '{key_alias, key, models, rpm_limit}'
 """),
+    explain(
+        ('curl -s $GW/key/generate -H "Authorization: Bearer $MK"', 'Ask the gateway to create a key. Only the master key may do that.'),
+        ("-d '{...}'", 'The settings for the new key, explained in the list below.'),
+        ("| jq '{key_alias, key, models, rpm_limit}'", 'The response repeats every setting the key has, most of them defaults. Show only the four that matter here, including the new key itself.'),
+    ),
     ul([
         '<code>key_alias</code> is the name you&#x27;ll see in logs and in the UI. It must be unique: re-running a step that creates a key fails with &quot;Key with alias ... already exists&quot;, so delete the old key (Lab 11) or pick another alias.',
         '<code>models</code> is the allow-list. Leave it out and the key can use every model.',
@@ -581,6 +795,9 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
     code(r"""
 read -rsp 'chat-ui key: ' UIKEY; echo
 """),
+    explain(
+        ("read -rsp 'chat-ui key: ' UIKEY; echo", 'Paste the <code>sk-...</code> value from the output above. It&#x27;s stored in <code>UIKEY</code> for the rest of this lab and Lab 4. Every later lab saves its new key into a variable the same way.'),
+    ),
     h3('2. See the limits work'),
     code(r"""
 # allowed model: answers
@@ -597,17 +814,33 @@ curl -s $GW/v1/chat/completions -H "Authorization: Bearer $UIKEY" -H 'Content-Ty
 # the key can't do admin work either
 curl -s $GW/key/generate -H "Authorization: Bearer $UIKEY" -H 'Content-Type: application/json' -d '{}' | jq -r '.error.message'
 """),
+    explain(
+        ('-H "Authorization: Bearer $UIKEY"', 'The same requests as before, but sent with the new <code>chat-ui</code> key instead of the master key.'),
+        ("jq -r '.error.message'", 'When the gateway refuses a request, its answer is <code>{&quot;error&quot;: {&quot;message&quot;: ...}}</code>. This prints just the reason.'),
+        ("/key/generate ... -d '{}'", 'Try to create a key (<code>{}</code> means no settings). An app key isn&#x27;t allowed to, so this fails too.'),
+    ),
     h3('3. Look a key up, change it, block it'),
     code(r"""
 curl -s "$GW/key/info?key=$UIKEY" -H "Authorization: Bearer $MK" | jq '.info | {key_alias, models, rpm_limit, spend}'
 
 # change a limit in place (the key itself stays the same)
+cat > ~/gw-labs/chat-ui-update.json <<EOF
+{"key": "$UIKEY", "rpm_limit": 30}
+EOF
 curl -s $GW/key/update -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d "{\"key\": \"$UIKEY\", \"rpm_limit\": 30}" | jq '{key_alias, rpm_limit}'
+  -d @$HOME/gw-labs/chat-ui-update.json | jq '{key_alias, rpm_limit}'
 
 # every key, by alias
 curl -s "$GW/key/list?return_full_object=true" -H "Authorization: Bearer $MK" | jq -r '.keys[] | "\(.key_alias)\t\(.models)"'
 """),
+    explain(
+        ('curl -s "$GW/key/info?key=$UIKEY"', 'Look up one key. The key goes in the URL after <code>?</code>; the URL is in double quotes so the shell doesn&#x27;t treat <code>?</code> as a filename pattern, while still filling in <code>$UIKEY</code>.'),
+        ("jq '.info | {...}'", 'The details are under <code>info</code>; show the alias, allowed models, rate limit and spend so far.'),
+        ('cat > ~/gw-labs/chat-ui-update.json <<EOF', 'Write the request body to a file. The heredoc is unquoted, so <code>$UIKEY</code> becomes the actual key. Run <code>cat ~/gw-labs/chat-ui-update.json</code> to see what will be sent.'),
+        ('-d @$HOME/gw-labs/chat-ui-update.json', 'Send that file as the body. <code>@</code> tells curl to read a file instead of taking the text literally. (<code>$HOME</code>, not <code>~</code>: the shell doesn&#x27;t expand <code>~</code> after <code>@</code>.)'),
+        ('/key/list?return_full_object=true', 'List every key with all its details, not just the hashes.'),
+        ('jq -r \'.keys[] | "\\(.key_alias)\\t\\(.models)"\'', 'For each key, print a line of text: <code>\\(...)</code> inserts a field&#x27;s value into the string, and <code>\\t</code> is a tab between the two columns.'),
+    ),
     p('Blocking and deleting a key is in Lab 11.'),
     h3('Notes'),
     ul([
@@ -623,13 +856,19 @@ L4 = lab(4, 'A Chat Web UI: Open WebUI on Podman', '192.168.1.100 (Open WebUI) â
     h3('1. The key goes in an env file'),
     code(r"""
 sudo mkdir -p /opt/open-webui
-sudo install -m 600 /dev/null /opt/open-webui/open-webui.env
-printf '%s\n' \
-  "OPENAI_API_BASE_URL=http://192.168.1.101:4000/v1" \
-  "OPENAI_API_KEY=$UIKEY" \
-  "WEBUI_SECRET_KEY=$(openssl rand -hex 32)" \
-  | sudo tee /opt/open-webui/open-webui.env >/dev/null
+sudo touch /opt/open-webui/open-webui.env
+sudo chmod 600 /opt/open-webui/open-webui.env
+sudo tee /opt/open-webui/open-webui.env >/dev/null <<EOF
+OPENAI_API_BASE_URL=http://192.168.1.101:4000/v1
+OPENAI_API_KEY=$UIKEY
+WEBUI_SECRET_KEY=$(openssl rand -hex 32)
+EOF
 """),
+    explain(
+        ('sudo mkdir -p /opt/open-webui', 'A directory for Open WebUI&#x27;s settings file.'),
+        ('sudo touch ... / sudo chmod 600 ...', 'Create the env file empty and root-only before the key goes in.'),
+        ('sudo tee ... <<EOF', 'Write the three settings. The heredoc is unquoted, so <code>$UIKEY</code> becomes your <code>chat-ui</code> key and <code>$(openssl rand -hex 32)</code> becomes a random secret. Check with <code>sudo cat /opt/open-webui/open-webui.env</code>.'),
+    ),
     p('<code>OPENAI_API_BASE_URL</code> points Open WebUI at the gateway as if it were OpenAI. <code>WEBUI_SECRET_KEY</code> signs login sessions; keeping it fixed means you stay logged in across restarts. (In a new shell, <code>read -rsp</code> the key into <code>UIKEY</code> again first.)'),
     h3('2. The Quadlet units'),
     p('A named volume keeps Open WebUI&#x27;s users, chats and settings when the container is replaced. The container listens on 8080 inside; <code>PublishPort=3000:8080</code> makes that port 3000 on the host.'),
@@ -659,6 +898,13 @@ TimeoutStartSec=900
 WantedBy=multi-user.target
 EOF
 """),
+    explain(
+        ("sudo tee /etc/containers/systemd/... <<'EOF'", 'Write each Quadlet file into the directory systemd reads them from. The heredocs are quoted because there&#x27;s nothing for the shell to fill in.'),
+        ('open-webui.volume', 'A named volume, <code>open-webui</code>, for the app&#x27;s data.'),
+        ('Volume=open-webui.volume:/app/backend/data', 'Mount that volume where Open WebUI keeps its database inside the container.'),
+        ('EnvironmentFile= / Environment=', 'Settings from the env file (the gateway URL and key), plus one extra setting written directly, since it isn&#x27;t secret.'),
+        ('[Service] / [Install]', 'Restart it if it stops, allow 15 minutes for the first start, and start it at boot. The same pattern as the gateway in Lab 0.'),
+    ),
     p('<code>ENABLE_OLLAMA_API=false</code> stops it looking for a local Ollama it doesn&#x27;t need. <code>TimeoutStartSec=900</code> gives the first start time to pull the image, which is several GB.'),
     h3('3. Start it'),
     code(r"""
@@ -668,6 +914,13 @@ systemctl status open-webui --no-pager
 sudo firewall-cmd --permanent --add-port=3000/tcp && sudo firewall-cmd --reload   # if firewalld is running
 curl -s http://localhost:3000/health; echo                     # {"status":true}
 """),
+    explain(
+        ('sudo systemctl daemon-reload', 'Generate <code>open-webui.service</code> from the files you just wrote.'),
+        ('sudo systemctl start open-webui', 'Start it. The command waits while the image downloads.'),
+        ('systemctl status open-webui --no-pager', 'Show whether it&#x27;s running and its last few log lines. <code>--no-pager</code> prints straight to the screen instead of opening a scrollable view.'),
+        ('sudo firewall-cmd ...', 'Open port 3000 so your browser can reach it from another machine.'),
+        ('curl -s http://localhost:3000/health; echo', 'Ask Open WebUI itself whether it&#x27;s up. <code>localhost</code> means this machine.'),
+    ),
     h3('Verify'),
     ol([
         'Open <code>http://192.168.1.100:3000</code> and sign up. <strong>The first account becomes the admin.</strong>',
@@ -700,6 +953,11 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
   -d '{"key_alias": "ops-agent", "models": ["lab-agent"], "rpm_limit": 30}' | jq -r .key
 read -rsp 'ops-agent key: ' OPS_KEY; echo
 """),
+    explain(
+        ('curl -s $GW/key/generate ...', 'Create a key named <code>ops-agent</code> that may use only <code>lab-agent</code>, at most 30 requests a minute (Lab 3 explains each setting).'),
+        ('| jq -r .key', 'Print only the new key.'),
+        ("read -rsp 'ops-agent key: ' OPS_KEY; echo", 'Paste it to store it in <code>OPS_KEY</code>.'),
+    ),
     h3('2. The agent'),
     write_file('~/gw-labs/agent.py', 'agent.py'),
     p('Read it top to bottom: the tools are plain Python functions, <code>TOOL_SPECS</code> describes them to the model, and <code>run()</code> is the loop. <code>max_steps</code> stops a confused model from looping forever. The two settings near the middle (<code>AGENT_PROMPT</code>, <code>AGENT_TOOLS</code>) let Lab 6 reuse this file for a second agent.'),
@@ -714,6 +972,10 @@ AGENT_KEY=$OPS_KEY python agent.py "Is http://192.168.1.101:4000/health/liveline
 # - 192.168.1.100 port 22: open
 # - Time: 2026-10-06 00:27 UTC
 """),
+    explain(
+        ('cd ~/gw-labs && . .venv/bin/activate', 'Go to the lab directory and switch to its Python environment (Lab 2). Needed again in every new shell.'),
+        ('AGENT_KEY=$OPS_KEY python agent.py "..."', 'Run the agent with its own key, set for this command only, and pass your question as the argument. The quotes keep the question together as one argument.'),
+    ),
     p('The <code>[tool]</code> lines are the loop at work: the model chose which tools to call and with what arguments, and the program ran them. Try a question that needs no tools (&quot;What is a TCP port?&quot;) and one about a port that&#x27;s closed.'),
     h3('Verify: what the gateway saw'),
     code(r"""
@@ -721,6 +983,11 @@ curl -s "$GW/spend/logs?start_date=$(date -u +%F)&end_date=$(date -u -d tomorrow
   -H "Authorization: Bearer $MK" \
   | jq -r '.[] | select(.metadata.user_api_key_alias == "ops-agent") | "\(.startTime)  \(.model_group)  tokens=\(.total_tokens)"'
 """),
+    explain(
+        ('"$GW/spend/logs?start_date=...&end_date=...&summarize=false"', 'Ask for the log of every request between two dates, one entry per request (<code>summarize=false</code>). The URL is in double quotes because <code>&amp;</code> would otherwise end the command.'),
+        ('$(date -u +%F) / $(date -u -d tomorrow +%F)', 'Today&#x27;s and tomorrow&#x27;s dates in UTC, such as <code>2026-10-06</code>, filled in by the shell. The gateway logs in UTC.'),
+        ('jq -r \'.[] | select(...) | "..."\'', 'Go through each logged request, keep only those made with the <code>ops-agent</code> key (<code>select</code>), and print its time, model and token count on one line.'),
+    ),
     p('One question made several requests, one per pass around the loop, all under the alias <code>ops-agent</code>. Spend logs are written in batches, so the newest requests can take up to a minute to appear.'),
     h3('Notes'),
     ul([
@@ -741,6 +1008,10 @@ L6 = lab(6, 'Agent 2: Run Agents as Always-On Services', '192.168.1.100',
 sudo mkdir -p /opt/agents
 sudo cp ~/gw-labs/agent.py /opt/agents/
 """),
+    explain(
+        ('sudo mkdir -p /opt/agents', 'A directory for everything that goes into the agent image.'),
+        ('sudo cp ~/gw-labs/agent.py /opt/agents/', 'Copy your Lab 5 agent there, unchanged.'),
+    ),
     write_file('/opt/agents/a2a_server.py', 'a2a_server.py', sudo=True),
     h3('2. Build the image'),
     p('A <code>Containerfile</code> is Podman&#x27;s name for a Dockerfile; the syntax is the same. Pin the library versions so a rebuild next month gets the same code.'),
@@ -755,6 +1026,13 @@ CMD ["python", "a2a_server.py"]
 EOF
 sudo podman build -t localhost/a2a-agent:1 /opt/agents
 """),
+    explain(
+        ('FROM docker.io/library/python:3.12.15-slim', 'Start from the official small Python image.'),
+        ('RUN pip install ...', 'Run a command while building: install the libraries into the image, at pinned versions.'),
+        ('WORKDIR /app / COPY agent.py a2a_server.py ./', 'Use <code>/app</code> as the working directory and copy the two programs from <code>/opt/agents</code> into it.'),
+        ('USER 1001 / CMD [...]', 'Run as an ordinary user, and start the A2A server when a container starts from this image.'),
+        ('sudo podman build -t localhost/a2a-agent:1 /opt/agents', 'Build the image from the <code>Containerfile</code> in <code>/opt/agents</code> and name it (<code>-t</code>, for tag) <code>localhost/a2a-agent</code>, version <code>1</code>. Check with <code>sudo podman images</code>.'),
+    ),
     p('<code>USER 1001</code> runs the agent as an unprivileged user inside the container. The <code>localhost/</code> prefix marks an image you built yourself, so Podman never tries to pull it from a registry.'),
     h3('3. A second key, then one env file per agent'),
     code(r"""
@@ -762,11 +1040,16 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
   -d '{"key_alias": "writer-agent", "models": ["lab-agent"], "rpm_limit": 30}' | jq -r .key
 read -rsp 'writer-agent key: ' WRITER_KEY; echo
 
-sudo install -m 600 /dev/null /opt/agents/ops-agent.env
-sudo install -m 600 /dev/null /opt/agents/writer-agent.env
+sudo touch /opt/agents/ops-agent.env /opt/agents/writer-agent.env
+sudo chmod 600 /opt/agents/ops-agent.env /opt/agents/writer-agent.env
 echo "AGENT_KEY=$OPS_KEY"    | sudo tee /opt/agents/ops-agent.env >/dev/null
 echo "AGENT_KEY=$WRITER_KEY" | sudo tee /opt/agents/writer-agent.env >/dev/null
 """),
+    explain(
+        ('curl ... / read -rsp ...', 'A second key, for <code>writer-agent</code>, stored in <code>WRITER_KEY</code>. Same steps as for <code>ops-agent</code> in Lab 5.'),
+        ('sudo touch ... / sudo chmod 600 ...', 'Create one root-only env file per agent.'),
+        ('echo "AGENT_KEY=$OPS_KEY" | sudo tee ...', '<code>echo</code> prints the line with your key filled in, and <code>sudo tee</code> writes it into the agent&#x27;s env file. Each agent gets its own key, so the logs tell them apart.'),
+    ),
     h3('4. Two Quadlet units, one image'),
     p('The two files differ only in name, port and environment. <code>writer-agent</code> gets no tools and a different system prompt; it turns notes into a readable status update. <code>PUBLIC_URL</code> is the address other hosts use to reach the agent; it goes into the agent card.'),
     code(r"""
@@ -821,6 +1104,14 @@ sudo systemctl start ops-agent writer-agent
 systemctl is-active ops-agent writer-agent                   # active, active
 sudo firewall-cmd --permanent --add-port={8601,8602}/tcp && sudo firewall-cmd --reload   # if firewalld is running
 """),
+    explain(
+        ('Image=localhost/a2a-agent:1', 'Both services run the image you just built. What makes them different agents is only their settings.'),
+        ('Environment=AGENT_NAME= / PORT= / PUBLIC_URL=', 'Settings the program reads at startup: its name, the port to listen on, and the address to advertise in its agent card.'),
+        ('Environment=AGENT_TOOLS=off / AGENT_PROMPT="..."', '<code>writer-agent</code> only: no tools, and a different system prompt. The double quotes keep a value with spaces together.'),
+        ('sudo systemctl start ops-agent writer-agent', 'Start both services with one command.'),
+        ('systemctl is-active ops-agent writer-agent', 'Print one word per service: <code>active</code> if it&#x27;s running.'),
+        ('--add-port={8601,8602}/tcp', 'The shell expands the braces into two arguments, <code>--add-port=8601/tcp --add-port=8602/tcp</code>, opening both ports at once.'),
+    ),
     h3('Verify: talk to an agent directly'),
     code(r"""
 # the agent card: who it is and where to reach it
@@ -838,6 +1129,14 @@ curl -s http://192.168.1.100:8601/ -H 'Content-Type: application/json' -H 'A2A-V
 
 sudo journalctl -u ops-agent -n 5 --no-pager                   # the [tool] lines show what it did
 """),
+    explain(
+        ('curl -s http://192.168.1.100:8601/.well-known/agent-card.json', 'Fetch the agent card from the agent itself. This is a plain GET; no key is needed.'),
+        ("jq '{name, description, url: .supportedInterfaces[0].url}'", 'Show the name, the description, and the first address it says it can be reached at.'),
+        ("cat > ~/gw-labs/ask.json <<'EOF'", 'Save an A2A message to a file: a JSON-RPC call (<code>&quot;jsonrpc&quot;: &quot;2.0&quot;</code>) to the <code>SendMessage</code> method, from the user, with one text part. <code>messageId</code> is any unique ID you choose.'),
+        ("curl ... -H 'A2A-Version: 1.0' -d @$HOME/gw-labs/ask.json", 'POST that file to the agent. The <code>A2A-Version</code> header says which version of the protocol you&#x27;re speaking.'),
+        ("jq -r '.result.task.status.message.parts[0].text'", 'Dig the answer text out of the reply: the result is a task, whose status holds a message, whose first part is the text.'),
+        ('sudo journalctl -u ops-agent -n 5 --no-pager', 'The last five lines of the agent&#x27;s log, where you can see which tools it called to answer.'),
+    ),
     p('The reply is an A2A <strong>task</strong>: it has a state (<code>TASK_STATE_COMPLETED</code>) and the answer as a message. Long-running agents use the same structure to report progress.'),
     h3('Notes'),
     ul([
@@ -896,25 +1195,53 @@ for a in ops-agent writer-agent; do
     -d @$HOME/gw-labs/$a.json | jq '{agent_name, agent_id}'
 done
 """),
+    explain(
+        ("cat > ~/gw-labs/ops-agent.json <<'EOF'", 'Save each registration to a file. <code>agent_name</code> is the name in the gateway&#x27;s URL (<code>/a2a/ops-agent</code>). <code>agent_card_params</code> is the agent card the gateway shows callers, and its <code>url</code> is where the gateway forwards their calls.'),
+        ('for a in ops-agent writer-agent; do ... done', 'Run the <code>curl</code> once per agent, with the name in <code>$a</code>, so <code>@$HOME/gw-labs/$a.json</code> sends <code>ops-agent.json</code> and then <code>writer-agent.json</code>.'),
+        ('curl -s $GW/v1/agents ... -d @...', 'POST the registration to <code>/v1/agents</code>. Registering is an admin job, so it uses the master key.'),
+        ("jq '{agent_name, agent_id}'", 'Show the name and the ID the gateway gave the agent.'),
+    ),
     p('Each agent gets an <code>agent_id</code>. You&#x27;ll use the IDs to grant access. List them again any time with:'),
     code(r"""
 curl -s $GW/v1/agents -H "Authorization: Bearer $MK" | jq -r '.[] | "\(.agent_id)  \(.agent_name)"'
 """),
+    explain(
+        ('curl -s $GW/v1/agents ...', 'A GET to the same address lists the registered agents.'),
+        ('jq -r \'.[] | "\\(.agent_id)  \\(.agent_name)"\'', 'For each agent in the list, print its ID and name on one line.'),
+    ),
     h3('2. Call an agent through the gateway'),
     p('With the master key first, to prove the route works. It&#x27;s the same <code>ask.json</code> from Lab 6, sent to the gateway instead of to the agent:'),
     code(r"""
 curl -s $GW/a2a/ops-agent -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' \
   -d @$HOME/gw-labs/ask.json | jq -r '.result.task.status.message.parts[0].text'
 """),
+    explain(
+        ('curl -s $GW/a2a/ops-agent ...', 'The same A2A call as in Lab 6, word for word, except for two things: it goes to the gateway&#x27;s <code>/a2a/ops-agent</code> address, and it carries a key. The gateway checks the key, forwards the message to <code>http://192.168.1.100:8601/</code>, and passes the answer back.'),
+    ),
     h3('3. A caller key that may use ops-agent only'),
     p('Virtual keys can&#x27;t see <em>any</em> agent until you grant one. The grant goes in <code>object_permission.agents</code> and takes agent <strong>IDs</strong>, not names:'),
     code(r"""
 OPS_ID=$(curl -s $GW/v1/agents -H "Authorization: Bearer $MK" | jq -r '.[] | select(.agent_name=="ops-agent") | .agent_id')
+echo "$OPS_ID"
+
+cat > ~/gw-labs/ops-caller.json <<EOF
+{
+  "key_alias": "ops-caller",
+  "models": ["lab-agent"],
+  "object_permission": {"agents": ["$OPS_ID"]}
+}
+EOF
+cat ~/gw-labs/ops-caller.json               # check the ID was filled in
+
 curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d "{\"key_alias\": \"ops-caller\", \"models\": [\"lab-agent\"], \"object_permission\": {\"agents\": [\"$OPS_ID\"]}}" \
-  | jq -r .key
+  -d @$HOME/gw-labs/ops-caller.json | jq -r .key
 read -rsp 'ops-caller key: ' CALLER_KEY; echo
 """),
+    explain(
+        ('OPS_ID=$(curl ... | jq -r \'... select(.agent_name=="ops-agent") | .agent_id\')', 'List the agents, keep the one named <code>ops-agent</code>, print its ID, and store that in <code>OPS_ID</code> (<code>$(...)</code> captures the output). <code>echo</code> shows it so you can see it worked.'),
+        ('cat > ~/gw-labs/ops-caller.json <<EOF', 'Write the new key&#x27;s settings to a file. The heredoc is unquoted, so <code>$OPS_ID</code> is replaced with the real ID. <code>object_permission.agents</code> is the list of agents this key may reach.'),
+        ('curl ... -d @$HOME/gw-labs/ops-caller.json | jq -r .key', 'Create the key from that file and print it, then paste it into <code>CALLER_KEY</code>.'),
+    ),
     h3('Verify'),
     code(r"""
 # the key sees only the agent it was granted
@@ -929,6 +1256,11 @@ curl -s $GW/a2a/ops-agent -H "Authorization: Bearer $CALLER_KEY" -H 'Content-Typ
 curl -s $GW/v1/agents -H "Authorization: Bearer $UIKEY" | jq length
 # 0
 """),
+    explain(
+        ("... -H \"Authorization: Bearer $CALLER_KEY\" | jq -r '.[].agent_name'", 'List agents as the new key sees them: only the names it was granted.'),
+        ('curl -s $GW/a2a/ops-agent ... $CALLER_KEY', 'The same call as step 2, now with the limited key.'),
+        ('... $UIKEY | jq length', '<code>length</code> counts the items in the list. The <code>chat-ui</code> key sees zero agents.'),
+    ),
     h3('Notes'),
     ul([
         'There are two keys in every gateway call to an agent. The <strong>caller&#x27;s</strong> key decides whether it may reach the agent. The <strong>agent&#x27;s own</strong> key (in its env file) is what the agent uses for its model calls. The logs show both, so you can tell who asked and what the agent spent answering.',
@@ -949,6 +1281,7 @@ L8 = lab(8, 'Agent 4: Tools from an MCP Server, Through the Gateway', '192.168.1
     code(r"""
 sudo mkdir -p /opt/lab-tools
 """),
+    explain(('sudo mkdir -p /opt/lab-tools', 'A directory for the MCP server&#x27;s program and <code>Containerfile</code>, like <code>/opt/agents</code> in Lab 6.')),
     write_file('/opt/lab-tools/lab_tools.py', 'lab_tools.py', sudo=True),
     code(r"""
 sudo tee /opt/lab-tools/Containerfile >/dev/null <<'EOF'
@@ -981,6 +1314,12 @@ sudo systemctl start lab-tools
 systemctl is-active lab-tools
 sudo firewall-cmd --permanent --add-port=8701/tcp && sudo firewall-cmd --reload   # if firewalld is running
 """),
+    explain(
+        ('Containerfile', 'The same recipe as the agent image in Lab 6, with the <code>mcp</code> library and one program. <code>EXPOSE 8701</code> documents the port it listens on.'),
+        ('sudo podman build -t localhost/lab-tools:1 /opt/lab-tools', 'Build the image and name it <code>localhost/lab-tools</code>, version <code>1</code>.'),
+        ('lab-tools.container', 'A Quadlet service for it, publishing port 8701. It has no env file: the tools need no key, because the MCP server never calls the gateway.'),
+        ('daemon-reload / start / is-active / firewall-cmd', 'Generate the service, start it, check it&#x27;s running, and open its port, as in the earlier labs.'),
+    ),
     h3('2. Register it with LiteLLM (on .101)'),
     p('MCP servers are part of the gateway config. Add this block at the end of <code>/opt/litellm/config.yaml</code> as a new top-level key, then restart:'),
     code(r"""
@@ -991,8 +1330,16 @@ mcp_servers:
     description: Home-lab checks (URL, port, DNS)
 """),
     code(r"""
+sudo cp -a /opt/litellm/config.yaml /opt/litellm/config.yaml.bak-$(date +%F)
+sudo vi /opt/litellm/config.yaml             # paste the block above at the end, starting in column 1
 sudo systemctl restart litellm
+sudo journalctl -u litellm -f                # Ctrl-C once you see "Uvicorn running"
 """),
+    explain(
+        ('mcp_servers: / lab_tools: / url: / transport: http', 'A new top-level section of the config, not indented. It names the server <code>lab_tools</code> and tells the gateway where it is and that it speaks MCP over plain HTTP.'),
+        ('sudo cp -a ... / sudo vi ...', 'Back up the config, then open it to paste the block, as in Lab 1.'),
+        ('sudo systemctl restart litellm / journalctl -f', 'Restart so the gateway reads the change, and watch it start.'),
+    ),
     p('Back on .100, check that LiteLLM sees the tools:'),
     code(r"""
 curl -s $GW/mcp-rest/tools/list -H "Authorization: Bearer $MK" | jq -r '.tools[].name'
@@ -1000,6 +1347,10 @@ curl -s $GW/mcp-rest/tools/list -H "Authorization: Bearer $MK" | jq -r '.tools[]
 # check_port
 # dns_lookup
 """),
+    explain(
+        ('curl -s $GW/mcp-rest/tools/list ...', 'Ask the gateway which MCP tools it can reach. <code>/mcp-rest/</code> is a plain-HTTP view of MCP that&#x27;s easy to try with curl; agents use the real MCP endpoint, <code>/mcp/</code>.'),
+        ("jq -r '.tools[].name'", 'Print each tool&#x27;s name.'),
+    ),
     h3('3. A key that may use lab_tools'),
     p('As with agents, a virtual key sees no MCP servers until you grant them, in <code>object_permission.mcp_servers</code>. Server names work here.'),
     code(r"""
@@ -1008,6 +1359,9 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
   | jq -r .key
 read -rsp 'mcp-agent key: ' MCP_KEY; echo
 """),
+    explain(
+        ('"object_permission": {"mcp_servers": ["lab_tools"]}', 'Grant this key the <code>lab_tools</code> server. Because a name works here, no variable is needed and the JSON can stay in single quotes.'),
+    ),
     h3('4. An agent with no tools of its own'),
     p('<code>mcp_agent.py</code> connects to the gateway&#x27;s MCP endpoint, asks which tools its key may use, hands them to the model, and sends each tool call back through the gateway. Compare it to <code>agent.py</code>: the loop is the same, and the tool code is gone.'),
     write_file('~/gw-labs/mcp_agent.py', 'mcp_agent.py'),
@@ -1021,11 +1375,17 @@ AGENT_KEY=$MCP_KEY python mcp_agent.py "Resolve github.com, check whether port 4
 #   [mcp] lab_tools-check_url({'url': 'http://192.168.1.101:4000/health/liveliness'}) -> HTTP 200 in 18 ms
 # All three checks done: ...
 """),
+    explain(
+        ('AGENT_KEY=$MCP_KEY python mcp_agent.py "..."', 'Run the MCP agent with the <code>mcp-agent</code> key. The first line it prints is the tool list it got from the gateway; each <code>[mcp]</code> line is a tool call the gateway passed on to the MCP server.'),
+    ),
     p('A key that was never granted <code>lab_tools</code> can&#x27;t even connect. Try the <code>ops-agent</code> key:'),
     code(r"""
 curl -s $GW/mcp-rest/tools/list -H "Authorization: Bearer $OPS_KEY" | jq -r .message
 # ... The key is not allowed to access any MCP servers.
 """),
+    explain(
+        ('... $OPS_KEY | jq -r .message', 'The same tool list request with a key that wasn&#x27;t granted the server. This endpoint reports refusals in a <code>message</code> field.'),
+    ),
     p('<code>mcp_agent.py</code> run with that key stops at the connect step with <code>MCPError: Server returned an error response</code> for the same reason.'),
     h3('Notes'),
     ul([
@@ -1045,12 +1405,27 @@ L9 = lab(9, 'Agent 5: A Coordinator That Delegates to Other Agents', '192.168.1.
     code(r"""
 IDS=$(curl -s $GW/v1/agents -H "Authorization: Bearer $MK" \
   | jq -c '[.[] | select(.agent_name == "ops-agent" or .agent_name == "writer-agent") | .agent_id]')
-echo "$IDS"                                 # two agent IDs
+echo "$IDS"                                 # ["...","..."]: two agent IDs
+
+cat > ~/gw-labs/coordinator-key.json <<EOF
+{
+  "key_alias": "coordinator",
+  "models": ["lab-agent"],
+  "object_permission": {"agents": $IDS}
+}
+EOF
+cat ~/gw-labs/coordinator-key.json
+
 curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-  -d "{\"key_alias\": \"coordinator\", \"models\": [\"lab-agent\"], \"object_permission\": {\"agents\": $IDS}}" \
-  | jq -r .key
+  -d @$HOME/gw-labs/coordinator-key.json | jq -r .key
 read -rsp 'coordinator key: ' COORD_KEY; echo
 """),
+    explain(
+        ('jq -c \'[.[] | select(... or ...) | .agent_id]\'', 'Keep the two agents by name, take their IDs, and collect them into a JSON list (the outer <code>[ ]</code>). <code>-c</code> prints it compactly on one line, ready to drop into the key&#x27;s settings.'),
+        ('IDS=$(...)', 'Store that list in <code>IDS</code>.'),
+        ('cat > ~/gw-labs/coordinator-key.json <<EOF', 'Write the key&#x27;s settings, with <code>$IDS</code> replaced by the list. It already has its brackets and quotes, so it goes in without any.'),
+        ('curl ... -d @$HOME/gw-labs/coordinator-key.json', 'Create the key, and paste it into <code>COORD_KEY</code>.'),
+    ),
     h3('2. The coordinator'),
     write_file('~/gw-labs/coordinator.py', 'coordinator.py'),
     p('Two details worth noticing. The <code>enum</code> in the tool&#x27;s parameters limits the model to agent names that actually exist. The system prompt says it can&#x27;t check anything itself, which stops it guessing instead of delegating.'),
@@ -1065,6 +1440,9 @@ AGENT_KEY=$COORD_KEY python coordinator.py
 #   <- writer-agent: Quick check-in: the gateway is up and responding normally ...
 # **Status update: all services operational** ...
 """),
+    explain(
+        ('AGENT_KEY=$COORD_KEY python coordinator.py', 'Run the coordinator with its key. With no question given, it uses a built-in example. <code>-&gt;</code> lines are messages it sends to an agent, <code>&lt;-</code> lines are the answers.'),
+    ),
     p('Give it your own goals: &quot;Find out whether Open WebUI on 192.168.1.100:3000 is up and write a one-line note for the team.&quot; While it runs, <code>sudo journalctl -u ops-agent -f</code> in another terminal shows the tool calls happening inside the delegated agent.'),
     h3('See the whole chain'),
     code(r"""
@@ -1075,6 +1453,11 @@ curl -s "$GW/spend/logs?start_date=$(date -u +%F)&end_date=$(date -u -d tomorrow
 # ops-agent      ...
 # writer-agent   ...
 """),
+    explain(
+        ('curl -s "$GW/spend/logs?..."', 'Today&#x27;s request log, as in Lab 5.'),
+        ("group_by(.metadata.user_api_key_alias)[]", 'Sort the requests into groups, one per key alias, and go through each group.'),
+        ('"\\(.[0].metadata.user_api_key_alias // \"master\")\\t\\(length) requests"', 'For each group, print the alias (taken from its first request) and how many requests it holds. <code>//</code> means &quot;or, if empty&quot;: requests made with the master key have no alias.'),
+    ),
     p('One question to the coordinator turned into requests under three different keys. That&#x27;s the point of putting the gateway in the middle: you can see how much work each agent did, and limit or switch off any one of them.'),
     h3('Notes'),
     ul([
@@ -1093,6 +1476,9 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
   -d '{"key_alias": "coding-agent", "models": ["lab-agent"], "rpm_limit": 120, "object_permission": {"mcp_servers": ["lab_tools"]}}' \
   | jq -r .key
 """),
+    explain(
+        ('curl -s $GW/key/generate ... | jq -r .key', 'Create a <code>coding-agent</code> key that may use <code>lab-agent</code>, up to 120 requests a minute, plus the <code>lab_tools</code> MCP server from Lab 8. Copy the key it prints; step 2 or 3 asks for it.'),
+    ),
     p('Coding agents send many requests per task, so give them a higher <code>rpm_limit</code> than the other agents.'),
     h3('2. opencode'),
     p('opencode can talk to any OpenAI-compatible server. Add the gateway as a provider in <code>~/.config/opencode/opencode.json</code> (or the <code>config.json</code> you already have; merge these keys into it). <code>{env:LITELLM_KEY}</code> reads the key from an environment variable, so the key isn&#x27;t stored in the file.'),
@@ -1123,11 +1509,21 @@ curl -s $GW/key/generate -H "Authorization: Bearer $MK" -H 'Content-Type: applic
   }
 }
 """),
+    explain(
+        ('"model": "litellm/lab-agent"', 'The default model, written as <code>provider/model</code>: the <code>lab-agent</code> model from the provider defined below.'),
+        ('"provider": {"litellm": {...}}', 'A provider named <code>litellm</code>. <code>npm</code> names the client library opencode uses for any OpenAI-compatible server; <code>options</code> gives it the gateway&#x27;s address and the key.'),
+        ('"models": {"lab-agent": {...}}', 'Which models to offer from that provider. <code>tools: true</code> says it can call tools; <code>limit</code> tells opencode how much it can send and receive.'),
+        ('"mcp": {"lab-tools": {...}}', 'An MCP server: the gateway&#x27;s <code>/mcp/</code> endpoint, with the same key sent in the <code>Authorization</code> header.'),
+    ),
     code(r"""
 read -rsp 'coding-agent key: ' LITELLM_KEY; echo; export LITELLM_KEY
 opencode run "Reply with the single word pong."
 opencode run "Use the lab-tools check_port tool to check whether port 22 is open on 192.168.1.101."
 """),
+    explain(
+        ("read -rsp 'coding-agent key: ' LITELLM_KEY; echo; export LITELLM_KEY", 'Paste the key from step 1 into <code>LITELLM_KEY</code> and export it, so opencode can read it through <code>{env:LITELLM_KEY}</code>.'),
+        ('opencode run "..."', 'Run one task without opening opencode&#x27;s full-screen interface. The first proves the model works; the second makes it use an MCP tool.'),
+    ),
     p('Set <code>limit.context</code> to the context length the model is actually loaded with, so opencode compacts the conversation before it overflows.'),
     h3('3. Claude Code'),
     p('Claude Code speaks Anthropic&#x27;s Messages API. LiteLLM serves that too, at <code>/v1/messages</code>, and translates it for whatever model is behind the alias, including the local one:'),
@@ -1138,6 +1534,12 @@ curl -s $GW/v1/messages -H "Authorization: Bearer $MK" -H 'content-type: applica
   | jq -r '.content[] | select(.type == "text") | .text'
 # pong
 """),
+    explain(
+        ('curl -s $GW/v1/messages', 'Anthropic&#x27;s API address on the gateway, instead of the OpenAI-style <code>/v1/chat/completions</code>.'),
+        ("-H 'anthropic-version: 2023-06-01'", 'The Anthropic API requires a version header. This is the current one, despite the date.'),
+        ('"max_tokens": 400', 'The Anthropic API requires a limit on the length of the answer.'),
+        ("jq -r '.content[] | select(.type == \"text\") | .text'", 'Anthropic-style answers are a list of blocks (text, thinking, tool calls). Print only the text blocks.'),
+    ),
     p('Then set these in the shell where you start Claude Code:'),
     code(r"""
 export ANTHROPIC_BASE_URL=http://192.168.1.101:4000
@@ -1148,6 +1550,13 @@ claude mcp add --transport http lab-tools http://192.168.1.101:4000/mcp/ \
   --header "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"
 claude
 """),
+    explain(
+        ('export ANTHROPIC_BASE_URL=...', 'Send Claude Code&#x27;s requests to the gateway instead of to Anthropic.'),
+        ('export ANTHROPIC_AUTH_TOKEN=...', 'Your <code>coding-agent</code> key. Replace <code>&lt;coding-agent key&gt;</code>, angle brackets included, or use <code>read -rsp</code> as before.'),
+        ('export ANTHROPIC_MODEL= / ANTHROPIC_DEFAULT_HAIKU_MODEL=', 'Which model names to ask for, for the main work and for small background jobs. Both point at <code>lab-agent</code>.'),
+        ('claude mcp add --transport http lab-tools URL --header ...', 'Register the gateway&#x27;s MCP endpoint with Claude Code under the name <code>lab-tools</code>, sending the key with every call.'),
+        ('claude', 'Start Claude Code.'),
+    ),
     h3('Verify'),
     p('Run a small task in either agent, then look in the gateway UI under <strong>Logs</strong>, filtered by key alias <code>coding-agent</code>. Every request the coding agent made is there, including the MCP tool calls.'),
     h3('Notes'),
@@ -1172,8 +1581,12 @@ L11 = lab(11, 'Operate It: Reboots, Logs, Usage, Kill Switches, Upgrades', '192.
     code(r"""
 # on .100
 systemctl list-units --no-pager 'open-webui*' 'ops-agent*' 'writer-agent*' 'lab-tools*'
-sudo podman ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
+sudo podman ps
 """),
+    explain(
+        ("systemctl list-units --no-pager 'open-webui*' ...", 'List the lab&#x27;s services and whether each is running. The <code>*</code> patterns are quoted so systemctl sees them, not the shell.'),
+        ('sudo podman ps', 'List the running containers, with how long each has been up and its ports.'),
+    ),
     h3('2. The reboot test'),
     p('This is the real proof. Reboot the agent host, and then the gateway:'),
     code(r"""
@@ -1185,6 +1598,12 @@ curl -s http://localhost:8601/.well-known/agent-card.json | jq -r .name
 sudo systemctl reboot
 curl -s http://192.168.1.101:4000/health/readiness | jq '{status, db}'
 """),
+    explain(
+        ('sudo systemctl reboot', 'Restart the machine. Your SSH session drops; log in again once it&#x27;s back.'),
+        ('systemctl is-active ...', 'One word per service. Every line should be <code>active</code>, without you having started anything.'),
+        ('curl ... agent-card.json | jq -r .name', 'Ask <code>ops-agent</code> for its card and print its name: proof that it&#x27;s answering, not just running.'),
+        ('curl .../health/readiness', 'On the gateway, the same readiness check as Lab 1, including the database.'),
+    ),
     p('If a service isn&#x27;t active, check that its file is in <code>/etc/containers/systemd/</code>, that it has an <code>[Install]</code> section with <code>WantedBy=multi-user.target</code>, and run <code>sudo /usr/libexec/podman/quadlet -dryrun</code> to see Quadlet&#x27;s complaints about any file it couldn&#x27;t convert.'),
     h3('3. Logs'),
     code(r"""
@@ -1192,6 +1611,11 @@ sudo journalctl -u ops-agent -f                 # one service, live
 sudo journalctl -u litellm --since '10 min ago' # on .101: gateway errors, model failures
 sudo journalctl -b -u 'ops-agent' -u 'lab-tools' --no-pager   # everything since the last boot
 """),
+    explain(
+        ('-f', 'Keep following: new lines appear as they&#x27;re written, until Ctrl-C.'),
+        ("--since '10 min ago'", 'Only lines from the last ten minutes. It also accepts times such as <code>&#x27;2026-10-06 14:00&#x27;</code>.'),
+        ('-b -u ... -u ...', 'Only lines since the last boot (<code>-b</code>), from both services mixed together in time order.'),
+    ),
     p('A Quadlet container&#x27;s output goes to the journal, so you use <code>journalctl</code>, not <code>podman logs</code> (which still works too).'),
     h3('4. Who used what'),
     code(r"""
@@ -1200,19 +1624,39 @@ curl -s "$GW/spend/logs?start_date=$(date -u -d '7 days ago' +%F)&end_date=$(dat
   | jq -r 'group_by(.metadata.user_api_key_alias)[]
            | "\(.[0].metadata.user_api_key_alias // "master")\t\(length) requests\t\(map(.total_tokens) | add) tokens"'
 """),
+    explain(
+        ("$(date -u -d '7 days ago' +%F)", 'The date a week ago, so the log covers the last seven days.'),
+        ('group_by(...)[]', 'One group per key alias, as in Lab 9.'),
+        ('map(.total_tokens) | add', 'Take every request&#x27;s token count in the group and add them up.'),
+    ),
     p('The gateway UI shows the same under <strong>Usage</strong> (charts per key and model) and <strong>Logs</strong> (each request, with its prompt and response).'),
     h3('5. Kill switch'),
     code(r"""
 # block one key: every request with it fails right away, and nothing else is affected
-curl -s $GW/key/block   -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d "{\"key\": \"$OPS_KEY\"}" | jq '{key_alias, blocked}'
-curl -s $GW/key/unblock -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d "{\"key\": \"$OPS_KEY\"}" | jq '{key_alias, blocked}'
+cat > ~/gw-labs/ops-key.json <<EOF
+{"key": "$OPS_KEY"}
+EOF
+curl -s $GW/key/block   -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d @$HOME/gw-labs/ops-key.json | jq '{key_alias, blocked}'
+curl -s $GW/key/unblock -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d @$HOME/gw-labs/ops-key.json | jq '{key_alias, blocked}'
 
 # delete a key for good
-curl -s $GW/key/delete  -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' -d "{\"keys\": [\"$CALLER_KEY\"]}"
+cat > ~/gw-labs/delete-keys.json <<EOF
+{"keys": ["$CALLER_KEY"]}
+EOF
+curl -s $GW/key/delete  -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+  -d @$HOME/gw-labs/delete-keys.json
 
 # stop an agent from being reachable through the gateway
 curl -s -X DELETE $GW/v1/agents/<agent_id> -H "Authorization: Bearer $MK"
 """),
+    explain(
+        ('cat > ~/gw-labs/ops-key.json <<EOF', 'A request body naming the key to act on, with <code>$OPS_KEY</code> filled in. Block and unblock both use it.'),
+        ('/key/block, then /key/unblock', 'Block the key and show that <code>blocked</code> is now <code>true</code>; try the agent while it&#x27;s blocked, then unblock it.'),
+        ('{"keys": ["$CALLER_KEY"]} / /key/delete', 'Delete takes a list, so you can remove several keys at once. A deleted key can&#x27;t be brought back.'),
+        ('curl -s -X DELETE $GW/v1/agents/<agent_id>', 'Remove an agent&#x27;s registration. <code>-X DELETE</code> sends a DELETE request instead of a GET. Replace <code>&lt;agent_id&gt;</code> with an ID from the agent list in Lab 7.'),
+    ),
     p('Blocking <code>ops-agent</code>&#x27;s key stops that agent from reaching any model, even when someone calls it directly on port 8601. That&#x27;s the advantage of agents having their own keys instead of sharing one.'),
     h3('6. Upgrades'),
     p('<strong>An agent:</strong> edit the code in <code>/opt/agents</code>, rebuild with a new tag, point the Quadlet at it, restart. Keeping the old tag makes rolling back a one-line change.'),
@@ -1221,6 +1665,11 @@ sudo podman build -t localhost/a2a-agent:2 /opt/agents
 sudo sed -i 's#localhost/a2a-agent:1#localhost/a2a-agent:2#' /etc/containers/systemd/{ops,writer}-agent.container
 sudo systemctl daemon-reload && sudo systemctl restart ops-agent writer-agent
 """),
+    explain(
+        ('sudo podman build -t localhost/a2a-agent:2 /opt/agents', 'Build the changed code as version <code>2</code>. Version <code>1</code> stays on the machine.'),
+        ("sudo sed -i 's#...:1#...:2#' /etc/containers/systemd/{ops,writer}-agent.container", 'In both Quadlet files (the braces expand to the two file names), replace the image version 1 with 2.'),
+        ('daemon-reload && restart', 'Apply the changed files and restart both agents on the new image. To roll back, run the same <code>sed</code> the other way round.'),
+    ),
     p('Upgrading LiteLLM itself, and backing up its database, are in <a href="#l0-options">Lab 0, Part 5</a>.'),
     h3('Clean up the labs'),
     code(r"""
@@ -1235,6 +1684,13 @@ sudo rm -rf /opt/agents /opt/lab-tools /opt/open-webui ~/gw-labs
 # on .101, remove the mcp_servers block from Lab 8 (and the lab- models, if you added them
 # only for these labs) from config.yaml, then: sudo systemctl restart litellm
 """),
+    explain(
+        ('sudo systemctl stop ...', 'Stop the four services.'),
+        ('sudo rm /etc/containers/systemd/{...}', 'Delete their Quadlet files. After the <code>daemon-reload</code> the services no longer exist.'),
+        ('sudo podman volume rm open-webui', 'Delete Open WebUI&#x27;s data: accounts and chats.'),
+        ('sudo podman rmi ...', 'Delete the two images you built.'),
+        ('sudo rm -rf /opt/agents ... ~/gw-labs', 'Delete the lab directories and everything in them. <code>-r</code> includes their contents and <code>-f</code> skips the prompts, so check the paths before you press Enter.'),
+    ),
 )
 
 labs_html = ''.join([L0, L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11])
