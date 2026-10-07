@@ -1210,7 +1210,7 @@ L7 = lab(7, 'Agent 3: Publish Agents Through the Gateway (A2A)', '192.168.1.100 
     h3('Why go through the gateway'),
     p('Calling agents directly (Lab 6) works, but then every caller needs to know every agent&#x27;s address, and nothing checks who&#x27;s calling. Registered with the gateway, all agents live at one address, <code>http://192.168.1.101:4000/a2a/&lt;name&gt;</code>. Each call needs a virtual key that&#x27;s been granted that agent, and every call is logged. You can move an agent to another host by changing its registration, and no caller has to change anything.'),
     h3('1. Register the agents'),
-    p('Registration is the agent card plus a name for the gateway. <code>url</code> is where LiteLLM forwards calls.'),
+    p('Registration is an agent card plus a name for the gateway. Each agent already serves its own card (Lab 6), but you type it out here because LiteLLM takes the card in an older, flat layout with a single top-level <code>url</code>: the address it forwards calls to. The agents&#x27; own cards list their address under <code>supportedInterfaces</code> instead.'),
     code(r"""
 cat > ~/gw-labs/ops-agent.json <<'EOF'
 {
@@ -1249,14 +1249,22 @@ EOF
 
 for a in ops-agent writer-agent; do
   curl -s $GW/v1/agents -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-    -d @$HOME/gw-labs/$a.json | jq '{agent_name, agent_id}'
+    -d @$HOME/gw-labs/$a.json | jq '{agent_name, agent_id, detail}'
 done
 """),
     explain(
-        ("cat > ~/gw-labs/ops-agent.json <<'EOF'", 'Save each registration to a file. <code>agent_name</code> is the name in the gateway&#x27;s URL (<code>/a2a/ops-agent</code>). <code>agent_card_params</code> is the agent card the gateway shows callers, and its <code>url</code> is where the gateway forwards their calls.'),
+        ("cat > ~/gw-labs/ops-agent.json <<'EOF'", 'Save each registration to a file. The heredoc is quoted, since there&#x27;s nothing for the shell to fill in.'),
+        ('"agent_name"', 'The name in the gateway&#x27;s URL: <code>/a2a/ops-agent</code>. It must be unique on the gateway.'),
+        ('"agent_card_params": {...}', 'The agent card the gateway shows callers who ask what agents exist.'),
+        ('"protocolVersion": "1.0"', 'The A2A version the agent speaks, so the gateway knows how to talk to it.'),
+        ('"url": "http://192.168.1.100:8601/"', 'Where the gateway forwards calls: the agent service from Lab 6.'),
+        ('"name" / "description" / "version"', 'What callers see. Other agents read <code>description</code> to decide whether this agent can help them, much as a model reads a tool&#x27;s description.'),
+        ('"defaultInputModes" / "defaultOutputModes"', 'The kinds of content it takes and returns: plain text only.'),
+        ('"capabilities": {"streaming": false}', 'It answers in one piece rather than streaming progress.'),
+        ('"skills": [...]', 'A list of the specific things the agent can do, each with an ID, a name, a description and search tags. One skill per agent is enough here.'),
         ('for a in ops-agent writer-agent; do ... done', 'Run the <code>curl</code> once per agent, with the name in <code>$a</code>, so <code>@$HOME/gw-labs/$a.json</code> sends <code>ops-agent.json</code> and then <code>writer-agent.json</code>.'),
         ('curl -s $GW/v1/agents ... -d @...', 'POST the registration to <code>/v1/agents</code>. Registering is an admin job, so it uses the master key.'),
-        ("jq '{agent_name, agent_id}'", 'Show the name and the ID the gateway gave the agent.'),
+        ("jq '{agent_name, agent_id, detail}'", 'Show the name and the ID the gateway gave the agent. <code>detail</code> is <code>null</code> on success. If you run this again, the gateway refuses to register the same name twice: you get <code>null</code> for the name and ID and &quot;Agent with name ops-agent already exists&quot; in <code>detail</code>. That&#x27;s harmless; the first registration is still there.'),
     ),
     p('Each agent gets an <code>agent_id</code>. You&#x27;ll use the IDs to grant access. List them again any time with:'),
     code(r"""
@@ -1302,6 +1310,8 @@ echo "CALLER_KEY=$CALLER_KEY" >> ~/gw-labs/keys.env
     ),
     h3('Verify'),
     code(r"""
+. ~/gw-labs/keys.env                       # UIKEY from Lab 3, CALLER_KEY from step 3
+
 # the key sees only the agent it was granted
 curl -s $GW/v1/agents -H "Authorization: Bearer $CALLER_KEY" | jq -r '.[].agent_name'
 # ops-agent
@@ -1315,6 +1325,7 @@ curl -s $GW/v1/agents -H "Authorization: Bearer $UIKEY" | jq length
 # 0
 """),
     explain(
+        ('. ~/gw-labs/keys.env', 'Load your saved keys. Without it, in a new shell <code>$UIKEY</code> is empty, and the last check gets an error instead of <code>0</code>.'),
         ("... -H \"Authorization: Bearer $CALLER_KEY\" | jq -r '.[].agent_name'", 'List agents as the new key sees them: only the names it was granted.'),
         ('curl -s $GW/a2a/ops-agent ... $CALLER_KEY', 'The same call as step 2, now with the limited key.'),
         ('... $UIKEY | jq length', '<code>length</code> counts the items in the list. The <code>chat-ui</code> key sees zero agents.'),
@@ -1325,7 +1336,7 @@ curl -s $GW/v1/agents -H "Authorization: Bearer $UIKEY" | jq length
         'LiteLLM also accepts older A2A v0.3 clients (<code>&quot;method&quot;: &quot;message/send&quot;</code>, parts with <code>&quot;kind&quot;: &quot;text&quot;</code>) and translates them for these 1.0 agents.',
         'The admin UI&#x27;s <strong>Agents</strong> page shows the same registrations, and can add or delete them.',
         'Registrations are kept in the database. They survive a gateway restart only if the config has <code>store_model_in_db: true</code> (<a href="#lab-1">Lab 1</a>, step 2). If <code>/v1/agents</code> comes back empty after a restart, that setting is missing.',
-        'To change where an agent lives, delete its registration (<code>curl -X DELETE $GW/v1/agents/&lt;agent_id&gt;</code>) and register it again with the new <code>url</code>. Its ID changes, so update the keys that were granted the old one.',
+        'To change where an agent lives, delete its registration (<code>curl -s -X DELETE $GW/v1/agents/$OPS_ID -H &quot;Authorization: Bearer $MK&quot;</code>), edit <code>url</code> in its JSON file and run the registration again. It gets a <strong>new ID</strong>, and keys granted the old ID silently lose access. Re-grant them: set <code>OPS_ID</code> again as in step 3, write <code>{&quot;key&quot;: &quot;$CALLER_KEY&quot;, &quot;object_permission&quot;: {&quot;agents&quot;: [&quot;$OPS_ID&quot;]}}</code> to a file with an unquoted heredoc, and send it to <code>$GW/key/update</code> with <code>-d @file</code>, as in Lab 3. The gateway caches keys, so a key that was used recently can take up to a minute to see the change.',
         'Treat what an agent returns, including its card, as untrusted text. Another agent&#x27;s reply can contain instructions aimed at the model reading it.',
     ]),
 )
