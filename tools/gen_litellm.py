@@ -733,6 +733,16 @@ pip install "openai==3.24.0"
     ),
     p('<code>chat.py</code> keeps the history in a list (step 2) and streams each answer (step 3):'),
     write_file('~/gw-labs/chat.py', 'chat.py'),
+    explain(
+        ('client = OpenAI(base_url=..., api_key=...)', 'A client for the OpenAI API, pointed at the gateway (<code>$GW/v1</code>) instead of OpenAI, with the key from <code>KEY</code>. This line is the only thing that makes it a &quot;gateway&quot; program.'),
+        ('MODEL = os.environ.get("MODEL", "lab-chat")', 'Use the model named in <code>MODEL</code>, or <code>lab-chat</code> if it isn&#x27;t set.'),
+        ('history = [{"role": "system", ...}]', 'The conversation so far, starting with the system message. This list is the program&#x27;s memory (step 2).'),
+        ('input("\\nyou> ")', 'Wait for you to type a line. Ctrl-D raises <code>EOFError</code>, which ends the loop.'),
+        ('history.append({"role": "user", ...})', 'Add your question to the conversation.'),
+        ('client.chat.completions.create(..., messages=history, stream=True)', 'Send the <em>whole</em> history and ask for a streamed answer (step 3).'),
+        ('for chunk in stream: ... print(piece, end="", flush=True)', 'Print each piece as it arrives, without a newline, and collect the pieces into <code>answer</code>.'),
+        ('history.append({"role": "assistant", "content": answer})', 'Add the full answer to the conversation, so the next question can refer to it.'),
+    ),
     code(r"""
 KEY=$MK python chat.py
 # you> My name is Pat.
@@ -957,23 +967,45 @@ echo "OPS_KEY=$OPS_KEY" >> ~/gw-labs/keys.env
         ('echo "OPS_KEY=$OPS_KEY" >> ~/gw-labs/keys.env', 'Save it in your key file too, as in Lab 3.'),
     ),
     h3('2. The agent'),
-    write_file('~/gw-labs/agent.py', 'agent.py'),
-    p('Read it top to bottom: the tools are plain Python functions, <code>TOOL_SPECS</code> describes them to the model, and <code>run()</code> is the loop. <code>max_steps</code> stops a confused model from looping forever. The two settings near the middle (<code>AGENT_PROMPT</code>, <code>AGENT_TOOLS</code>) let Lab 6 reuse this file for a second agent.'),
-    h3('3. Run it'),
+    p('The program needs one more library, <code>httpx</code>, which its <code>check_url</code> tool uses to fetch web pages. Install it into the environment from Lab 2:'),
     code(r"""
 cd ~/gw-labs && . .venv/bin/activate
 pip install "httpx==0.28.1"
+"""),
+    explain(
+        ('cd ~/gw-labs && . .venv/bin/activate', 'Go to the lab directory and switch to its Python environment (Lab 2).'),
+        ('pip install "httpx==0.28.1"', 'Install <code>httpx</code> at the tested version. Only needed once.'),
+    ),
+    write_file('~/gw-labs/agent.py', 'agent.py'),
+    p('What the program does, part by part. The loop at the end is the four steps from the top of this lab:'),
+    explain(
+        ('client = OpenAI(...) / MODEL = ...', 'A client pointed at the gateway with the agent&#x27;s own key (<code>AGENT_KEY</code>), and the model to ask for: <code>lab-agent</code> unless <code>AGENT_MODEL</code> says otherwise.'),
+        ('get_time, check_url, check_port', 'The tools: ordinary Python functions that return a short text result. Nothing about them is AI-specific.'),
+        ('TOOLS = {...}', 'Maps each tool&#x27;s name to its function, so the program can look up the function the model asks for by name.'),
+        ('call_tool(name, arguments)', 'Runs one tool. The model sends the arguments as a JSON string, so this decodes them first. If the model asks for a tool that doesn&#x27;t exist, or sends arguments that don&#x27;t fit, the error goes back to the model as the tool&#x27;s result instead of crashing the program, and the model usually corrects itself on the next pass. Models do get this wrong sometimes, so every agent needs this.'),
+        ('TOOL_SPECS = [...]', 'How the model learns the tools exist: each one&#x27;s name, a <code>description</code> the model reads to decide when to use it, and its parameters as JSON Schema (names, types, which are <code>required</code>). This list is sent with every request.'),
+        ('SYSTEM / USE_TOOLS', 'The system prompt, and whether to offer the tools at all. Each reads an environment variable (<code>AGENT_PROMPT</code>, <code>AGENT_TOOLS</code>) and falls back to the ops-agent defaults. Lab 6 runs this same file as a second agent by setting those two variables.'),
+        ('messages = [system, user]', 'The conversation starts with the system prompt and your question.'),
+        ('reply = client.chat.completions.create(..., tools=TOOL_SPECS)', 'One pass around the loop: an ordinary chat request through the gateway, with the tool list attached.'),
+        ('if not msg.tool_calls: return msg.content', 'The model answered in plain text instead of asking for a tool: that&#x27;s the final answer.'),
+        ('messages.append(msg.model_dump(...))', 'Otherwise, add the model&#x27;s tool request to the conversation, so on the next pass it remembers what it asked for.'),
+        ('for call in msg.tool_calls: ... {"role": "tool", ...}', 'Run each requested tool (the model can ask for several at once), print a <code>[tool]</code> line so you can watch, and add each result as a <code>tool</code> message. <code>tool_call_id</code> tells the model which request the result belongs to.'),
+        ('for _ in range(max_steps): ... "Stopped: too many steps."', 'Go round at most 8 times, so a confused model can&#x27;t loop forever.'),
+        ('if __name__ == "__main__":', 'When you run the file directly, use the command-line arguments as the question. Lab 6 imports the file instead and calls <code>run()</code> itself.'),
+    ),
+    h3('3. Run it'),
+    code(r"""
+cd ~/gw-labs && . .venv/bin/activate
 AGENT_KEY=$OPS_KEY python agent.py "Is http://192.168.1.101:4000/health/liveliness answering, is port 22 open on 192.168.1.100, and what time is it?"
-#   [tool] check_url({'url': 'http://192.168.1.101:4000/health/liveliness'}) -> HTTP 200 in 16 ms
-#   [tool] check_port({'host': '192.168.1.100', 'port': 22}) -> 192.168.1.100:22 is open
+#   [tool] check_url({"url":"http://192.168.1.101:4000/health/liveliness"}) -> HTTP 200 in 16 ms
+#   [tool] check_port({"host":"192.168.1.100","port":22}) -> 192.168.1.100:22 is open
 #   [tool] get_time({}) -> 2026-10-06T00:27:31+00:00
 # - 192.168.1.101:4000/health/liveliness: HTTP 200 (16 ms)
 # - 192.168.1.100 port 22: open
 # - Time: 2026-10-06 00:27 UTC
 """),
     explain(
-        ('cd ~/gw-labs && . .venv/bin/activate', 'Go to the lab directory and switch to its Python environment (Lab 2). Needed again in every new shell.'),
-        ('pip install "httpx==0.28.1"', 'Install <code>httpx</code>, which the agent&#x27;s <code>check_url</code> tool uses to make web requests. Only needed once.'),
+        ('cd ~/gw-labs && . .venv/bin/activate', 'Go to the lab directory and switch to its Python environment. Needed again in every new shell, along with <code>. ~/gw-labs/keys.env</code> for <code>$OPS_KEY</code>.'),
         ('AGENT_KEY=$OPS_KEY python agent.py "..."', 'Run the agent with its own key, set for this command only, and pass your question as the argument. The quotes keep the question together as one argument.'),
     ),
     p('The <code>[tool]</code> lines are the loop at work: the model chose which tools to call and with what arguments, and the program ran them. Try a question that needs no tools (&quot;What is a TCP port?&quot;) and one about a port that&#x27;s closed.'),

@@ -37,6 +37,17 @@ def check_port(host: str, port: int) -> str:
 
 TOOLS = {"get_time": get_time, "check_url": check_url, "check_port": check_port}
 
+
+def call_tool(name: str, arguments: str) -> str:
+    """Run one tool the model asked for. Mistakes go back to the model as text, so it can retry."""
+    if name not in TOOLS:
+        return f"error: there is no tool called {name!r}"
+    try:
+        return TOOLS[name](**json.loads(arguments or "{}"))
+    except (json.JSONDecodeError, TypeError) as err:
+        return f"error: bad arguments for {name}: {err}"
+
+
 # ---- how the model learns about the tools: JSON Schema descriptions --------
 TOOL_SPECS = [
     {"type": "function", "function": {
@@ -68,9 +79,8 @@ def run(question: str, max_steps: int = 8) -> str:
             return msg.content
         messages.append(msg.model_dump(exclude_none=True))
         for call in msg.tool_calls:                 # run each requested tool, return the result
-            args = json.loads(call.function.arguments or "{}")
-            result = TOOLS[call.function.name](**args)
-            print(f"  [tool] {call.function.name}({args}) -> {result}", file=sys.stderr)
+            result = call_tool(call.function.name, call.function.arguments)
+            print(f"  [tool] {call.function.name}({call.function.arguments}) -> {result}", file=sys.stderr)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
     return "Stopped: too many steps."
 
