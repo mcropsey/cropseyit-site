@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Cropsey IT Blog</title>
+    <link>https://cropseyit.com/blog/</link>
+    <description>Linux, containers, networking and AI security, worked through on real systems.</description>
+    <language>en-us</language>
+    <item>
+      <title>Run Containers as systemd Services with Podman Quadlets</title>
+      <link>https://cropseyit.com/blog/podman-quadlets.html</link>
+      <guid>https://cropseyit.com/blog/podman-quadlets.html</guid>
+      <pubDate>Mon, 19 Oct 2026 12:00:00 +0000</pubDate>
+      <description>Turn a podman run command into a service that starts at boot, restarts when it crashes and logs to the journal, using a short Quadlet file instead of Docker&#x27;s daemon.</description>
+    </item>
+  </channel>
+</rss>

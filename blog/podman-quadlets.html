@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Run Containers as systemd Services with Podman Quadlets</title>
+  <meta name="description" content="Turn a podman run command into a service that starts at boot, restarts when it crashes and logs to the journal, using a short Quadlet file instead of Docker&#x27;s daemon.">
+  <meta name="author" content="Mike Cropsey">
+  <link rel="canonical" href="https://cropseyit.com/blog/podman-quadlets.html">
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="alternate" type="application/rss+xml" title="Cropsey IT Blog" href="/blog/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Cropsey IT Solutions, LLC">
+  <meta property="og:title" content="Run Containers as systemd Services with Podman Quadlets">
+  <meta property="og:description" content="Turn a podman run command into a service that starts at boot, restarts when it crashes and logs to the journal, using a short Quadlet file instead of Docker&#x27;s daemon.">
+  <meta property="og:url" content="https://cropseyit.com/blog/podman-quadlets.html">
+  <meta property="og:image" content="https://cropseyit.com/logo.png">
+  <meta name="twitter:card" content="summary">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f5f7fb;
+      --surface-2: #eef2fa;
+      --text: #0f172a;
+      --text-muted: #4b5568;
+      --border: #e2e7f0;
+      --brand: #1238a8;
+      --brand-hover: #0d2b85;
+      --cyan: #0a9bd6;
+      --teal: #0f7a5c;
+      --hero-bg: #0a1430;
+      --hero-text: #e8eefc;
+      --hero-muted: #a9b6d6;
+      --tag-bg: #e6eefc;
+      --tag-text: #1238a8;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1222;
+        --surface: #111a2e;
+        --surface-2: #16213a;
+        --text: #e6ebf5;
+        --text-muted: #a3afc7;
+        --border: #23304d;
+        --brand: #6f9bff;
+        --brand-hover: #9bbaff;
+        --cyan: #38c4f5;
+        --teal: #3fc79c;
+        --hero-bg: #070d1d;
+        --tag-bg: #1a2a4d;
+        --tag-text: #a9c2ff;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+    a { color: var(--brand); text-decoration: none; }
+    a:hover { color: var(--brand-hover); text-decoration: underline; }
+    .container { max-width: 1040px; margin: 0 auto; padding: 0 1rem; }
+    @media (min-width: 720px) { .container { padding: 0 1.5rem; } }
+
+    /* Header */
+    header {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 0.6rem 1.25rem; padding: 0.75rem 0;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 0.65rem;
+      font-weight: 700; font-size: 1.02rem; color: var(--text); letter-spacing: -0.01em;
+    }
+    .logo:hover { text-decoration: none; color: var(--brand); }
+    .logo img { width: 36px; height: 36px; border-radius: 8px; background: #fff; object-fit: contain; }
+    nav { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem 1.15rem; }
+    nav a { color: var(--text-muted); font-size: 0.93rem; font-weight: 500; }
+    nav a:hover { color: var(--text); text-decoration: none; }
+    .social { display: flex; gap: 0.8rem; align-items: center; }
+    .social a { color: var(--text-muted); display: inline-flex; }
+    .social a:hover { color: var(--brand); }
+    .social svg { width: 19px; height: 19px; }
+
+    
+    footer { border-top: 1px solid var(--border); padding: 2rem 0; color: var(--text-muted); font-size: 0.9rem; }
+    .footer-inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem 1.5rem; }
+  
+    main { padding: 3rem 0 4rem; }
+    .narrow { max-width: 46rem; }
+    .kicker { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cyan); margin-bottom: 0.5rem; }
+    .kicker a { color: inherit; }
+    h1 { font-size: clamp(1.7rem, 4vw, 2.4rem); font-weight: 750; line-height: 1.15; letter-spacing: -0.025em; text-wrap: balance; }
+    .meta { color: var(--text-muted); font-size: 0.92rem; margin: 0.75rem 0 2.25rem; }
+    article h2 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.015em; margin: 2.5rem 0 0.75rem; line-height: 1.25; }
+    article h3 { font-size: 1.12rem; font-weight: 650; margin: 1.75rem 0 0.5rem; }
+    article p, article ul, article ol, article table, article blockquote { margin-bottom: 1rem; }
+    article ul, article ol { padding-left: 1.4rem; }
+    article li { margin-top: 0.3rem; }
+    article code { font-family: var(--mono); font-size: 0.88em; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.05em 0.3em; overflow-wrap: anywhere; }
+    article pre { position: relative; background: #0a1430; color: #e8eefc; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.1rem; overflow-x: auto; font-size: 0.86rem; line-height: 1.55; }
+    article pre code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; overflow-wrap: normal; }
+    article pre .copy { position: absolute; top: 0.5rem; right: 0.5rem; font: 600 0.72rem system-ui, sans-serif; color: #a9b6d6; background: #16213a; border: 1px solid #23304d; border-radius: 6px; padding: 0.2rem 0.55rem; cursor: pointer; }
+    article pre .copy:hover { color: #fff; }
+    article blockquote { border-left: 3px solid var(--cyan); background: var(--surface); padding: 0.75rem 1rem; border-radius: 0 8px 8px 0; color: var(--text-muted); }
+    article blockquote p:last-child { margin-bottom: 0; }
+    .tablewrap { overflow-x: auto; margin-bottom: 1.1rem; }
+    article table { border-collapse: collapse; width: 100%; font-size: 0.93rem; margin: 0; }
+    article th, article td { text-align: left; vertical-align: top; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border); }
+    article th { background: var(--surface); font-weight: 650; }
+    article td:first-child code { white-space: nowrap; }
+    .posts { list-style: none; }
+    .posts li { padding: 1.4rem 0; border-bottom: 1px solid var(--border); }
+    .posts li:first-child { padding-top: 0; }
+    .posts h2 { font-size: 1.25rem; font-weight: 680; letter-spacing: -0.01em; margin: 0.2rem 0 0.35rem; }
+    .posts time { color: var(--text-muted); font-size: 0.88rem; font-family: var(--mono); }
+    .posts p { color: var(--text-muted); }
+    .back { margin-top: 3rem; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container header-inner">
+      <a href="/" class="logo">
+        <img src="/logo.webp" alt="Cropsey IT logo" width="36" height="36">
+        Cropsey IT Solutions, LLC
+      </a>
+      <nav>
+        <a href="/#focus">Focus</a>
+        <a href="/#services">Services</a>
+        <a href="/rhcsa.html">RHCSA Labs</a>
+        <a href="/litellm.html">AI Gateway Labs</a>
+        <a href="/blog/">Blog</a>
+        <a href="/#contact">Contact</a>
+        <div class="social">
+          <a href="https://www.linkedin.com/in/michael-cropsey/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          </a>
+          <a href="https://github.com/mcropsey" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          </a>
+          <a href="https://www.youtube.com/@mikecropsey1966" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          </a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container narrow">
+      <article>
+        <p class="kicker"><a href="/blog/">Blog</a></p>
+        <h1>Run Containers as systemd Services with Podman Quadlets</h1>
+        <p class="meta">Mike Cropsey &middot; <time datetime="2026-10-19">October 19, 2026</time></p>
+<p>You have a container working with <code>podman run</code>. Now you want it to start when the server boots, come back if it crashes, write its logs where the rest of your logs go, and start after the things it depends on. Docker does this with a daemon and <code>--restart=always</code>. Podman has no daemon, so the job goes to the service manager that's already running everything else on the box: <strong>systemd</strong>.</p>
+<p><strong>Quadlet</strong> is how you describe a container to systemd. You write a short file that looks like a systemd unit, and Podman turns it into a real service. If you've seen <code>podman generate systemd</code>, that command is deprecated; Quadlet replaces it.</p>
+<blockquote>
+<p>Everything below was run on Rocky Linux 9.8 with Podman 5.8.2. It works the same on RHEL 9 and 10, Rocky 10, and Fedora. Quadlet first shipped in Podman 4.4.</p>
+</blockquote>
+<h2 id="how-it-works">How it works</h2>
+<ol>
+<li>You write a file such as <code>hello.container</code> in <code>/etc/containers/systemd/</code>.</li>
+<li>You run <code>systemctl daemon-reload</code>. That runs Podman's Quadlet <em>generator</em>, which reads your file and writes a full service, <code>hello.service</code>, into <code>/run/systemd/generator/</code>.</li>
+<li>You manage <code>hello.service</code> like any other service: <code>start</code>, <code>stop</code>, <code>status</code>, <code>journalctl</code>.</li>
+</ol>
+<p>The generated service lives in <code>/run</code>, which is in memory. It's rebuilt at every boot and every <code>daemon-reload</code>, so you never edit it. Your <code>.container</code> file is the only thing you maintain, and it's short enough to keep in Git.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Who runs the container</th>
+<th>Put Quadlet files in</th>
+<th>Manage with</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>root (rootful)</td>
+<td><code>/etc/containers/systemd/</code></td>
+<td><code>sudo systemctl ...</code></td>
+</tr>
+<tr>
+<td>your own user (rootless)</td>
+<td><code>~/.config/containers/systemd/</code></td>
+<td><code>systemctl --user ...</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Rootful is simpler, so we'll start there and cover rootless later.</p>
+<h2 id="your-first-quadlet-a-small-web-server">Your first Quadlet: a small web server</h2>
+<p>Make a folder with a web page in it:</p>
+<pre><code class="language-bash">sudo mkdir -p /srv/hello
+echo &quot;Hello from a Quadlet&quot; | sudo tee /srv/hello/index.html
+</code></pre>
+<p>Then write the Quadlet file. This uses <code>tee</code> with a heredoc so you can paste it in one go:</p>
+<pre><code class="language-bash">sudo tee /etc/containers/systemd/hello.container &lt;&lt;'EOF'
+[Unit]
+Description=Hello web server
+
+[Container]
+Image=docker.io/library/nginx:1.29-alpine
+ContainerName=hello
+PublishPort=8080:80
+Volume=/srv/hello:/usr/share/nginx/html:ro,Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+</code></pre>
+<p>Each line does one job:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Line</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[Unit]</code> <code>Description=</code></td>
+<td>Ordinary systemd. This text shows up in <code>systemctl status</code>.</td>
+</tr>
+<tr>
+<td><code>[Container]</code></td>
+<td>The Quadlet part. Each key here becomes an option on the <code>podman run</code> command that systemd will run.</td>
+</tr>
+<tr>
+<td><code>Image=</code></td>
+<td>The image to run. Use the full name (<code>docker.io/library/...</code>), not just <code>nginx</code>, so nothing has to guess which registry you meant.</td>
+</tr>
+<tr>
+<td><code>ContainerName=hello</code></td>
+<td>Names the container <code>hello</code>. Without it, Quadlet names it <code>systemd-hello</code>.</td>
+</tr>
+<tr>
+<td><code>PublishPort=8080:80</code></td>
+<td>Port 8080 on the host goes to port 80 in the container. Same as <code>-p 8080:80</code>.</td>
+</tr>
+<tr>
+<td><code>Volume=/srv/hello:...:ro,Z</code></td>
+<td>Mounts the host folder into the container, read-only (<code>ro</code>). The <code>Z</code> relabels the folder for SELinux so the container is allowed to read it. Leave it off and nginx gets "permission denied".</td>
+</tr>
+<tr>
+<td><code>[Service]</code> <code>Restart=always</code></td>
+<td>Ordinary systemd: if the container stops for any reason other than you stopping it, start it again.</td>
+</tr>
+<tr>
+<td><code>[Install]</code> <code>WantedBy=multi-user.target</code></td>
+<td>Start it at boot, along with the server's other services.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Now have systemd pick it up and start it:</p>
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl start hello
+systemctl status hello --no-pager
+curl http://localhost:8080
+</code></pre>
+<p><code>status</code> shows it running, and <code>generated</code> tells you Quadlet made it:</p>
+<pre><code class="language-text">● hello.service - Hello web server
+     Loaded: loaded (/etc/containers/systemd/hello.container; generated)
+     Active: active (running) since Mon 2026-10-19 09:22:17 CDT; 3s ago
+</code></pre>
+<p><code>curl</code> prints <code>Hello from a Quadlet</code>. To reach it from another machine, open the port in the firewall:</p>
+<pre><code class="language-bash">sudo firewall-cmd --permanent --add-port=8080/tcp
+sudo firewall-cmd --reload
+</code></pre>
+<h2 id="dont-run-systemctl-enable">Don't run <code>systemctl enable</code></h2>
+<p>Habit says to run <code>systemctl enable hello</code> next. It fails:</p>
+<pre><code class="language-text">Failed to enable unit: Unit /run/systemd/generator/hello.service is transient or generated.
+</code></pre>
+<p>That's expected. <code>enable</code> works by creating links next to a unit file, and a generated unit is rebuilt from scratch every time. In a Quadlet, the <code>[Install]</code> section does that job instead: the generator reads <code>WantedBy=multi-user.target</code> and creates the boot link itself. <code>systemctl is-enabled hello</code> answers <code>generated</code>, and the container starts at the next boot.</p>
+<p>To stop a Quadlet from starting at boot, remove or comment out the <code>[Install]</code> section and run <code>daemon-reload</code>.</p>
+<h2 id="see-what-quadlet-built">See what Quadlet built</h2>
+<p>You don't have to take the generator's work on trust. Two ways to look:</p>
+<pre><code class="language-bash">systemctl cat hello
+sudo /usr/libexec/podman/quadlet -dryrun
+</code></pre>
+<p><code>systemctl cat</code> shows the unit systemd is using. <code>quadlet -dryrun</code> runs the generator without changing anything and prints every unit it would make, along with any errors in your files. Use <code>-dryrun -user</code> for rootless files. If a Quadlet doesn't show up after <code>daemon-reload</code>, this is the first thing to run, because a typo in a key name stops the unit from being generated at all.</p>
+<p>The most useful line in the output is the command systemd actually runs:</p>
+<pre><code class="language-text">ExecStart=/usr/bin/podman run --name hello --replace --rm --cgroups=split --sdnotify=conmon -d -v /srv/hello:/usr/share/nginx/html:ro,Z --publish 8080:80 docker.io/library/nginx:1.29-alpine
+</code></pre>
+<p>Note <code>--rm</code> and <code>--replace</code>. <strong>The container is thrown away when it stops and created fresh when it starts.</strong> Anything written inside the container and not in a volume is gone after a restart. That's the point: the container stays disposable and your data lives in volumes, which are the next section.</p>
+<p>Newer Podman releases also have <code>podman quadlet list</code>, which shows every Quadlet and whether it's running:</p>
+<pre><code class="language-text">NAME             UNIT NAME      PATH ON DISK                             STATUS          APPLICATION
+hello.container  hello.service  /etc/containers/systemd/hello.container  active/running
+</code></pre>
+<h3 id="it-comes-back-on-its-own">It comes back on its own</h3>
+<p>Kill the container behind systemd's back and watch it return:</p>
+<pre><code class="language-bash">sudo podman kill hello
+sleep 4
+systemctl show hello -p NRestarts -p ActiveState
+</code></pre>
+<pre><code class="language-text">NRestarts=1
+ActiveState=active
+</code></pre>
+<h3 id="its-logs-are-in-the-journal">Its logs are in the journal</h3>
+<p>Everything the container prints goes to the journal under the service name, next to the rest of the system's logs:</p>
+<pre><code class="language-bash">sudo journalctl -u hello -f
+</code></pre>
+<p>If you ship the journal to Loki or a SIEM, your containers come along with no extra setup.</p>
+<h2 id="two-pieces-a-database-with-its-own-network-volume-and-password">Two pieces: a database with its own network, volume and password</h2>
+<p>Real services have parts. Here's PostgreSQL with a private network, a named volume for its data, and a password kept out of the files. Quadlet has a file type for each part.</p>
+<p>First, store the password as a Podman secret, so it never appears in a file you might commit:</p>
+<pre><code class="language-bash">printf 'change-me-to-something-long' | sudo podman secret create demo-db-pass -
+</code></pre>
+<p>Then the three Quadlet files. The network and volume files can be empty; defaults are fine.</p>
+<pre><code class="language-bash">sudo tee /etc/containers/systemd/demo.network &lt;&lt;'EOF'
+[Network]
+EOF
+
+sudo tee /etc/containers/systemd/demo-db.volume &lt;&lt;'EOF'
+[Volume]
+EOF
+
+sudo tee /etc/containers/systemd/demo-db.container &lt;&lt;'EOF'
+[Unit]
+Description=Demo PostgreSQL database
+
+[Container]
+Image=docker.io/library/postgres:17-alpine
+ContainerName=demo-db
+Network=demo.network
+Volume=demo-db.volume:/var/lib/postgresql/data
+Secret=demo-db-pass,type=env,target=POSTGRES_PASSWORD
+HealthCmd=pg_isready -U postgres
+HealthInterval=10s
+Notify=healthy
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl start demo-db
+</code></pre>
+<p>What's new here:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Line</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>demo.network</code></td>
+<td>Creates a Podman network. Containers on it can reach each other by container name, and nothing else is on it.</td>
+</tr>
+<tr>
+<td><code>demo-db.volume</code></td>
+<td>Creates a named volume. It's kept when the container is thrown away and recreated, so the database survives restarts and upgrades.</td>
+</tr>
+<tr>
+<td><code>Network=demo.network</code></td>
+<td>Joins the network. Naming the <em>file</em> (with <code>.network</code> on the end) tells Quadlet to make sure the network exists first.</td>
+</tr>
+<tr>
+<td><code>Volume=demo-db.volume:/var/lib/...</code></td>
+<td>Mounts the named volume where PostgreSQL keeps its data. Again, naming the file adds the dependency.</td>
+</tr>
+<tr>
+<td><code>Secret=demo-db-pass,type=env,target=POSTGRES_PASSWORD</code></td>
+<td>Hands the secret to the container as the <code>POSTGRES_PASSWORD</code> variable. The password is in Podman's secret store, not in this file.</td>
+</tr>
+<tr>
+<td><code>HealthCmd=</code> <code>HealthInterval=</code></td>
+<td>A command Podman runs every 10 seconds to check that the database is actually answering, not just that the process exists.</td>
+</tr>
+<tr>
+<td><code>Notify=healthy</code></td>
+<td>Tells systemd the service hasn't finished starting until the health check passes. <code>systemctl start demo-db</code> waits until PostgreSQL accepts connections, so anything that starts after it can connect straight away.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Quadlet wired the dependencies up for you. <code>systemctl cat demo-db</code> shows:</p>
+<pre><code class="language-text">Requires=demo-network.service
+After=demo-network.service
+Requires=demo-db-volume.service
+After=demo-db-volume.service
+</code></pre>
+<p>Note the names, because they trip people up. Each file becomes a service with a suffix, and the Podman object gets a <code>systemd-</code> prefix:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>systemd unit</th>
+<th>Podman object</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>demo.network</code></td>
+<td><code>demo-network.service</code></td>
+<td>network <code>systemd-demo</code></td>
+</tr>
+<tr>
+<td><code>demo-db.volume</code></td>
+<td><code>demo-db-volume.service</code></td>
+<td>volume <code>systemd-demo-db</code></td>
+</tr>
+<tr>
+<td><code>demo-db.container</code></td>
+<td><code>demo-db.service</code></td>
+<td>container <code>demo-db</code> (set by <code>ContainerName=</code>)</td>
+</tr>
+</tbody>
+</table></div>
+<p>To prove the network works, run a throwaway client on the same network and connect by name:</p>
+<pre><code class="language-bash">sudo podman run --rm --network systemd-demo -e PGPASSWORD='change-me-to-something-long' \
+  docker.io/library/postgres:17-alpine psql -h demo-db -U postgres -c 'select version();'
+</code></pre>
+<p>An app container that needs the database joins the same network and adds ordinary systemd ordering, so it starts only once the database is healthy:</p>
+<pre><code class="language-ini">[Unit]
+Requires=demo-db.service
+After=demo-db.service
+
+[Container]
+Network=demo.network
+</code></pre>
+<h2 id="changing-a-quadlet-and-upgrading-the-image">Changing a Quadlet and upgrading the image</h2>
+<p>Any time you edit a Quadlet file, do both of these, or systemd keeps running the old version:</p>
+<pre><code class="language-bash">sudo systemctl daemon-reload
+sudo systemctl restart hello
+</code></pre>
+<p>For image upgrades you have two choices.</p>
+<p><strong>Pin the tag and upgrade on purpose.</strong> Change <code>Image=</code> to the new tag, then <code>daemon-reload</code> and <code>restart</code>. You decide when it changes, and the file in Git shows exactly what's running. This is what I use for anything with a database behind it.</p>
+<p><strong>Let Podman do it.</strong> Add <code>AutoUpdate=registry</code> under <code>[Container]</code>, then turn on Podman's daily timer:</p>
+<pre><code class="language-bash">sudo systemctl enable --now podman-auto-update.timer
+sudo podman auto-update --dry-run
+</code></pre>
+<p>Once a day, Podman checks whether the registry has a newer image for that tag, pulls it and restarts the service. <code>--dry-run</code> shows what it would update without doing it. The timer isn't on by default, which is easy to miss. Auto-update needs the full image name (<code>docker.io/library/nginx:...</code>), another reason to always write it out.</p>
+<h2 id="rootless-the-same-thing-as-your-own-user">Rootless: the same thing as your own user</h2>
+<p>Running as an ordinary user means a container breakout lands in an unprivileged account instead of root. The file is nearly the same, but goes in your home directory:</p>
+<pre><code class="language-bash">mkdir -p ~/.config/containers/systemd ~/hello-user
+echo &quot;Hello from a rootless Quadlet&quot; &gt; ~/hello-user/index.html
+
+cat &gt; ~/.config/containers/systemd/hello-user.container &lt;&lt;'EOF'
+[Unit]
+Description=Rootless hello web server
+
+[Container]
+Image=docker.io/library/nginx:1.29-alpine
+PublishPort=8081:80
+Volume=%h/hello-user:/usr/share/nginx/html:ro,Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user start hello-user
+</code></pre>
+<p>What's different:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Difference</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>systemctl --user</code>, no <code>sudo</code></td>
+<td>It's your own systemd instance, which runs your services.</td>
+</tr>
+<tr>
+<td><code>%h</code></td>
+<td>systemd's shorthand for your home directory.</td>
+</tr>
+<tr>
+<td><code>WantedBy=default.target</code></td>
+<td>User services start with <code>default.target</code>; there's no <code>multi-user.target</code> in a user's systemd.</td>
+</tr>
+<tr>
+<td>Port 8081, not 80</td>
+<td>Ordinary users can't listen on ports below 1024 by default.</td>
+</tr>
+</tbody>
+</table></div>
+<p>One more step matters more than all of these. By default, your user's systemd only runs while you're logged in. Log out, and your containers stop; reboot, and they don't start until you log in. Fix that with:</p>
+<pre><code class="language-bash">sudo loginctl enable-linger $USER
+</code></pre>
+<h2 id="removing-a-quadlet-cleanly">Removing a Quadlet cleanly</h2>
+<p>This is the one that bites. Network and volume services run once and then sit at <code>active (exited)</code>. If you delete the files first, those services <em>stay</em> active, with nothing on disk behind them:</p>
+<pre><code class="language-text">● demo-network.service
+     Loaded: not-found (Reason: Unit demo-network.service not found.)
+     Active: active (exited) since Mon 2026-10-19 09:22:34 CDT; 38s ago
+</code></pre>
+<p>The network and volume are still there too. Now suppose you clean up with <code>podman network rm</code> and later put the files back. systemd still thinks <code>demo-network.service</code> is running, so it never runs it again to recreate the network, and the database container fails to start because its network is missing. I hit exactly this rebuilding a lab. Stop everything first, then delete:</p>
+<pre><code class="language-bash"># 1. Stop the containers, then the network and volume services
+sudo systemctl stop demo-db
+sudo systemctl stop demo-network demo-db-volume
+
+# 2. Remove the files and tell systemd
+sudo rm /etc/containers/systemd/demo.network \
+        /etc/containers/systemd/demo-db.volume \
+        /etc/containers/systemd/demo-db.container
+sudo systemctl daemon-reload
+
+# 3. Remove what Podman made. This deletes the database's data.
+sudo podman network rm systemd-demo
+sudo podman volume rm systemd-demo-db
+sudo podman secret rm demo-db-pass
+</code></pre>
+<p>Stopping a volume service doesn't delete the volume, so step 3 is a separate, deliberate step. Skip it if you want to keep the data.</p>
+<h2 id="why-i-like-this-from-a-security-point-of-view">Why I like this from a security point of view</h2>
+<ul>
+<li><strong>No daemon running as root.</strong> Nothing sits listening on a socket with full control of every container.</li>
+<li><strong>Rootless is easy.</strong> Same file, different folder, plus <code>enable-linger</code>.</li>
+<li><strong>SELinux stays on.</strong> <code>:Z</code> labels the files the container needs instead of turning protection off.</li>
+<li><strong>Secrets stay out of files</strong>, so the unit files can go in Git and be reviewed like any other change.</li>
+<li><strong>One place for logs and status.</strong> Containers show up in <code>systemctl</code> and <code>journalctl</code> with every other service, so your existing monitoring already covers them.</li>
+</ul>
+<p>Quadlet also has keys for locking a container down further, such as <code>ReadOnly=true</code>, <code>NoNewPrivileges=true</code> and <code>DropCapability=</code>. Add them one at a time and test, since many images expect to write somewhere or need a capability or two.</p>
+<h2 id="cheat-sheet">Cheat sheet</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pick up new or changed files</td>
+<td><code>sudo systemctl daemon-reload</code></td>
+</tr>
+<tr>
+<td>Start, stop, restart</td>
+<td><code>sudo systemctl start NAME</code> (or <code>stop</code>, <code>restart</code>)</td>
+</tr>
+<tr>
+<td>Status and logs</td>
+<td><code>systemctl status NAME</code>, <code>sudo journalctl -u NAME -f</code></td>
+</tr>
+<tr>
+<td>See the generated unit</td>
+<td><code>systemctl cat NAME</code></td>
+</tr>
+<tr>
+<td>Check files for errors</td>
+<td><code>sudo /usr/libexec/podman/quadlet -dryrun</code></td>
+</tr>
+<tr>
+<td>List all Quadlets</td>
+<td><code>sudo podman quadlet list</code></td>
+</tr>
+<tr>
+<td>Start at boot</td>
+<td><code>[Install]</code> <code>WantedBy=multi-user.target</code> (not <code>systemctl enable</code>)</td>
+</tr>
+<tr>
+<td>Rootless at boot</td>
+<td><code>WantedBy=default.target</code> and <code>sudo loginctl enable-linger $USER</code></td>
+</tr>
+<tr>
+<td>Automatic image updates</td>
+<td><code>AutoUpdate=registry</code> and <code>sudo systemctl enable --now podman-auto-update.timer</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>If you're running containers in production and want a second pair of eyes on how they're isolated, updated and monitored, <a href="/#contact">get in touch</a>.</p>
+      </article>
+      <p class="back"><a href="/blog/">&larr; All posts</a> &middot; <a href="/#contact">Work with me</a></p>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <p>&copy; <span id="year"></span> Cropsey IT Solutions, LLC</p>
+      <p><a href="mailto:mcropsey@gmail.com">mcropsey@gmail.com</a> &middot; <a href="/rhcsa.html">RHCSA Labs</a> &middot; <a href="/litellm.html">AI Gateway Labs</a> &middot; <a href="/blog/">Blog</a></p>
+    </div>
+  </footer>
+
+  <script>
+document.getElementById('year').textContent = new Date().getFullYear();
+document.querySelectorAll('article pre').forEach(function (pre) {
+  var b = document.createElement('button');
+  b.className = 'copy'; b.type = 'button'; b.textContent = 'Copy';
+  b.addEventListener('click', function () {
+    navigator.clipboard.writeText(pre.querySelector('code').innerText).then(function () {
+      b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500);
+    });
+  });
+  pre.appendChild(b);
+});
+</script>
+</body>
+</html>
