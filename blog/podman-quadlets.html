@@ -266,6 +266,7 @@ EOF
 <pre><code class="language-bash">sudo systemctl daemon-reload
 sudo systemctl start hello
 systemctl status hello --no-pager
+sleep 2
 curl http://localhost:8080
 </code></pre>
 <p><code>status</code> shows it running, and <code>generated</code> tells you Quadlet made it:</p>
@@ -273,7 +274,7 @@ curl http://localhost:8080
      Loaded: loaded (/etc/containers/systemd/hello.container; generated)
      Active: active (running) since Mon 2026-10-19 09:22:17 CDT; 3s ago
 </code></pre>
-<p><code>curl</code> prints <code>Hello from a Quadlet</code>. To reach it from another machine, open the port in the firewall:</p>
+<p><code>curl</code> prints <code>Hello from a Quadlet</code>. The <code>sleep 2</code> matters: systemd calls the service started as soon as the container launches, a moment before nginx inside it is listening, so a <code>curl</code> straight after <code>start</code> can get "Connection refused". The database example below fixes that properly with a health check. To reach it from another machine, open the port in the firewall:</p>
 <pre><code class="language-bash">sudo firewall-cmd --permanent --add-port=8080/tcp
 sudo firewall-cmd --reload
 </code></pre>

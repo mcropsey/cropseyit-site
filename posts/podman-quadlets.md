@@ -73,6 +73,7 @@ Now have systemd pick it up and start it:
 sudo systemctl daemon-reload
 sudo systemctl start hello
 systemctl status hello --no-pager
+sleep 2
 curl http://localhost:8080
 ```
 
@@ -84,7 +85,7 @@ curl http://localhost:8080
      Active: active (running) since Mon 2026-10-19 09:22:17 CDT; 3s ago
 ```
 
-`curl` prints `Hello from a Quadlet`. To reach it from another machine, open the port in the firewall:
+`curl` prints `Hello from a Quadlet`. The `sleep 2` matters: systemd calls the service started as soon as the container launches, a moment before nginx inside it is listening, so a `curl` straight after `start` can get "Connection refused". The database example below fixes that properly with a health check. To reach it from another machine, open the port in the firewall:
 
 ```bash
 sudo firewall-cmd --permanent --add-port=8080/tcp
