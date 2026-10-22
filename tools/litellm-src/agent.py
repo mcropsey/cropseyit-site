@@ -86,4 +86,4 @@ def run(question: str, max_steps: int = 8) -> str:
 
 
 if __name__ == "__main__":
-    print(run(" ".join(sys.argv[1:]) or "Is the gateway at 192.168.1.101 port 4000 up, and what time is it?"))
+    print(run(" ".join(sys.argv[1:]) or "Is the gateway at 192.168.1.104 port 4000 up, and what time is it?"))

@@ -50,4 +50,4 @@ async def main(question: str) -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main(" ".join(sys.argv[1:]) or "What IP does rocky-linux resolve to, and is port 4000 open on 192.168.1.101?"))
+    asyncio.run(main(" ".join(sys.argv[1:]) or "What IP does rocky-linux resolve to, and is port 4000 open on 192.168.1.104?"))

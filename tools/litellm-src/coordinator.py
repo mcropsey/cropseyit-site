@@ -75,5 +75,5 @@ def main(goal: str) -> None:
 
 
 if __name__ == "__main__":
-    main(" ".join(sys.argv[1:]) or "Check whether the gateway (http://192.168.1.101:4000/health/liveliness) "
+    main(" ".join(sys.argv[1:]) or "Check whether the gateway (http://192.168.1.104:4000/health/liveliness) "
                                     "and SSH on 192.168.1.100 are up, then have the results written up as a status update.")
