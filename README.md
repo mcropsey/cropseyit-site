@@ -18,7 +18,7 @@ Each lab set is **one HTML page** in the repo root. A page holds every lab in th
 | `rhcsa.html` | **RHCSA Lab Workbook**: Labs 1–25 for a two-server RHEL 9/10 setup (EX200 practice). |
 | `lab-diagram.html` | RHCSA lab diagram: the three VMs (server1, server2, utility) and what each one runs. Goes with `rhcsa.html`. |
 | `cheatsheet.html` | RHCSA cheat sheet: one-page command reference taken from `rhcsa.html`. |
-| `litellm.html` | **LiteLLM Gateway Labs**: Labs 0–11 on chat apps and AI agents through a LiteLLM gateway on rootful Podman. |
+| `litellm.html` | **LiteLLM Gateway Labs**: Labs 0–12 on chat apps and AI agents through a LiteLLM gateway on rootful Podman. |
 | `blog/` | Generated blog: `index.html`, `feed.xml` and one page per post. **Don't edit these files**; they're rebuilt from `posts/`. |
 | `posts/*.md` | Blog posts in Markdown (the source for `blog/`). |
 | `tools/` | Generators and the Python programs used by the LiteLLM labs (see below). |
@@ -56,7 +56,7 @@ Related pages: `lab-diagram.html` (the lab setup) and `cheatsheet.html` (quick r
 
 ### LiteLLM Gateway Labs (`litellm.html`)
 
-0. Reference: Setting Up LiteLLM (only if you need to)
+0. Set Up the Gateway
 1. Connect to the Gateway
 2. Chat Through the Gateway: curl and Python
 3. Virtual Keys: One Key per App
@@ -67,10 +67,11 @@ Related pages: `lab-diagram.html` (the lab setup) and `cheatsheet.html` (quick r
 8. Agent 4: Tools from an MCP Server, Through the Gateway
 9. Agent 5: A Coordinator That Delegates to Other Agents
 10. A Coding Agent Through the Gateway: opencode
-11. Operate It: Reboots, Logs, Usage, Kill Switches, Upgrades
+11. Web Search Through the Gateway: SearXNG
+12. Operate It: Reboots, Logs, Usage, Kill Switches, Upgrades
 
 The labs publish these Python programs. They are kept in `tools/litellm-src/` and embedded in the page:
-`chat.py`, `lab_tools.py`, `agent.py`, `a2a_server.py`, `mcp_agent.py`, `coordinator.py`.
+`chat.py`, `lab_tools.py`, `agent.py`, `a2a_server.py`, `mcp_agent.py`, `coordinator.py`, `search_agent.py`.
 
 ## Tools
 
