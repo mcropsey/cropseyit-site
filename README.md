@@ -66,7 +66,7 @@ Related pages: `lab-diagram.html` (the lab setup) and `cheatsheet.html` (quick r
 7. Agent 3: Publish Agents Through the Gateway (A2A)
 8. Agent 4: Tools from an MCP Server, Through the Gateway
 9. Agent 5: A Coordinator That Delegates to Other Agents
-10. Coding Agents Through the Gateway: opencode and Claude Code
+10. A Coding Agent Through the Gateway: opencode
 11. Operate It: Reboots, Logs, Usage, Kill Switches, Upgrades
 
 The labs publish these Python programs. They are kept in `tools/litellm-src/` and embedded in the page:
