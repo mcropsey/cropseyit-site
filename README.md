@@ -10,7 +10,7 @@ Each lab set is **one HTML page** in the repo root. A page holds every lab in th
 
 > **Note on GitHub's file list:** the text GitHub shows next to each file is the message of the
 > **last commit that changed that file**, not a description of the file. For example,
-> `litellm.html` might show "Lab 5: ..." because the latest edit was in Lab 5 of that page.
+> `ai-workshop.html` might show "Lab 5: ..." because the latest edit was in Lab 5 of that page.
 
 | File | What it is |
 |---|---|
@@ -18,7 +18,7 @@ Each lab set is **one HTML page** in the repo root. A page holds every lab in th
 | `rhcsa.html` | **RHCSA Lab Workbook**: Labs 1–25 for a two-server RHEL 9/10 setup (EX200 practice). |
 | `lab-diagram.html` | RHCSA lab diagram: the three VMs (server1, server2, utility) and what each one runs. Goes with `rhcsa.html`. |
 | `cheatsheet.html` | RHCSA cheat sheet: one-page command reference taken from `rhcsa.html`. |
-| `litellm.html` | **Hands-On AI Workshop**: Labs 1–14 that build each AI component in turn, from an LM Studio model server on Windows to a LiteLLM gateway on rootful Podman, chat apps, agents, MCP, opencode and SearXNG. |
+| `ai-workshop.html` | **Hands-On AI Workshop**: Labs 1–14 that build each AI component in turn, from an LM Studio model server on Windows to a LiteLLM gateway on rootful Podman, chat apps, agents, MCP, opencode and SearXNG. |
 | `blog/` | Generated blog: `index.html`, `feed.xml` and one page per post. **Don't edit these files**; they're rebuilt from `posts/`. |
 | `posts/*.md` | Blog posts in Markdown (the source for `blog/`). |
 | `tools/` | Generators and the Python programs used by the LiteLLM labs (see below). |
@@ -54,7 +54,7 @@ Each lab set is **one HTML page** in the repo root. A page holds every lab in th
 
 Related pages: `lab-diagram.html` (the lab setup) and `cheatsheet.html` (quick reference).
 
-### Hands-On AI Workshop (`litellm.html`)
+### Hands-On AI Workshop (`ai-workshop.html`)
 
 1. Set Up the Model Server: LM Studio on Windows
 2. Set Up the Gateway
@@ -78,11 +78,11 @@ The labs publish these Python programs. They are kept in `tools/litellm-src/` an
 
 - `tools/gen_blog.py`: builds `blog/` from `posts/*.md`. Run `python3 tools/gen_blog.py`
   after adding or editing a post.
-- `tools/gen_litellm.py`: the original generator for `litellm.html`. It copies the CSS and JS from
+- `tools/gen_litellm.py`: the original generator for the workshop page (then `litellm.html`, now `ai-workshop.html`). It copies the CSS and JS from
   `rhcsa.html` and the programs from `tools/litellm-src/`.
-  **Stale since 2026-10-06:** since then, `litellm.html` has been edited by hand, so the
+  **Stale since 2026-10-06:** since then, `ai-workshop.html` has been edited by hand, so the
   generator no longer matches it. **Don't run it against the live repo**, because it would
-  overwrite those edits. Edit `litellm.html` directly.
+  overwrite those edits. Edit `ai-workshop.html` directly.
 
 The lab pages share one style. `rhcsa.html` holds the main `<style>` and `<script>`.
 
@@ -98,4 +98,4 @@ git add -A && git commit -m "..." && git push         # publish source to GitHub
 Each commit message starts with the workbook name, then the lab, so it makes sense when GitHub
 shows it next to a file: `LiteLLM Lab 5: ...`, `RHCSA Lab 1: ...`, `Blog: ...`, `Home: ...`.
 (Older commits just say `Lab N:`. Up to 2026-10-04 they are RHCSA; from 2026-10-05 on they are LiteLLM.)
-To see a page's change history, run `git log --oneline -- litellm.html`.
+To see a page's change history, run `git log --oneline --follow -- ai-workshop.html` (`--follow` includes its history as `litellm.html`).
