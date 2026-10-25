@@ -18,7 +18,7 @@ Each lab set is **one HTML page** in the repo root. A page holds every lab in th
 | `rhcsa.html` | **RHCSA Lab Workbook**: Labs 1–25 for a two-server RHEL 9/10 setup (EX200 practice). |
 | `lab-diagram.html` | RHCSA lab diagram: the three VMs (server1, server2, utility) and what each one runs. Goes with `rhcsa.html`. |
 | `cheatsheet.html` | RHCSA cheat sheet: one-page command reference taken from `rhcsa.html`. |
-| `litellm.html` | **AI Gateway Workshop**: Labs 1–14, from an LM Studio model server on Windows to chat apps and AI agents through a LiteLLM gateway on rootful Podman. |
+| `litellm.html` | **Hands-On AI Workshop**: Labs 1–14 that build each AI component in turn, from an LM Studio model server on Windows to a LiteLLM gateway on rootful Podman, chat apps, agents, MCP, opencode and SearXNG. |
 | `blog/` | Generated blog: `index.html`, `feed.xml` and one page per post. **Don't edit these files**; they're rebuilt from `posts/`. |
 | `posts/*.md` | Blog posts in Markdown (the source for `blog/`). |
 | `tools/` | Generators and the Python programs used by the LiteLLM labs (see below). |
@@ -54,7 +54,7 @@ Each lab set is **one HTML page** in the repo root. A page holds every lab in th
 
 Related pages: `lab-diagram.html` (the lab setup) and `cheatsheet.html` (quick reference).
 
-### AI Gateway Workshop (`litellm.html`)
+### Hands-On AI Workshop (`litellm.html`)
 
 1. Set Up the Model Server: LM Studio on Windows
 2. Set Up the Gateway

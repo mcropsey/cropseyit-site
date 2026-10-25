@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Gateway Workshop</title>
-<meta name="description" content="Hands-on labs for running chat apps and AI agents through a LiteLLM gateway with rootful Podman: virtual keys, Open WebUI, tool-using agents, A2A, MCP, multi-agent coordination, coding agents and web search.">
+<title>Hands-On AI Workshop</title>
+<meta name="description" content="A hands-on workshop for learning the parts of a self-hosted AI stack by building them: an LM Studio model server, a LiteLLM gateway on rootful Podman, virtual keys, Open WebUI, tool-using agents, A2A, MCP, multi-agent coordination, coding agents and web search.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d5c63'/%3E%3Ctext x='5' y='22' font-family='monospace' font-size='15' fill='%23e8f1ee'%3EAI%3C/text%3E%3C/svg%3E">
 <style>
 :root {
@@ -161,7 +161,7 @@ code.tool { white-space: nowrap; overflow-wrap: normal; }
 <button class="menu" type="button" aria-expanded="false" aria-controls="sidebar">Labs</button>
 <div class="layout">
 <aside id="sidebar">
-  <div class="brand"><strong>AI Gateway Workshop</strong><span>model .194 &nbsp;/&nbsp; gateway .104 &nbsp;/&nbsp; your lab host</span></div>
+  <div class="brand"><strong>Hands-On AI Workshop</strong><span>model .194 &nbsp;/&nbsp; gateway .104 &nbsp;/&nbsp; your lab host</span></div>
   <input class="search" type="search" placeholder="Search labs (e.g. quadlet, mcp)" aria-label="Search labs">
   <div class="progress"><span id="prog">0 of 14 labs done</span><div class="bar"><i id="progbar"></i></div></div>
   <nav aria-label="Labs"><ul><li><a href="#lab-1" data-lab="1"><span class="num">1</span><span class="nm">Set Up the Model Server: LM Studio</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-2" data-lab="2"><span class="num">2</span><span class="nm">Set Up the Gateway</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-3" data-lab="3"><span class="num">3</span><span class="nm">Connect to the Gateway</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-4" data-lab="4"><span class="num">4</span><span class="nm">Chat Through the Gateway: curl and Python</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-5" data-lab="5"><span class="num">5</span><span class="nm">Virtual Keys: One Key per App</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-6" data-lab="6"><span class="num">6</span><span class="nm">A Chat Web UI: Open WebUI on Podman</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-7" data-lab="7"><span class="num">7</span><span class="nm">Agent 1: Your First Tool-Using Agent</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-8" data-lab="8"><span class="num">8</span><span class="nm">Agent 2: Run Agents as Always-On Services</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-9" data-lab="9"><span class="num">9</span><span class="nm">Agent 3: Publish Agents Through the Gateway (A2A)</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-10" data-lab="10"><span class="num">10</span><span class="nm">Agent 4: Tools from an MCP Server, Through the Gateway</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-11" data-lab="11"><span class="num">11</span><span class="nm">Agent 5: A Coordinator That Delegates to Other Agents</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-12" data-lab="12"><span class="num">12</span><span class="nm">A Coding Agent Through the Gateway: opencode</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-13" data-lab="13"><span class="num">13</span><span class="nm">Web Search Through the Gateway: SearXNG</span><span class="tick" aria-hidden="true"></span></a></li><li><a href="#lab-14" data-lab="14"><span class="num">14</span><span class="nm">Operate It: Reboots, Logs, Usage, Kill Switches, Upgrades</span><span class="tick" aria-hidden="true"></span></a></li></ul><p class="empty" id="empty">No lab mentions that.</p></nav>
@@ -177,8 +177,8 @@ code.tool { white-space: nowrap; overflow-wrap: normal; }
 </aside>
 <main>
 <section class="intro" id="overview">
-  <h1>AI Gateway Workshop: From Model Server to Agents</h1>
-  <p class="sub">A hands-on workshop, start to finish: run your own model, put a LiteLLM gateway in front of it, and send every chat and every AI agent in a home lab through it: one address, one key per app, and one log of who asked what.</p>
+  <h1>Hands-On AI Workshop: Learn the AI Components by Building Them</h1>
+  <p class="sub">Build a complete self-hosted AI stack in your home lab, one component at a time: a model server, an AI gateway, a chat UI, agents, MCP tools, a coding agent and web search. You install each piece yourself and see how they fit together, with every request going through one gateway: one address, one key per app, and one log of who asked what.</p>
   <p>You&#x27;ll start by setting up the model server, LM Studio on a Windows PC with a GPU, and building the gateway in front of it. Then you&#x27;ll send plain chat requests, put a chat web UI in front of the gateway, then build five agents: a single tool-using agent, agents running as always-on services, agents published through the gateway over A2A, an agent whose tools come from an MCP server, and a coordinator that hands work to the other agents. Lab 12 then points a coding agent at the gateway too.</p>
 
   <h2>The hosts</h2>
