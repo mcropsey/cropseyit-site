@@ -43,4 +43,4 @@ def run(question: str, max_steps: int = 6) -> str:
 
 
 if __name__ == "__main__":
-    print(run(" ".join(sys.argv[1:]) or "What is the newest Rocky Linux release, and when did it come out?"))
+    print(run(" ".join(sys.argv[1:]) or "What is the newest Ubuntu LTS release, and when did it come out?"))

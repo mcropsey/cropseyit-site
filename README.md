@@ -18,7 +18,7 @@ Each lab set is **one HTML page** in the repo root. A page holds every lab in th
 | `rhcsa.html` | **RHCSA Lab Workbook**: Labs 1–25 for a two-server RHEL 9/10 setup (EX200 practice). |
 | `lab-diagram.html` | RHCSA lab diagram: the three VMs (server1, server2, utility) and what each one runs. Goes with `rhcsa.html`. |
 | `cheatsheet.html` | RHCSA cheat sheet: one-page command reference taken from `rhcsa.html`. |
-| `ai-workshop.html` | **Hands-On AI Workshop**: Labs 1–14 that build each AI component in turn, from an LM Studio model server on Windows to a LiteLLM gateway on rootful Podman, chat apps, agents, MCP, opencode and SearXNG. |
+| `ai-workshop.html` | **Hands-On AI Workshop**: Labs 1–14 that build each AI component in turn, from an LM Studio model server on Windows to a LiteLLM gateway on Ubuntu and Docker, chat apps, agents, MCP, opencode and SearXNG. |
 | `blog/` | Generated blog: `index.html`, `feed.xml` and one page per post. **Don't edit these files**; they're rebuilt from `posts/`. |
 | `posts/*.md` | Blog posts in Markdown (the source for `blog/`). |
 | `tools/` | Generators and the Python programs used by the LiteLLM labs (see below). |
@@ -61,7 +61,7 @@ Related pages: `lab-diagram.html` (the lab setup) and `cheatsheet.html` (quick r
 3. Connect to the Gateway
 4. Chat Through the Gateway: curl and Python
 5. Virtual Keys: One Key per App
-6. A Chat Web UI: Open WebUI on Podman
+6. A Chat Web UI: Open WebUI on Docker
 7. Agent 1: Your First Tool-Using Agent
 8. Agent 2: Run Agents as Always-On Services
 9. Agent 3: Publish Agents Through the Gateway (A2A)
